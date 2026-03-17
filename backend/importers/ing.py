@@ -8,10 +8,7 @@ class INGImporter(BaseImporter):
     source = "ing"
 
     def parse(self, file) -> list[ParsedTransaction]:
-        content = file.read() if hasattr(file, 'read') else file
-        if isinstance(content, bytes):
-            content = content.decode("utf-8")
-        reader = csv.DictReader(io.StringIO(content), delimiter=";")
+        reader = csv.DictReader(io.StringIO(self._read_content(file)), delimiter=";")
         results = []
         for row in reader:
             raw_date = row.get("Date", "").strip().strip('"')

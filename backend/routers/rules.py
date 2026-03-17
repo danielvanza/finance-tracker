@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db import get_db
 from models import Rule, Transaction
-from schemas import RuleCreate, RuleTestRequest
+from schemas import RuleCreate, RuleUpdate, RuleTestRequest
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -23,13 +23,16 @@ def create_rule(body: RuleCreate, db: Session = Depends(get_db)):
     return _to_out(rule)
 
 @router.patch("/{rule_id}")
-def update_rule(rule_id: int, body: RuleCreate, db: Session = Depends(get_db)):
+def update_rule(rule_id: int, body: RuleUpdate, db: Session = Depends(get_db)):
     rule = db.get(Rule, rule_id)
     if not rule:
         raise HTTPException(404)
-    rule.pattern = body.pattern
-    rule.category_id = body.category_id
-    rule.priority = body.priority
+    if body.pattern is not None:
+        rule.pattern = body.pattern
+    if body.category_id is not None:
+        rule.category_id = body.category_id
+    if body.priority is not None:
+        rule.priority = body.priority
     db.commit()
     return _to_out(rule)
 

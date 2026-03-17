@@ -80,6 +80,11 @@ class RuleCreate(BaseModel):
     category_id: int
     priority: int = 0
 
+class RuleUpdate(BaseModel):
+    pattern: Optional[str] = None
+    category_id: Optional[int] = None
+    priority: Optional[int] = None
+
 class RuleTestRequest(BaseModel):
     pattern: str
 

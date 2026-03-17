@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from collections import defaultdict
 from db import get_db
 from models import Budget, Category, Transaction
 from schemas import BudgetPatch
@@ -20,25 +21,38 @@ def _auto_populate(month_date: date, db: Session):
 
 @router.get("")
 def get_budget(month: str = Query(...), db: Session = Depends(get_db)):
-    year, mo = int(month[:4]), int(month[5:7])
+    try:
+        parsed = datetime.strptime(month, "%Y-%m")
+        year, mo = parsed.year, parsed.month
+    except ValueError:
+        raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
     month_date = date(year, mo, 1)
     _auto_populate(month_date, db)
+
+    # Single query to get all actual spend for the month
+    actual_spend_rows = db.query(
+        Transaction.category_id,
+        func.sum(Transaction.amount).label("total")
+    ).filter(
+        extract("year", Transaction.date) == year,
+        extract("month", Transaction.date) == mo,
+        Transaction.confirmed == True,
+        Transaction.amount < 0,
+    ).group_by(Transaction.category_id).all()
+
+    actual_by_cat = {row.category_id: abs(row.total) for row in actual_spend_rows}
+
     rows = db.query(Budget).filter(Budget.month == month_date).all()
     result = []
     for row in rows:
-        actual = db.query(func.sum(Transaction.amount)).filter(
-            Transaction.category_id == row.category_id,
-            extract("year", Transaction.date) == year,
-            extract("month", Transaction.date) == mo,
-            Transaction.confirmed == True,
-        ).scalar() or Decimal("0")
+        actual = actual_by_cat.get(row.category_id, Decimal("0"))
         result.append({
             "id": row.id,
             "category_id": row.category_id,
             "category_name": row.category.name,
             "month": row.month,
             "planned_amount": row.planned_amount,
-            "actual_amount": abs(actual) if actual < 0 else actual,
+            "actual_amount": actual,
         })
     return result
 

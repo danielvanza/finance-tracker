@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
 from decimal import Decimal
@@ -10,7 +10,12 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/summary")
 def summary(month: str = Query(...), db: Session = Depends(get_db)):
-    year, mo = int(month[:4]), int(month[5:7])
+    try:
+        from datetime import datetime
+        parsed = datetime.strptime(month, "%Y-%m")
+        year, mo = parsed.year, parsed.month
+    except ValueError:
+        raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
 
     txs = db.query(Transaction).filter(
         extract("year", Transaction.date) == year,

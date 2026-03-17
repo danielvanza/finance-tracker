@@ -70,8 +70,9 @@ household-finance/
 | source | enum | ing / revolut / degiro |
 | category_id | int FK | nullable until categorised |
 | confirmed | bool | false = needs review |
-| categorised_by | enum | rule / ai / manual |
-| import_hash | str | deduplication hash |
+| categorised_by | enum | rule / ai / manual / null (uncategorised) |
+| ai_confidence | float | 0.0–1.0, null if not AI-categorised |
+| import_hash | str | SHA-256 of `source + date + amount + description`; unique constraint for deduplication |
 
 ### `rules`
 | Field | Type | Notes |
@@ -86,10 +87,30 @@ household-finance/
 |-------|------|-------|
 | id | int PK | |
 | category_id | int FK | |
-| month | date | first day of month |
+| month | date | first day of month; NULL = default (template) |
 | planned_amount | decimal | |
 
-A **default budget** per category is stored as `month = NULL`. New months auto-populate from defaults; individual months can be overridden.
+A **default budget** per category uses `month = NULL`. When the dashboard or budget page is opened for a month with no rows yet, the backend auto-creates that month's budget rows by copying the defaults. This happens server-side on the `GET /budget?month=YYYY-MM` request if no rows exist for that month.
+
+## REST API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/dashboard/summary?month=YYYY-MM` | Summary cards + chart data for a given month |
+| POST | `/import/preview` | Parse uploaded CSV, return parsed rows (not saved) |
+| POST | `/import/confirm` | Save previewed transactions, run categoriser, return counts |
+| GET | `/transactions?month=&category=&source=&confirmed=` | Paginated transaction list |
+| PATCH | `/transactions/{id}` | Update category and/or confirmed status |
+| GET | `/transactions/review` | Next uncategorised transaction for card review |
+| GET | `/categories` | All categories |
+| GET | `/budget?month=YYYY-MM` | Budget rows for a month (auto-creates from defaults if missing) |
+| PATCH | `/budget/{id}` | Update a budget row's planned_amount |
+| PATCH | `/budget/defaults/{category_id}` | Update the default planned_amount for a category |
+| GET | `/rules` | All rules |
+| POST | `/rules` | Create a rule |
+| PATCH | `/rules/{id}` | Update a rule |
+| DELETE | `/rules/{id}` | Delete a rule |
+| POST | `/rules/test` | Test a pattern against all transactions, return matches |
 
 ## Pages
 
@@ -104,21 +125,23 @@ A **default budget** per category is stored as `month = NULL`. New months auto-p
 - File upload with source selector (ING / Revolut / DEGIRO)
 - Preview of parsed transactions before confirming import
 - Deduplication: transactions with matching `import_hash` are skipped with a count shown
-- On import: rules engine runs immediately, unmatched go to AI queue
+- On import: rules engine runs immediately, unmatched transactions are sent to Claude for AI categorisation
 
 ### Transactions (`/transactions`)
 - Full transaction table, filterable by month, category, source, status
-- Flagged/unconfirmed transactions shown first (orange badge with count)
-- Card-by-card review for uncategorised transactions:
+- Unconfirmed transactions shown first (orange badge count = rows where `confirmed = false`)
+- Rule-matched transactions (`categorised_by = rule`) are `confirmed = true` and do not appear in the review queue
+- Card-by-card review for unconfirmed transactions (`confirmed = false`):
   - Shows merchant, amount, date, source
-  - AI suggestion with confidence score
-  - One-click confirm, or pick from category list
-  - Option to create a rule: "Always categorise [merchant] as [category]"
+  - If `categorised_by = ai`: shows AI suggestion + confidence percentage; user confirms or overrides
+  - If `categorised_by = null`: no suggestion; user picks from category list
+  - On confirm/override: `confirmed = true`, `categorised_by = manual` (if overriding AI)
+  - "Always categorise [merchant] as [category]" button: pre-fills rule pattern with the trimmed lowercase description; saves rule; retroactively re-categorises all existing unconfirmed transactions matching the new rule (`confirmed = true`, `categorised_by = rule`); confirms the current transaction
 
 ### Budget (`/budget`)
-- Table of categories with planned amount per month
-- Edit inline
-- Default column: set once, auto-fills future months
+- Table of categories with planned amount per selected month
+- Separate "Default" column to update the template for future months
+- Edit inline (PATCH on blur)
 - Shows actual vs planned for current month
 
 ### Rules (`/rules`)
@@ -134,11 +157,12 @@ A **default budget** per category is stored as `month = NULL`. New months auto-p
 ## Categorisation Flow
 
 1. Transaction imported → rule engine checks all rules in priority order (case-insensitive substring match on `description`)
-2. Match found → category assigned, `confirmed = true`, `categorised_by = rule`
-3. No match → Claude API called with transaction description + list of available categories → suggestion returned with confidence
-4. AI suggestion stored, `confirmed = false`, `categorised_by = ai`
-5. User reviews card → confirms or overrides → `confirmed = true`
-6. Optional: user creates rule to automate future matches
+2. Match found → `category_id` set, `confirmed = true`, `categorised_by = rule`
+3. No match → Claude API called with `description` + list of category names. Response is structured output (JSON): `{ "category": "<name>", "confidence": 0.0–1.0 }`. Elicited via a system prompt instructing the model to return only valid JSON.
+4. AI response stored: `category_id` set, `confirmed = false`, `categorised_by = ai`, `ai_confidence` = returned float
+5. If Claude call fails → `category_id = null`, `confirmed = false`, `categorised_by = null`; surfaced in review queue
+6. User reviews card → confirms or overrides → `confirmed = true`
+7. Optional: user creates rule → new rule saved, all matching unconfirmed transactions retroactively confirmed
 
 ## Category Structure (initial seed data)
 
@@ -161,11 +185,22 @@ A **default budget** per category is stored as `month = NULL`. New months auto-p
 
 ## CSV Import Format Notes
 
-Each source has a different CSV format; each importer normalises to the common transaction schema:
+Each importer normalises to the common transaction schema (signed `amount`, `date`, `description`):
 
-- **ING:** Semicolon-delimited; columns include Datum, Naam/Omschrijving, Bedrag, Af Bij
-- **Revolut:** Comma-delimited; columns include Date, Description, Amount, Currency
-- **DEGIRO:** Comma-delimited; transaction history export with Date, Product, Value columns
+**ING** (semicolon-delimited, Dutch locale):
+- `date` ← `Datum` (format: `YYYYMMDD`)
+- `description` ← `Naam / Omschrijving` (counterparty name) concatenated with `Omschrijving` if both present, otherwise whichever is non-empty
+- `amount` ← `Bedrag (EUR)` as decimal, negated if `Af Bij` == `"Af"`, kept positive if `"Bij"`
+
+**Revolut** (comma-delimited):
+- `date` ← `Started Date` (ISO format, truncated to date)
+- `description` ← `Description`
+- `amount` ← `Amount` (already signed: negative = debit)
+
+**DEGIRO** (comma-delimited):
+- `date` ← `Date` (format: `DD-MM-YYYY`)
+- `description` ← `Product`
+- `amount` ← `Value` (already signed)
 
 ## Future: ING Open Banking API
 
@@ -173,15 +208,14 @@ The importer interface (`importers/base.py`) is designed to support both file-ba
 
 ## Error Handling
 
-- CSV parse errors: show per-row errors in import preview, allow partial import
-- AI categorisation failure: transaction left as uncategorised, surfaced in review queue
-- Duplicate import: skip silently, show count of skipped duplicates to user
+- CSV parse errors: show per-row errors in import preview, allow partial import of valid rows
+- AI categorisation failure (API error or invalid JSON response): transaction left as uncategorised (`categorised_by = null`), surfaced in review queue
+- Duplicate import: transactions whose `import_hash` already exists are skipped; count of skipped rows shown to user after import
 
 ## Testing
 
-- Backend: pytest with test SQLite database; unit tests for each importer, rule engine, and API routes
+- Backend: pytest with a real SQLite test database (no mocking); unit tests for each importer, rule engine, and API routes
 - Frontend: Vitest for component tests; focus on import flow and review card behaviour
-- No mocking of the database in backend tests — use a real SQLite test DB
 
 ## Out of Scope (v1)
 

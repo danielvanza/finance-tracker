@@ -6,5 +6,5 @@ def apply_rules(transaction, db: Session) -> Category | None:
     desc_lower = transaction.description.lower()
     for rule in rules:
         if rule.pattern.lower() in desc_lower:
-            return db.get(Category, rule.category_id)
+            return rule.category
     return None

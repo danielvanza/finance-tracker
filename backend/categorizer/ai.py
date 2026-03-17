@@ -3,6 +3,8 @@ import anthropic
 from sqlalchemy.orm import Session
 from models import Category
 
+AI_MODEL = "claude-haiku-4-5-20251001"
+
 def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | None:
     categories = db.query(Category).all()
     category_names = [c.name for c in categories]
@@ -15,7 +17,7 @@ def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | Non
     )
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=AI_MODEL,
             max_tokens=64,
             system="You are a financial transaction categoriser. Respond with JSON only.",
             messages=[{"role": "user", "content": prompt}],
@@ -24,6 +26,12 @@ def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | Non
         cat = next((c for c in categories if c.name == data["category"]), None)
         if cat is None:
             return None
-        return cat, float(data["confidence"])
-    except (json.JSONDecodeError, KeyError, Exception):
+        confidence = float(data["confidence"])
+        if not (0.0 <= confidence <= 1.0):
+            return None
+        return cat, confidence
+    except anthropic.APIError as e:
+        print(f"[AI categoriser] Anthropic API error: {e}")
+        return None
+    except (json.JSONDecodeError, KeyError):
         return None

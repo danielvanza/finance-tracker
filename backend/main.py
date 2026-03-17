@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from db import Base, engine
+from db import Base, engine, SessionLocal
 import models  # noqa: F401
+from seed import run_seed
 
 app = FastAPI(title="Household Finance")
 
@@ -13,6 +14,9 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+with SessionLocal() as session:
+    run_seed(session)
 
 @app.get("/health")
 def health():

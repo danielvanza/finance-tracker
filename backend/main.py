@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db import Base, engine
+import models  # noqa: F401
 
 app = FastAPI(title="Household Finance")
 

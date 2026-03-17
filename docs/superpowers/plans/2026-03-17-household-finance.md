@@ -547,14 +547,15 @@ from importers.ing import INGImporter
 from importers.revolut import RevolutImporter
 from importers.degiro import DEGIROImporter
 
-ING_CSV = """Datum;Naam / Omschrijving;Rekening;Tegenrekening;Code;Af Bij;Bedrag (EUR);Mutatiesoort;Mededelingen
-20260301;Albert Heijn;NL00INGB0000000000;NL00INGB0001111111;GT;Af;67,40;Betaalautomaat;
-20260302;Salaris Bedrijf BV;NL00INGB0000000000;NL00INGB0002222222;OV;Bij;3460,26;Overschrijving;Maandloon
+ING_CSV = """"Date";"Name / Description";"Account";"Counterparty";"Code";"Debit/credit";"Amount (EUR)";"Transaction type";"Notifications";"Resulting balance";"Tag"
+"20260301";"Albert Heijn";"NL57INGB0000000000";"";"BA";"Debit";"67,40";"Payment terminal";"";"";"";""
+"20260302";"Salaris Bedrijf BV";"NL57INGB0000000000";"NL00INGB0002222222";"GT";"Credit";"3460,26";"Online Banking";"Maandloon";"";"";""
 """
 
 REVOLUT_CSV = """Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
-CARD_PAYMENT,Current,2026-03-05 14:22:00,2026-03-05 14:22:01,Spotify,-9.99,0.00,EUR,COMPLETED,120.01
-TRANSFER,Current,2026-03-06 09:00:00,2026-03-06 09:00:01,Top-up by *1234,500.00,0.00,EUR,COMPLETED,620.01
+Card Payment,Current,2026-03-05 14:22:00,2026-03-05 14:22:01,Spotify,-9.99,0.10,EUR,COMPLETED,120.01
+Topup,Current,2026-03-06 09:00:00,,IDEAL Top-Up,100.00,0.00,EUR,REVERTED,
+Topup,Current,2026-03-06 09:01:00,2026-03-06 09:01:15,IDEAL Top-Up,500.00,0.00,EUR,COMPLETED,620.01
 """
 
 DEGIRO_CSV = """Date,Time,Product,ISIN,Description,FX,Change,,Balance,,Order ID
@@ -592,6 +593,10 @@ def test_revolut_parses_income():
     rows = RevolutImporter().parse(io.StringIO(REVOLUT_CSV))
     income = next(r for r in rows if r.amount > 0)
     assert income.amount == Decimal("500.00")
+
+def test_revolut_skips_reverted_transactions():
+    rows = RevolutImporter().parse(io.StringIO(REVOLUT_CSV))
+    assert len(rows) == 2  # REVERTED top-up is excluded
 
 def test_degiro_parses_transaction():
     rows = DEGIROImporter().parse(io.StringIO(DEGIRO_CSV))
@@ -658,18 +663,16 @@ class INGImporter(BaseImporter):
         reader = csv.DictReader(io.StringIO(content), delimiter=";")
         results = []
         for row in reader:
-            raw_date = row.get("Datum", "").strip()
+            raw_date = row.get("Date", "").strip().strip('"')
             if not raw_date:
                 continue
             tx_date = datetime.strptime(raw_date, "%Y%m%d").date()
 
-            naam = row.get("Naam / Omschrijving", "").strip()
-            omschrijving = row.get("Mededelingen", "").strip()
-            description = naam if naam else omschrijving
+            description = row.get("Name / Description", "").strip().strip('"')
 
-            raw_amount = row.get("Bedrag (EUR)", "0").strip().replace(",", ".")
+            raw_amount = row.get("Amount (EUR)", "0").strip().strip('"').replace(",", ".")
             amount = Decimal(raw_amount)
-            if row.get("Af Bij", "").strip().lower() == "af":
+            if row.get("Debit/credit", "").strip().strip('"').lower() == "debit":
                 amount = -amount
 
             results.append(ParsedTransaction(
@@ -701,6 +704,8 @@ class RevolutImporter(BaseImporter):
         reader = csv.DictReader(io.StringIO(content))
         results = []
         for row in reader:
+            if row.get("State", "").strip() == "REVERTED":
+                continue
             raw_date = row.get("Started Date", "").strip()
             if not raw_date:
                 continue
@@ -1063,9 +1068,9 @@ from db import Base, get_db
 from main import app
 from seed import run_seed
 
-ING_CSV = b"""Datum;Naam / Omschrijving;Rekening;Tegenrekening;Code;Af Bij;Bedrag (EUR);Mutatiesoort;Mededelingen
-20260301;Albert Heijn;NL00;;GT;Af;67,40;Betaalautomaat;
-20260302;Salaris;;NL00;;Bij;3460,26;Overschrijving;
+ING_CSV = b""""Date";"Name / Description";"Account";"Counterparty";"Code";"Debit/credit";"Amount (EUR)";"Transaction type";"Notifications";"Resulting balance";"Tag"
+"20260301";"Albert Heijn";"NL57INGB0000000000";"";"BA";"Debit";"67,40";"Payment terminal";"";"";"";""
+"20260302";"Salaris";"NL57INGB0000000000";"NL00INGB0002222222";"GT";"Credit";"3460,26";"Online Banking";"Maandloon";"";"";""
 """
 
 @pytest.fixture

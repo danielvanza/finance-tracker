@@ -187,15 +187,16 @@ A **default budget** per category uses `month = NULL`. When the dashboard or bud
 
 Each importer normalises to the common transaction schema (signed `amount`, `date`, `description`):
 
-**ING** (semicolon-delimited, Dutch locale):
-- `date` ← `Datum` (format: `YYYYMMDD`)
-- `description` ← `Naam / Omschrijving` (counterparty name) concatenated with `Omschrijving` if both present, otherwise whichever is non-empty
-- `amount` ← `Bedrag (EUR)` as decimal, negated if `Af Bij` == `"Af"`, kept positive if `"Bij"`
+**ING** (semicolon-delimited, English export, all values quoted):
+- `date` ← `Date` (format: `YYYYMMDD`)
+- `description` ← `Name / Description`
+- `amount` ← `Amount (EUR)` as decimal, negated if `Debit/credit` == `"Debit"`, kept positive if `"Credit"`
 
 **Revolut** (comma-delimited):
-- `date` ← `Started Date` (ISO format, truncated to date)
+- `date` ← `Started Date` (format: `YYYY-MM-DD HH:MM:SS`, truncated to date)
 - `description` ← `Description`
 - `amount` ← `Amount` (already signed: negative = debit)
+- Skip rows where `State` == `"REVERTED"` (failed/cancelled transactions)
 
 **DEGIRO** (comma-delimited):
 - `date` ← `Date` (format: `DD-MM-YYYY`)

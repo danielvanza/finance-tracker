@@ -1,0 +1,6 @@
+pyproject.toml
+household_finance.egg-info/PKG-INFO
+household_finance.egg-info/SOURCES.txt
+household_finance.egg-info/dependency_links.txt
+household_finance.egg-info/requires.txt
+household_finance.egg-info/top_level.txt

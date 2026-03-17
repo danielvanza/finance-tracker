@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from decimal import Decimal
 from datetime import date
 from typing import Optional
@@ -24,6 +24,8 @@ class ImportConfirmResponse(BaseModel):
     uncategorised: int
 
 class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     date: date
     amount: Decimal
@@ -35,23 +37,21 @@ class TransactionOut(BaseModel):
     categorised_by: Optional[str]
     ai_confidence: Optional[float]
 
-    class Config:
-        from_attributes = True
-
 class TransactionPatch(BaseModel):
     category_id: Optional[int] = None
     confirmed: Optional[bool] = None
 
 class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     type: str
     sort_order: int
 
-    class Config:
-        from_attributes = True
-
 class BudgetRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     category_id: int
     category_name: str
@@ -59,21 +59,17 @@ class BudgetRow(BaseModel):
     planned_amount: Decimal
     actual_amount: Optional[Decimal] = None
 
-    class Config:
-        from_attributes = True
-
 class BudgetPatch(BaseModel):
     planned_amount: Decimal
 
 class RuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     pattern: str
     category_id: int
     category_name: str
     priority: int
-
-    class Config:
-        from_attributes = True
 
 class RuleCreate(BaseModel):
     pattern: str

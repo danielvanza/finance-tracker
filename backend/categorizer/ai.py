@@ -9,7 +9,12 @@ def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | Non
     categories = db.query(Category).all()
     category_names = [c.name for c in categories]
 
-    client = anthropic.Anthropic()
+    try:
+        client = anthropic.Anthropic()
+    except TypeError as e:
+        print(f"[AI categoriser] Configuration error: {e}")
+        return None
+
     prompt = (
         f"Transaction description: \"{transaction.description}\"\n"
         f"Available categories: {', '.join(category_names)}\n"
@@ -34,4 +39,7 @@ def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | Non
         print(f"[AI categoriser] Anthropic API error: {e}")
         return None
     except (json.JSONDecodeError, KeyError):
+        return None
+    except TypeError as e:
+        print(f"[AI categoriser] Configuration error: {e}")
         return None

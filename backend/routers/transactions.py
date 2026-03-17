@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import extract
+from datetime import date, datetime
 from typing import Optional
 from db import get_db
 from models import Transaction, Category, Rule
@@ -28,9 +30,11 @@ def list_transactions(
 ):
     q = db.query(Transaction)
     if month:
-        from datetime import date
-        year, mo = int(month[:4]), int(month[5:7])
-        from sqlalchemy import extract
+        try:
+            parsed = datetime.strptime(month, "%Y-%m")
+            year, mo = parsed.year, parsed.month
+        except ValueError:
+            raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
         q = q.filter(extract("year", Transaction.date) == year,
                      extract("month", Transaction.date) == mo)
     if category_id is not None:
@@ -45,7 +49,7 @@ def list_transactions(
 
 @router.get("/review")
 def next_review(db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.confirmed == False).first()
+    tx = db.query(Transaction).filter(Transaction.confirmed == False).order_by(Transaction.date.asc()).first()
     if not tx:
         return None
     return _to_out(tx)
@@ -73,8 +77,10 @@ def create_rule_from_transaction(tx_id: int, db: Session = Depends(get_db)):
     if not tx or not tx.category_id:
         raise HTTPException(400, "Transaction must have a category before creating a rule")
     pattern = tx.description.lower().strip()
-    rule = Rule(pattern=pattern, category_id=tx.category_id, priority=0)
-    db.add(rule)
+    existing_rule = db.query(Rule).filter_by(pattern=pattern).first()
+    if not existing_rule:
+        rule = Rule(pattern=pattern, category_id=tx.category_id, priority=0)
+        db.add(rule)
     # Retroactively confirm matching unconfirmed transactions
     unconfirmed = db.query(Transaction).filter(Transaction.confirmed == False).all()
     updated = 0

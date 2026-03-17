@@ -5,6 +5,10 @@ import models  # noqa: F401
 from seed import run_seed
 from routers.imports import router as imports_router
 from routers.transactions import router as transactions_router
+from routers.budget import router as budget_router
+from routers.rules import router as rules_router
+from routers.dashboard import router as dashboard_router
+from routers.categories import router as categories_router
 
 app = FastAPI(title="Household Finance")
 
@@ -19,6 +23,10 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(imports_router)
 app.include_router(transactions_router)
+app.include_router(budget_router)
+app.include_router(rules_router)
+app.include_router(dashboard_router)
+app.include_router(categories_router)
 
 with SessionLocal() as session:
     run_seed(session)

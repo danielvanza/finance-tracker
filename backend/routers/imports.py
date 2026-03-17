@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, Form, Depends
 from sqlalchemy.orm import Session
 from db import get_db
 from importers.ing import INGImporter
@@ -15,9 +15,11 @@ router = APIRouter(prefix="/import", tags=["import"])
 IMPORTERS = {"ing": INGImporter, "revolut": RevolutImporter, "degiro": DEGIROImporter}
 
 def _parse(file: UploadFile, source: str):
+    if source not in IMPORTERS:
+        raise HTTPException(status_code=422, detail=f"Unknown source '{source}'. Valid: {list(IMPORTERS)}")
     importer = IMPORTERS[source]()
     content = file.file.read()
-    return importer.parse(io.StringIO(content.decode("utf-8")))
+    return importer.parse(io.StringIO(content.decode("utf-8", errors="replace")))
 
 @router.post("/preview", response_model=ImportPreviewResponse)
 async def preview(source: str = Form(...), file: UploadFile = ..., db: Session = Depends(get_db)):

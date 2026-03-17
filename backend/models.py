@@ -35,7 +35,7 @@ class Transaction(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     description = Column(String, nullable=False)
     source = Column(SAEnum(TransactionSource), nullable=False)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     confirmed = Column(Boolean, default=False)
     categorised_by = Column(SAEnum(CategorisedBy), nullable=True)
     ai_confidence = Column(Float, nullable=True)
@@ -46,14 +46,14 @@ class Rule(Base):
     __tablename__ = "rules"
     id = Column(Integer, primary_key=True)
     pattern = Column(String, nullable=False)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
     priority = Column(Integer, default=0)
     category = relationship("Category", back_populates="rules")
 
 class Budget(Base):
     __tablename__ = "budgets"
     id = Column(Integer, primary_key=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
     month = Column(Date, nullable=True)  # NULL = default template
     planned_amount = Column(Numeric(12, 2), nullable=False)
     __table_args__ = (UniqueConstraint("category_id", "month"),)

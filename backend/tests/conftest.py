@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from db import Base
+import models  # noqa: F401 — ensures all models are registered before create_all
 
 @pytest.fixture(scope="function")
 def db():

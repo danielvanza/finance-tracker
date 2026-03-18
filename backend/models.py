@@ -7,6 +7,7 @@ class CategoryType(str, enum.Enum):
     needs = "needs"
     wants = "wants"
     savings = "savings"
+    income = "income"
 
 class TransactionSource(str, enum.Enum):
     ing = "ing"
@@ -58,3 +59,8 @@ class Budget(Base):
     planned_amount = Column(Numeric(12, 2), nullable=False)
     __table_args__ = (UniqueConstraint("category_id", "month"),)
     category = relationship("Category", back_populates="budgets")
+
+class Setting(Base):
+    __tablename__ = "settings"
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False)

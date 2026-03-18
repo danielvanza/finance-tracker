@@ -1,4 +1,4 @@
-from models import Category, Transaction, Rule, Budget
+from models import Category, Transaction, Rule, Budget, CategoryType, Setting
 from decimal import Decimal
 from datetime import date
 
@@ -44,3 +44,27 @@ def test_budget_creation(db):
     db.add(b)
     db.commit()
     assert b.id is not None
+
+def test_category_with_income_type(db):
+    cat = Category(name="Salary", type="income", sort_order=20)
+    db.add(cat)
+    db.commit()
+    assert cat.id is not None
+    assert cat.type == CategoryType.income
+
+def test_setting_creation(db):
+    s = Setting(key="financial_month_start_day", value="24")
+    db.add(s)
+    db.commit()
+    loaded = db.query(Setting).filter_by(key="financial_month_start_day").first()
+    assert loaded is not None
+    assert loaded.value == "24"
+
+def test_setting_primary_key_is_key(db):
+    db.add(Setting(key="test_key", value="a"))
+    db.commit()
+    db.add(Setting(key="test_key", value="b"))
+    from sqlalchemy.exc import IntegrityError
+    import pytest
+    with pytest.raises(IntegrityError):
+        db.commit()

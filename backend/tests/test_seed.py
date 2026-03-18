@@ -27,6 +27,37 @@ def test_seed_is_idempotent(db):
     run_seed(db)
     run_seed(db)  # should not raise or duplicate
     cats = db.query(Category).all()
-    assert len(cats) == 11
+    assert len(cats) == 14  # 11 expense + 3 income
     defaults = db.query(Budget).filter_by(month=None).all()
-    assert len(defaults) == 11
+    assert len(defaults) == 11  # income categories have no default budget
+
+def test_seed_creates_income_categories(db):
+    run_seed(db)
+    salary = db.query(Category).filter_by(name="Salary").first()
+    assert salary is not None
+    assert salary.type == CategoryType.income
+
+    refunds = db.query(Category).filter_by(name="Refunds").first()
+    assert refunds is not None
+    assert refunds.type == CategoryType.income
+
+    other = db.query(Category).filter_by(name="Other Income").first()
+    assert other is not None
+    assert other.type == CategoryType.income
+
+
+def test_seed_income_categories_have_no_default_budget(db):
+    run_seed(db)
+    from models import Budget as BudgetModel
+    income_cats = db.query(Category).filter(Category.type == CategoryType.income).all()
+    for cat in income_cats:
+        budget = db.query(Budget).filter_by(category_id=cat.id, month=None).first()
+        assert budget is None, f"Income category '{cat.name}' should not have a default budget"
+
+
+def test_seed_creates_financial_month_setting(db):
+    from models import Setting
+    run_seed(db)
+    setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
+    assert setting is not None
+    assert setting.value == "24"

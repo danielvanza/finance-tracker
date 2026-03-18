@@ -53,3 +53,43 @@ def test_review_endpoint_returns_unconfirmed(client):
     r = client.get("/transactions/review")
     assert r.status_code == 200
     assert r.json()["confirmed"] is False
+
+
+def test_filter_by_financial_month(client, db):
+    """Transactions should filter by financial month, not calendar month."""
+    from models import Setting
+    # Default start_day=24 from seed. Our fixture transactions are dated Mar 1 and Mar 2.
+    # "March 2026" financial month = Feb 24 – Mar 23. Both should be included.
+    r = client.get("/transactions?month=2026-03")
+    items = r.json()
+    assert len(items) == 2
+
+    # "April 2026" financial month = Mar 24 – Apr 23. Neither should be included.
+    r2 = client.get("/transactions?month=2026-04")
+    items2 = r2.json()
+    assert len(items2) == 0
+
+
+def test_create_rule_sign_aware_skips_incompatible(client, db):
+    """Create-rule from an expense tx should not retroactively assign to income transactions."""
+    from models import Transaction, Category
+    from decimal import Decimal
+    from datetime import date as dt_date
+
+    income_tx = Transaction(
+        date=dt_date(2026, 3, 3), amount=Decimal("100.00"),
+        description="Albert Heijn Refund", source="ing",
+        confirmed=False, import_hash="hash-sign-1",
+    )
+    db.add(income_tx)
+    db.commit()
+
+    # hash1 is the expense "Albert Heijn" from fixture — confirm it and create rule
+    expense_tx = db.query(Transaction).filter_by(import_hash="hash1").first()
+    # Ensure it has a category (from fixture)
+    r = client.post(f"/transactions/{expense_tx.id}/create-rule")
+    assert r.status_code == 200
+
+    # The income tx with "Albert Heijn Refund" should NOT be retroactively assigned
+    db.refresh(income_tx)
+    assert income_tx.confirmed is False

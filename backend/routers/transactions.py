@@ -1,13 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import extract
 from datetime import date, datetime
 from typing import Optional
 from db import get_db
-from models import Transaction, Category, Rule
+from models import Transaction, Category, Rule, Setting
 from schemas import TransactionPatch
+from financial_month import get_financial_month_range
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+def _get_start_day(db: Session) -> int:
+    setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
+    return int(setting.value) if setting else 24
+
 
 def _to_out(tx: Transaction) -> dict:
     return {
@@ -19,6 +25,7 @@ def _to_out(tx: Transaction) -> dict:
         "categorised_by": tx.categorised_by,
         "ai_confidence": tx.ai_confidence,
     }
+
 
 @router.get("")
 def list_transactions(
@@ -35,8 +42,9 @@ def list_transactions(
             year, mo = parsed.year, parsed.month
         except ValueError:
             raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
-        q = q.filter(extract("year", Transaction.date) == year,
-                     extract("month", Transaction.date) == mo)
+        start_day = _get_start_day(db)
+        start_date, end_date = get_financial_month_range(year, mo, start_day)
+        q = q.filter(Transaction.date >= start_date, Transaction.date <= end_date)
     if category_id is not None:
         q = q.filter(Transaction.category_id == category_id)
     if source:
@@ -47,12 +55,14 @@ def list_transactions(
     q = q.order_by(Transaction.confirmed.asc(), Transaction.date.desc())
     return [_to_out(tx) for tx in q.all()]
 
+
 @router.get("/review")
 def next_review(db: Session = Depends(get_db)):
     tx = db.query(Transaction).filter(Transaction.confirmed == False).order_by(Transaction.date.asc()).first()
     if not tx:
         return None
     return _to_out(tx)
+
 
 @router.patch("/{tx_id}")
 def patch_transaction(tx_id: int, body: TransactionPatch, db: Session = Depends(get_db)):
@@ -69,23 +79,35 @@ def patch_transaction(tx_id: int, body: TransactionPatch, db: Session = Depends(
     db.refresh(tx)
     return _to_out(tx)
 
+
 @router.post("/{tx_id}/create-rule")
 def create_rule_from_transaction(tx_id: int, db: Session = Depends(get_db)):
     """Create a rule from this transaction's description, confirm current tx,
-    and retroactively confirm all matching unconfirmed transactions."""
+    and retroactively confirm all matching unconfirmed transactions
+    whose sign is compatible with the rule's target category."""
     tx = db.get(Transaction, tx_id)
     if not tx or not tx.category_id:
         raise HTTPException(400, "Transaction must have a category before creating a rule")
+
+    category = db.get(Category, tx.category_id)
+    cat_type = category.type.value if hasattr(category.type, "value") else str(category.type)
+
     pattern = tx.description.lower().strip()
     existing_rule = db.query(Rule).filter_by(pattern=pattern).first()
     if not existing_rule:
         rule = Rule(pattern=pattern, category_id=tx.category_id, priority=0)
         db.add(rule)
-    # Retroactively confirm matching unconfirmed transactions
+
+    # Retroactively confirm matching unconfirmed transactions (sign-aware)
     unconfirmed = db.query(Transaction).filter(Transaction.confirmed == False).all()
     updated = 0
     for t in unconfirmed:
         if pattern in t.description.lower():
+            # Check sign compatibility
+            if t.amount > 0 and cat_type != "income":
+                continue
+            if t.amount <= 0 and cat_type == "income":
+                continue
             t.confirmed = True
             t.category_id = tx.category_id
             t.categorised_by = "rule"

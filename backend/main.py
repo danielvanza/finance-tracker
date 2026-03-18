@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db import Base, engine, SessionLocal
@@ -9,6 +12,7 @@ from routers.budget import router as budget_router
 from routers.rules import router as rules_router
 from routers.dashboard import router as dashboard_router
 from routers.categories import router as categories_router
+from routers.settings import router as settings_router
 
 app = FastAPI(title="Household Finance")
 
@@ -27,6 +31,7 @@ app.include_router(budget_router)
 app.include_router(rules_router)
 app.include_router(dashboard_router)
 app.include_router(categories_router)
+app.include_router(settings_router)
 
 with SessionLocal() as session:
     run_seed(session)

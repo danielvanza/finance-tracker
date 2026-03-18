@@ -91,5 +91,13 @@ class DashboardSummary(BaseModel):
     total_savings: Decimal
     left_over: Decimal
     category_breakdown: list[dict]
+    income_breakdown: list[dict]
     needs_wants_savings: dict
     monthly_trend: list[dict]
+
+class SettingOut(BaseModel):
+    key: str
+    value: str
+
+class SettingPatch(BaseModel):
+    value: str

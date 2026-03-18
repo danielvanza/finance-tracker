@@ -47,6 +47,8 @@ Given a `month` label (e.g. "2026-04") and a `start_day` (e.g. 24):
 
 This is a pure date-range calculation. No weekend adjustment — the boundary is always fixed at the configured day.
 
+The start day is constrained to 1–28 to avoid month-length issues (Feb has 28 days in non-leap years). This ensures every month can represent the start day without clamping.
+
 ### Shared helper
 
 A single utility function `get_financial_month_range(year, month, start_day) -> (date, date)` used by all routers (dashboard, budget, transactions). Replaces the current `extract(year/month)` queries with `date BETWEEN :start AND :end`.
@@ -59,22 +61,24 @@ The frontend month picker continues to use `YYYY-MM` strings. The backend interp
 
 ### Categorisation
 
-- **Rules engine:** When matching, filter available categories by transaction sign. Positive amounts only match rules pointing to income categories. Negative amounts only match rules pointing to needs/wants/savings.
+- **Rules engine:** After substring matching finds a candidate rule, check whether the rule's target category type is compatible with the transaction sign. If `amount > 0`, only accept the match if the category type is `income`. If `amount < 0`, only accept if the category type is `needs`, `wants`, or `savings`. This is a post-match filter — the substring matching itself is unchanged, but incompatible matches are skipped and the next priority rule is tried.
 - **AI categoriser:** Include the amount sign in the prompt context. Pass only income category names for positive transactions, only expense category names for negative ones.
 - **Manual review (frontend):** The category dropdown filters by transaction sign. Positive → income categories only. Negative → expense categories only.
+- **Create-rule endpoint:** When retroactively applying a rule to unconfirmed transactions, only apply if the rule's category type is compatible with the transaction's sign.
 
 ### Dashboard
 
 - `total_income`: sum of confirmed positive-amount transactions in the period (unchanged logic, but now these transactions have category breakdowns).
-- New field `income_breakdown`: list of `{category, amount}` for income-type categories, mirroring the existing `category_breakdown` for expenses.
+- New field `income_breakdown`: list of `{category_id: int, category_name: str, amount: float}` for income-type categories. No `planned` field since income has no budget.
 - `category_breakdown`: unchanged — only expense categories (needs/wants/savings).
 - `needs_wants_savings`: unchanged — only expense categories.
-- `monthly_trend`: unchanged — only expense totals.
+- `monthly_trend`: uses financial month ranges for each of the 6 trend periods, so trend bars are consistent with the main dashboard period.
 
 ### Budget
 
 - `_auto_populate()`: skip categories where `type == "income"`. Income categories never get budget rows.
 - Budget actual-spend query: unchanged — still filters `amount < 0`, now also explicitly excludes income-type categories for safety.
+- `Budget.month` column continues to store `date(year, mo, 1)` as a label key. The actual-spend query uses the financial month date range for filtering transactions, but the budget row itself is keyed by the label month.
 
 ### Transactions list
 
@@ -87,8 +91,8 @@ The frontend month picker continues to use `YYYY-MM` strings. The backend interp
 
 | Method | Path                   | Description                          |
 |--------|------------------------|--------------------------------------|
-| GET    | `/api/settings`        | Returns all settings as key/value    |
-| PATCH  | `/api/settings/{key}`  | Updates a single setting value       |
+| GET    | `/api/settings`        | Returns all settings as a flat dict `{"key": "value", ...}` |
+| PATCH  | `/api/settings/{key}`  | Updates a single setting value. Validates per-key: `financial_month_start_day` must be an integer 1–28. Returns 422 on validation failure. |
 
 ### Modified endpoints
 
@@ -103,8 +107,9 @@ All endpoints accepting a `month` query parameter now interpret it as a financia
 
 ### Schema changes
 
-- `DashboardSummary`: add `income_breakdown: list[dict]` field.
-- New `SettingOut` and `SettingPatch` schemas.
+- `DashboardSummary`: add `income_breakdown: list[dict]` field (shape: `{category_id, category_name, amount}`).
+- New `SettingOut` schema: `{key: str, value: str}`.
+- New `SettingPatch` schema: `{value: str}`.
 
 ## Frontend Changes
 
@@ -151,3 +156,4 @@ All endpoints accepting a `month` query parameter now interpret it as a financia
 - Weekend-adjusted salary dates (the financial month boundary is always the fixed start day).
 - Income budget tracking (planned vs actual income).
 - Migration tooling — tables are auto-created via `create_all()`.
+- Per-month versioning of the start day setting — changing the start day retroactively reinterprets all historical months.

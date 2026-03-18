@@ -58,4 +58,13 @@ export const api = {
 
   deleteRule: (id: number) =>
     fetch(`${BASE}/rules/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
+  getSettings: (): Promise<import('./types').SettingsMap> =>
+    fetch(`${BASE}/settings`).then(r => r.json()),
+
+  patchSetting: (key: string, value: string) =>
+    fetch(`${BASE}/settings/${key}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    }).then(r => r.json()),
 }

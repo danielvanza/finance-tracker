@@ -50,4 +50,13 @@ export interface DashboardSummary {
   }>
   needs_wants_savings: { needs: number; wants: number; savings: number }
   monthly_trend: Array<{ month: string; total: number }>
+  income_breakdown: Array<{
+    category_id: number
+    category_name: string
+    amount: number
+  }>
+}
+
+export interface SettingsMap {
+  [key: string]: string
 }

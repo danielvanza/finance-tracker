@@ -6,6 +6,7 @@ import Import from './pages/Import'
 import Transactions from './pages/Transactions'
 import Budget from './pages/Budget'
 import Rules from './pages/Rules'
+import Settings from './pages/Settings'
 
 const queryClient = new QueryClient()
 
@@ -13,17 +14,18 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <div style={{ minHeight: '100vh', background: '#0f0f13', color: '#e0e0e0', fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--sans)', position: 'relative', zIndex: 1 }}>
           <Nav />
-          <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
+          <main style={{ maxWidth: 1320, margin: '0 auto', padding: '36px 28px 80px' }}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/import" element={<Import />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/budget" element={<Budget />} />
               <Route path="/rules" element={<Rules />} />
+              <Route path="/settings" element={<Settings />} />
             </Routes>
-          </div>
+          </main>
         </div>
       </BrowserRouter>
     </QueryClientProvider>

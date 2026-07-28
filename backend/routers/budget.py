@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from datetime import date, datetime
 from decimal import Decimal
 from db import get_db
 from models import Budget, Category, Transaction, Setting
 from schemas import BudgetPatch
-from sqlalchemy import func
 from financial_month import get_financial_month_range
+from aggregate import effective_parts, is_spend_part
+from adjustments import materialise_standing_adjustments
 
 router = APIRouter(prefix="/budget", tags=["budget"])
 
@@ -23,11 +24,21 @@ def _auto_populate(month_date: date, db: Session):
     for d in defaults:
         cat = db.get(Category, d.category_id)
         cat_type = cat.type.value if hasattr(cat.type, "value") else str(cat.type)
-        if cat_type == "income":
+        if cat_type in ("income", "exclude"):
             continue
-        exists = db.query(Budget).filter_by(category_id=d.category_id, month=month_date).first()
+        exists = (
+            db.query(Budget)
+            .filter_by(category_id=d.category_id, month=month_date)
+            .first()
+        )
         if not exists:
-            db.add(Budget(category_id=d.category_id, month=month_date, planned_amount=d.planned_amount))
+            db.add(
+                Budget(
+                    category_id=d.category_id,
+                    month=month_date,
+                    planned_amount=d.planned_amount,
+                )
+            )
     db.commit()
 
 
@@ -43,41 +54,50 @@ def get_budget(month: str = Query(...), db: Session = Depends(get_db)):
     _auto_populate(month_date, db)
 
     start_day = _get_start_day(db)
+    materialise_standing_adjustments(year, mo, start_day, db)
     start_date, end_date = get_financial_month_range(year, mo, start_day)
 
-    # Actual spend for the financial month (expenses only, exclude income categories)
-    income_cat_ids = {c.id for c in db.query(Category).all()
-                      if (c.type.value if hasattr(c.type, "value") else str(c.type)) == "income"}
+    # Actual spend for the financial month: expenses netted with refunds,
+    # split transactions counted per part. May go below zero when a category
+    # is refunded more than it was spent this month.
+    income_cat_ids = {
+        c.id
+        for c in db.query(Category).all()
+        if (c.type.value if hasattr(c.type, "value") else str(c.type))
+        in ("income", "exclude")
+    }
 
-    actual_spend_rows = db.query(
-        Transaction.category_id,
-        func.sum(Transaction.amount).label("total")
-    ).filter(
+    txs = db.query(Transaction).options(selectinload(Transaction.splits)).filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
         Transaction.confirmed == True,
-        Transaction.amount < 0,
-    )
-    if income_cat_ids:
-        actual_spend_rows = actual_spend_rows.filter(
-            ~Transaction.category_id.in_(income_cat_ids)
-        )
-    actual_spend_rows = actual_spend_rows.group_by(Transaction.category_id).all()
+    ).all()
 
-    actual_by_cat = {row.category_id: abs(row.total) for row in actual_spend_rows}
+    actual_by_cat: dict[int, Decimal] = {}
+    for tx in txs:
+        for cid, amount, refund in effective_parts(tx):
+            if cid is None or cid in income_cat_ids:
+                continue
+            if is_spend_part(amount, refund):
+                actual_by_cat[cid] = actual_by_cat.get(cid, Decimal("0")) - amount
 
     rows = db.query(Budget).filter(Budget.month == month_date).all()
     result = []
     for row in rows:
         actual = actual_by_cat.get(row.category_id, Decimal("0"))
-        result.append({
-            "id": row.id,
-            "category_id": row.category_id,
-            "category_name": row.category.name,
-            "month": row.month,
-            "planned_amount": row.planned_amount,
-            "actual_amount": actual,
-        })
+        cat = row.category
+        cat_type = cat.type.value if hasattr(cat.type, "value") else str(cat.type)
+        result.append(
+            {
+                "id": row.id,
+                "category_id": row.category_id,
+                "category_name": cat.name,
+                "category_type": cat_type,
+                "month": row.month,
+                "planned_amount": row.planned_amount,
+                "actual_amount": actual,
+            }
+        )
     return result
 
 
@@ -99,5 +119,9 @@ def patch_budget(budget_id: int, body: BudgetPatch, db: Session = Depends(get_db
     row.planned_amount = body.planned_amount
     db.commit()
     db.refresh(row)
-    return {"id": row.id, "planned_amount": row.planned_amount,
-            "category_name": row.category.name, "month": row.month}
+    return {
+        "id": row.id,
+        "planned_amount": row.planned_amount,
+        "category_name": row.category.name,
+        "month": row.month,
+    }

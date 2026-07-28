@@ -7,6 +7,7 @@ import Transactions from './pages/Transactions'
 import Budget from './pages/Budget'
 import Rules from './pages/Rules'
 import Settings from './pages/Settings'
+import Analytics from './pages/Analytics'
 
 const queryClient = new QueryClient()
 
@@ -19,6 +20,7 @@ export default function App() {
           <main style={{ maxWidth: 1320, margin: '0 auto', padding: '36px 28px 80px' }}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/import" element={<Import />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/budget" element={<Budget />} />

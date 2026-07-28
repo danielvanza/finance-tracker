@@ -2,7 +2,7 @@ import csv
 import io
 from decimal import Decimal
 from datetime import datetime
-from .base import BaseImporter, ParsedTransaction, make_hash
+from .base import BaseImporter, ParsedTransaction, make_hash, deduplicate_hashes
 
 class INGImporter(BaseImporter):
     source = "ing"
@@ -23,11 +23,14 @@ class INGImporter(BaseImporter):
             if row.get("Debit/credit", "").strip().strip('"').lower() == "debit":
                 amount = -amount
 
+            notifications = row.get("Notifications", "").strip().strip('"')
+            balance = row.get("Resulting balance", "").strip().strip('"')
+
             results.append(ParsedTransaction(
                 date=tx_date,
                 amount=amount,
                 description=description,
                 source=self.source,
-                import_hash=make_hash(self.source, tx_date, amount, description),
+                import_hash=make_hash(self.source, tx_date, amount, description, notifications, balance),
             ))
-        return results
+        return deduplicate_hashes(results)

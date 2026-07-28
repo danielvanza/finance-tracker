@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from decimal import Decimal
 from datetime import date
 from db import get_db
 from models import Transaction, Budget, Category, Setting
 from financial_month import get_financial_month_range
+from aggregate import effective_parts, is_spend_part
+from adjustments import materialise_standing_adjustments
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -25,34 +27,41 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
 
     start_day = _get_start_day(db)
+    materialise_standing_adjustments(year, mo, start_day, db)
     start_date, end_date = get_financial_month_range(year, mo, start_day)
 
-    txs = db.query(Transaction).filter(
+    txs = db.query(Transaction).options(selectinload(Transaction.splits)).filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
         Transaction.confirmed == True,
     ).all()
 
-    total_income = sum(t.amount for t in txs if t.amount > 0)
-    total_expenses = abs(sum(t.amount for t in txs if t.amount < 0))
-
     cats = db.query(Category).all()
     cat_map = {c.id: c for c in cats}
+    exclude_cat_ids = {c.id for c in cats
+                       if (c.type.value if hasattr(c.type, "value") else str(c.type)) == "exclude"}
+
+    parts = [p for t in txs for p in effective_parts(t)]
+
+    total_income = sum(amount for cid, amount, refund in parts
+                       if amount > 0 and not refund and cid not in exclude_cat_ids)
+    # Spend contribution is -amount, so refund parts net against expenses
+    total_expenses = sum(-amount for cid, amount, refund in parts
+                         if is_spend_part(amount, refund) and cid not in exclude_cat_ids)
 
     # Budget rows keyed by label month (1st of month)
     budgets = {b.category_id: b.planned_amount
                for b in db.query(Budget).filter(Budget.month == date(year, mo, 1)).all()}
 
-    # Expense breakdown (needs/wants/savings only)
+    # Expense breakdown (needs/wants/savings only), refunds netted per category
     expense_breakdown = {}
-    for t in txs:
-        if t.category_id and t.amount < 0:
-            cat = cat_map.get(t.category_id)
+    for cid, amount, refund in parts:
+        if cid and is_spend_part(amount, refund):
+            cat = cat_map.get(cid)
             if cat:
                 cat_type = cat.type.value if hasattr(cat.type, "value") else str(cat.type)
                 if cat_type in ("needs", "wants", "savings"):
-                    cid = t.category_id
-                    expense_breakdown[cid] = expense_breakdown.get(cid, Decimal("0")) + abs(t.amount)
+                    expense_breakdown[cid] = expense_breakdown.get(cid, Decimal("0")) - amount
 
     category_breakdown = [
         {"category_id": cid, "category_name": cat_map[cid].name,
@@ -63,14 +72,13 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
 
     # Income breakdown
     income_breakdown_map = {}
-    for t in txs:
-        if t.category_id and t.amount > 0:
-            cat = cat_map.get(t.category_id)
+    for cid, amount, refund in parts:
+        if cid and amount > 0 and not refund:
+            cat = cat_map.get(cid)
             if cat:
                 cat_type = cat.type.value if hasattr(cat.type, "value") else str(cat.type)
                 if cat_type == "income":
-                    cid = t.category_id
-                    income_breakdown_map[cid] = income_breakdown_map.get(cid, Decimal("0")) + t.amount
+                    income_breakdown_map[cid] = income_breakdown_map.get(cid, Decimal("0")) + amount
 
     income_breakdown = [
         {"category_id": cid, "category_name": cat_map[cid].name, "amount": float(amount)}
@@ -80,7 +88,8 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
     savings_cats = {c.id for c in cats
                     if (c.type.value if hasattr(c.type, "value") else str(c.type)) == "savings"}
     total_savings = sum(
-        abs(t.amount) for t in txs if t.category_id in savings_cats and t.amount < 0
+        -amount for cid, amount, refund in parts
+        if cid in savings_cats and is_spend_part(amount, refund)
     )
     needs_total = sum(d["actual"] for d in category_breakdown if d["type"] == "needs")
     wants_total = sum(d["actual"] for d in category_breakdown if d["type"] == "wants")
@@ -94,15 +103,18 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
             m += 12
             y -= 1
         trend_start, trend_end = get_financial_month_range(y, m, start_day)
-        month_txs = db.query(Transaction).filter(
+        month_txs = db.query(Transaction).options(selectinload(Transaction.splits)).filter(
             Transaction.date >= trend_start,
             Transaction.date <= trend_end,
             Transaction.confirmed == True,
-            Transaction.amount < 0,
         ).all()
+        month_total = sum(
+            -amount for t in month_txs for cid, amount, refund in effective_parts(t)
+            if is_spend_part(amount, refund) and cid not in exclude_cat_ids
+        )
         trend.append({
             "month": f"{y}-{m:02d}",
-            "total": float(abs(sum(t.amount for t in month_txs))),
+            "total": float(month_total),
         })
 
     return {

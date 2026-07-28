@@ -1,20 +1,92 @@
-import { useState } from 'react'
-import type { Transaction, Category } from '../types'
+import { useMemo, useState } from 'react'
+import type { Transaction, Category, SplitInput } from '../types'
+import CategorySelect from './CategorySelect'
+import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
+
+export interface ReviewDecision {
+  category_id?: number
+  is_refund: boolean
+  splits?: SplitInput[]
+}
+
+type PositiveKind = 'income' | 'refund' | 'transfer'
 
 interface Props {
   transaction: Transaction
   categories: Category[]
-  onConfirm: (id: number, categoryId: number) => void
+  onConfirm: (id: number, decision: ReviewDecision) => void
   onSkip: () => void
   onCreateRule: (id: number, categoryId: number) => void
 }
 
+const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
+  income:   { label: 'Income',   hint: 'Salary, interest, gifts — money the household gained' },
+  refund:   { label: 'Refund',   hint: 'Money back on an earlier expense — reduces that category' },
+  transfer: { label: 'Transfer', hint: 'Between your own accounts — excluded from totals' },
+}
+
 export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip, onCreateRule }: Props) {
-  const filteredCategories = categories.filter(c => tx.amount > 0 ? c.type === 'income' : c.type !== 'income')
+  const isPositive = tx.amount > 0
+
+  const initialKind: PositiveKind = useMemo(() => {
+    if (tx.is_refund) return 'refund'
+    const cat = categories.find(c => c.id === tx.category_id)
+    if (cat?.type === 'exclude') return 'transfer'
+    if (cat && cat.type !== 'income') return 'refund'
+    return 'income'
+  }, [tx, categories])
+
+  const [kind, setKind] = useState<PositiveKind>(initialKind)
+
+  const filteredCategories = useMemo(() => {
+    if (!isPositive) {
+      return categories.filter(c => c.type === 'exclude' || c.type !== 'income')
+    }
+    if (kind === 'income') return categories.filter(c => c.type === 'income')
+    if (kind === 'transfer') return categories.filter(c => c.type === 'exclude')
+    return categories.filter(c => ['needs', 'wants', 'savings'].includes(c.type))
+  }, [categories, isPositive, kind])
+
   const [selectedCategory, setSelectedCategory] = useState<number>(tx.category_id ?? filteredCategories[0]?.id)
+  const [splitMode, setSplitMode] = useState(tx.splits.length > 0)
+  const [splitRows, setSplitRows] = useState<SplitRow[]>(() =>
+    tx.splits.length > 0
+      ? tx.splits.map(s => ({ category_id: s.category_id, amount: Math.abs(s.amount).toFixed(2) }))
+      : [{ category_id: null, amount: '' }, { category_id: null, amount: '' }]
+  )
   const [confirmHover, setConfirmHover] = useState(false)
   const [skipHover, setSkipHover] = useState(false)
   const [ruleHover, setRuleHover] = useState(false)
+
+  const changeKind = (k: PositiveKind) => {
+    if (k === kind) return
+    setKind(k)
+    const next = isPositive
+      ? (k === 'income' ? categories.filter(c => c.type === 'income')
+        : k === 'transfer' ? categories.filter(c => c.type === 'exclude')
+        : categories.filter(c => ['needs', 'wants', 'savings'].includes(c.type)))
+      : filteredCategories
+    setSelectedCategory(next[0]?.id)
+  }
+
+  const isRefund = isPositive && kind === 'refund'
+  const sign = isPositive ? 1 : -1
+  const splitsPayload: SplitInput[] = splitRows.map(r => ({
+    category_id: r.category_id!,
+    amount: Math.round(parseFloat(r.amount || '0') * 100) / 100 * sign,
+  }))
+  const canConfirm = splitMode
+    ? splitRowsValid(splitRows, tx.amount)
+    : selectedCategory != null
+
+  const handleConfirm = () => {
+    if (!canConfirm) return
+    if (splitMode) {
+      onConfirm(tx.id, { is_refund: isRefund, splits: splitsPayload })
+    } else {
+      onConfirm(tx.id, { category_id: selectedCategory, is_refund: isRefund })
+    }
+  }
 
   const isExpense = tx.amount < 0
   const amountColor = isExpense ? 'var(--red)' : 'var(--green)'
@@ -99,36 +171,92 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
         {/* Divider */}
         <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />
 
-        {/* Category selector */}
+        {/* Incoming money: income vs refund vs transfer */}
+        {isPositive && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{
+              display: 'block', marginBottom: 7,
+              fontSize: 10.5, fontWeight: 700, color: 'var(--text-label)',
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+            }}>
+              What is this money?
+            </label>
+            <div role="radiogroup" aria-label="Incoming money kind" style={{
+              display: 'flex', gap: 4,
+              background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius)', padding: 3,
+            }}>
+              {(Object.keys(KIND_META) as PositiveKind[]).map(k => (
+                <button
+                  key={k}
+                  role="radio"
+                  aria-checked={kind === k}
+                  onClick={() => changeKind(k)}
+                  style={{
+                    flex: 1,
+                    background: kind === k ? 'var(--accent-bg)' : 'transparent',
+                    color: kind === k ? 'var(--accent-light)' : 'var(--text-secondary)',
+                    border: `1px solid ${kind === k ? 'var(--accent-border)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-sm)', padding: '7px 8px',
+                    cursor: 'pointer', fontSize: 12.5, fontWeight: kind === k ? 700 : 500,
+                    fontFamily: 'var(--sans)', transition: 'all 0.15s ease',
+                  }}
+                >
+                  {KIND_META[k].label}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
+              {KIND_META[kind].hint}
+            </p>
+          </div>
+        )}
+
+        {/* Category selector or split editor */}
         <div style={{ marginBottom: 18 }}>
-          <label style={{
-            display: 'block', marginBottom: 7,
-            fontSize: 10.5, fontWeight: 700, color: 'var(--text-label)',
-            textTransform: 'uppercase', letterSpacing: '0.1em',
-          }}>
-            Category
-          </label>
-          <select
-            value={selectedCategory}
-            onChange={e => setSelectedCategory(Number(e.target.value))}
-            style={{
-              width: '100%',
-              background: 'var(--bg-input)', color: 'var(--text-h)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius)',
-              padding: '9px 32px 9px 12px',
-              fontSize: 13.5, fontFamily: 'var(--sans)',
-              cursor: 'pointer',
-            }}
-          >
-            {filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <label style={{
+              fontSize: 10.5, fontWeight: 700, color: 'var(--text-label)',
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+            }}>
+              {splitMode ? 'Split into parts' : 'Category'}
+            </label>
+            {(!isPositive || kind !== 'transfer') && (
+              <button
+                onClick={() => setSplitMode(m => !m)}
+                style={{
+                  background: splitMode ? 'var(--accent-bg)' : 'transparent',
+                  color: splitMode ? 'var(--accent-light)' : 'var(--text-secondary)',
+                  border: `1px solid ${splitMode ? 'var(--accent-border)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius-full)', padding: '2px 10px',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'var(--sans)',
+                }}
+              >
+                {splitMode ? 'Single category' : 'Split…'}
+              </button>
+            )}
+          </div>
+          {splitMode ? (
+            <SplitEditor
+              totalAmount={tx.amount}
+              categories={filteredCategories}
+              rows={splitRows}
+              onChange={setSplitRows}
+            />
+          ) : (
+            <CategorySelect
+              categories={filteredCategories}
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+            />
+          )}
         </div>
 
         {/* Primary actions */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <button
-            onClick={() => onConfirm(tx.id, selectedCategory)}
+            onClick={handleConfirm}
+            disabled={!canConfirm}
             onMouseEnter={() => setConfirmHover(true)}
             onMouseLeave={() => setConfirmHover(false)}
             style={{
@@ -137,17 +265,19 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
               color: '#fff', border: 'none',
               borderRadius: 'var(--radius)',
               padding: '10px 16px',
-              cursor: 'pointer', fontWeight: 600, fontSize: 13.5,
+              cursor: canConfirm ? 'pointer' : 'not-allowed',
+              opacity: canConfirm ? 1 : 0.5,
+              fontWeight: 600, fontSize: 13.5,
               fontFamily: 'var(--sans)',
-              boxShadow: confirmHover
+              boxShadow: confirmHover && canConfirm
                 ? '0 6px 20px rgba(99,102,241,0.5)'
                 : '0 3px 12px rgba(99,102,241,0.3)',
-              transform: confirmHover ? 'translateY(-1px)' : 'none',
+              transform: confirmHover && canConfirm ? 'translateY(-1px)' : 'none',
               transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)',
               letterSpacing: '-0.01em',
             }}
           >
-            Confirm Category
+            {splitMode ? 'Confirm Split' : isRefund ? 'Confirm Refund' : 'Confirm Category'}
           </button>
           <button
             onClick={onSkip}
@@ -167,27 +297,29 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           </button>
         </div>
 
-        {/* Rule creation */}
-        <button
-          onClick={() => onCreateRule(tx.id, selectedCategory)}
-          onMouseEnter={() => setRuleHover(true)}
-          onMouseLeave={() => setRuleHover(false)}
-          style={{
-            width: '100%',
-            background: ruleHover ? 'var(--accent-bg)' : 'transparent',
-            color: ruleHover ? 'var(--accent-light)' : 'var(--text-secondary)',
-            border: `1px solid ${ruleHover ? 'var(--accent-border)' : 'var(--border)'}`,
-            borderRadius: 'var(--radius)', padding: '8px 12px',
-            cursor: 'pointer', fontSize: 12, fontFamily: 'var(--sans)',
-            transition: 'all 0.15s ease',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          Always categorise "{tx.description}" as this
-        </button>
+        {/* Rule creation — not for splits or refunds, which carry one-off judgement */}
+        {!splitMode && !isRefund && (
+          <button
+            onClick={() => onCreateRule(tx.id, selectedCategory)}
+            onMouseEnter={() => setRuleHover(true)}
+            onMouseLeave={() => setRuleHover(false)}
+            style={{
+              width: '100%',
+              background: ruleHover ? 'var(--accent-bg)' : 'transparent',
+              color: ruleHover ? 'var(--accent-light)' : 'var(--text-secondary)',
+              border: `1px solid ${ruleHover ? 'var(--accent-border)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius)', padding: '8px 12px',
+              cursor: 'pointer', fontSize: 12, fontFamily: 'var(--sans)',
+              transition: 'all 0.15s ease',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Always categorise "{tx.description}" as this
+          </button>
+        )}
       </div>
     </div>
   )

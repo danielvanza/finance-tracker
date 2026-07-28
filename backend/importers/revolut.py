@@ -2,7 +2,7 @@ import csv
 import io
 from decimal import Decimal
 from datetime import datetime
-from .base import BaseImporter, ParsedTransaction, make_hash
+from .base import BaseImporter, ParsedTransaction, make_hash, deduplicate_hashes
 
 class RevolutImporter(BaseImporter):
     source = "revolut"
@@ -26,4 +26,4 @@ class RevolutImporter(BaseImporter):
                 source=self.source,
                 import_hash=make_hash(self.source, tx_date, amount, description),
             ))
-        return results
+        return deduplicate_hashes(results)

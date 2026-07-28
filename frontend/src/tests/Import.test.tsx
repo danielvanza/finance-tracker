@@ -7,8 +7,10 @@ const wrap = (ui: React.ReactElement) =>
 
 test('renders source selector and file upload', () => {
   wrap(<Import />)
-  expect(screen.getByText(/ING/)).toBeInTheDocument()
-  expect(screen.getByRole('combobox')).toBeInTheDocument()
+  // Source is now a button group — check the ING button is present
+  expect(screen.getByRole('button', { name: /^ING$/i })).toBeInTheDocument()
+  // Other source buttons should also be present
+  expect(screen.getByRole('button', { name: /^REVOLUT$/i })).toBeInTheDocument()
 })
 
 test('shows preview button after file selected', () => {

@@ -5,6 +5,8 @@ from models import Rule, Category
 def _is_sign_compatible(amount, category: Category) -> bool:
     """Check if the transaction sign is compatible with the category type."""
     cat_type = category.type.value if hasattr(category.type, "value") else str(category.type)
+    if cat_type == "exclude":
+        return True
     if amount > 0:
         return cat_type == "income"
     else:

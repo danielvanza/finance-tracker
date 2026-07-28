@@ -21,15 +21,17 @@ def test_seed_categories_have_correct_types(db):
 def test_seed_creates_default_budgets(db):
     run_seed(db)
     defaults = db.query(Budget).filter_by(month=None).all()
-    assert len(defaults) == 11
+    assert len(defaults) == 16  # expense/wants/savings categories with budgets
 
 def test_seed_is_idempotent(db):
     run_seed(db)
     run_seed(db)  # should not raise or duplicate
     cats = db.query(Category).all()
-    assert len(cats) == 14  # 11 expense + 3 income
+    assert len(cats) == 21  # 16 expense + 4 income + 1 exclude
     defaults = db.query(Budget).filter_by(month=None).all()
-    assert len(defaults) == 11  # income categories have no default budget
+    assert len(defaults) == 16  # income/exclude categories have no default budget
+    from models import StandingAdjustment
+    assert db.query(StandingAdjustment).count() == 2
 
 def test_seed_creates_income_categories(db):
     run_seed(db)

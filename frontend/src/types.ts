@@ -1,3 +1,10 @@
+export interface TransactionSplit {
+  id: number
+  category_id: number | null
+  category_name: string | null
+  amount: number
+}
+
 export interface Transaction {
   id: number
   date: string
@@ -9,6 +16,24 @@ export interface Transaction {
   confirmed: boolean
   categorised_by: string | null
   ai_confidence: number | null
+  is_refund: boolean
+  standing_adjustment_id: number | null
+  splits: TransactionSplit[]
+}
+
+export interface SplitInput {
+  category_id: number
+  amount: number
+}
+
+export interface StandingAdjustment {
+  id: number
+  name: string
+  amount: number
+  income_category_id: number
+  expense_category_id: number
+  active: boolean
+  start_month: string
 }
 
 export interface Category {
@@ -22,6 +47,7 @@ export interface BudgetRow {
   id: number
   category_id: number
   category_name: string
+  category_type: string
   month: string | null
   planned_amount: number
   actual_amount: number | null

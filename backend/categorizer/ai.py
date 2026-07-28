@@ -19,10 +19,10 @@ def _get_categories_for_sign(categories: list[Category], amount) -> list[Categor
     """Filter categories by transaction sign compatibility."""
     if amount > 0:
         return [c for c in categories
-                if (c.type.value if hasattr(c.type, "value") else str(c.type)) == "income"]
+                if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("income", "exclude")]
     else:
         return [c for c in categories
-                if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("needs", "wants", "savings")]
+                if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("needs", "wants", "savings", "exclude")]
 
 
 def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | None:

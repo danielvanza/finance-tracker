@@ -1,18 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
+from uuid import uuid4
 from db import get_db
-from models import Transaction, Category, Rule, Setting
-from schemas import TransactionPatch
+from models import Transaction, TransactionSplit, TransactionSource, Category, Rule, Setting
+from schemas import TransactionPatch, TransactionCreate, AdjustmentPairCreate, SplitIn
 from financial_month import get_financial_month_range
+from importers.base import make_hash
+from adjustments import materialise_standing_adjustments
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+EXPENSE_TYPES = ("needs", "wants", "savings")
 
 
 def _get_start_day(db: Session) -> int:
     setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
     return int(setting.value) if setting else 24
+
+
+def _cat_type(category: Category) -> str:
+    return category.type.value if hasattr(category.type, "value") else str(category.type)
 
 
 def _to_out(tx: Transaction) -> dict:
@@ -24,7 +35,59 @@ def _to_out(tx: Transaction) -> dict:
         "confirmed": tx.confirmed,
         "categorised_by": tx.categorised_by,
         "ai_confidence": tx.ai_confidence,
+        "is_refund": tx.is_refund,
+        "standing_adjustment_id": tx.standing_adjustment_id,
+        "splits": [
+            {"id": s.id, "category_id": s.category_id,
+             "category_name": s.category.name if s.category else None,
+             "amount": s.amount}
+            for s in tx.splits
+        ],
     }
+
+
+def _require_category(category_id: int, db: Session) -> Category:
+    cat = db.get(Category, category_id)
+    if not cat:
+        raise HTTPException(status_code=422, detail=f"Category {category_id} does not exist")
+    return cat
+
+
+def _validate_refund(amount: Decimal, categories: list[Category]):
+    if amount <= 0:
+        raise HTTPException(status_code=422,
+                            detail="Only an incoming (positive) amount can be marked as a refund")
+    for cat in categories:
+        if _cat_type(cat) not in EXPENSE_TYPES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"A refund must reduce an expense category (needs/wants/savings), "
+                       f"but '{cat.name}' is {_cat_type(cat)}",
+            )
+
+
+def _apply_splits(tx: Transaction, splits: list[SplitIn], db: Session):
+    if len(splits) == 0:
+        tx.splits = []
+        return
+    if len(splits) == 1:
+        raise HTTPException(status_code=422,
+                            detail="A split needs at least two parts; set category_id instead")
+    total = sum(s.amount for s in splits)
+    if total != tx.amount:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Split parts must sum to the transaction amount ({tx.amount}), got {total}",
+        )
+    for s in splits:
+        if s.amount == 0:
+            raise HTTPException(status_code=422, detail="Split parts must have a non-zero amount")
+        if (tx.amount > 0) != (s.amount > 0):
+            raise HTTPException(status_code=422,
+                                detail="Split parts must share the transaction's sign")
+        _require_category(s.category_id, db)
+    tx.splits = [TransactionSplit(category_id=s.category_id, amount=s.amount) for s in splits]
+    tx.category_id = None
 
 
 @router.get("")
@@ -35,7 +98,7 @@ def list_transactions(
     confirmed: Optional[bool] = None,
     db: Session = Depends(get_db),
 ):
-    q = db.query(Transaction)
+    q = db.query(Transaction).options(selectinload(Transaction.splits))
     if month:
         try:
             parsed = datetime.strptime(month, "%Y-%m")
@@ -43,10 +106,14 @@ def list_transactions(
         except ValueError:
             raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
         start_day = _get_start_day(db)
+        materialise_standing_adjustments(year, mo, start_day, db)
         start_date, end_date = get_financial_month_range(year, mo, start_day)
         q = q.filter(Transaction.date >= start_date, Transaction.date <= end_date)
     if category_id is not None:
-        q = q.filter(Transaction.category_id == category_id)
+        q = q.filter(or_(
+            Transaction.category_id == category_id,
+            Transaction.splits.any(TransactionSplit.category_id == category_id),
+        ))
     if source:
         q = q.filter(Transaction.source == source)
     if confirmed is not None:
@@ -57,11 +124,67 @@ def list_transactions(
 
 
 @router.get("/review")
-def next_review(db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.confirmed == False).order_by(Transaction.date.asc()).first()
+def next_review(skip_ids: list[int] = Query(default=[]), db: Session = Depends(get_db)):
+    q = db.query(Transaction).filter(Transaction.confirmed == False)
+    if skip_ids:
+        q = q.filter(~Transaction.id.in_(skip_ids))
+    tx = q.order_by(Transaction.date.asc()).first()
     if not tx:
         return None
     return _to_out(tx)
+
+
+@router.post("", status_code=201)
+def create_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
+    """Create a manual transaction (not from a CSV). Auto-confirmed: the user
+    just picked the category themselves."""
+    if body.amount == 0:
+        raise HTTPException(status_code=422, detail="Amount must be non-zero")
+    cat = _require_category(body.category_id, db)
+    if body.is_refund:
+        _validate_refund(body.amount, [cat])
+    tx = Transaction(
+        date=body.date, amount=body.amount, description=body.description,
+        source=TransactionSource.manual, category_id=body.category_id,
+        confirmed=True, categorised_by="manual", is_refund=body.is_refund,
+        import_hash=make_hash("manual", body.date, body.amount, body.description, uuid4().hex),
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(tx)
+    return _to_out(tx)
+
+
+@router.post("/adjustment-pair", status_code=201)
+def create_adjustment_pair(body: AdjustmentPairCreate, db: Session = Depends(get_db)):
+    """Create a balanced pair of manual transactions. The two legs must net to
+    exactly zero so the pair can never change left_over."""
+    if len(body.legs) != 2:
+        raise HTTPException(status_code=422, detail="An adjustment pair needs exactly two legs")
+    total = sum(leg.amount for leg in body.legs)
+    if total != 0:
+        raise HTTPException(status_code=422,
+                            detail=f"Adjustment legs must net to zero, got {total}")
+    if any(leg.amount == 0 for leg in body.legs):
+        raise HTTPException(status_code=422, detail="Adjustment legs must have a non-zero amount")
+    for leg in body.legs:
+        _require_category(leg.category_id, db)
+    txs = []
+    for leg in body.legs:
+        tx = Transaction(
+            date=body.date, amount=leg.amount,
+            description=leg.description or body.description,
+            source=TransactionSource.manual, category_id=leg.category_id,
+            confirmed=True, categorised_by="manual",
+            import_hash=make_hash("manual", body.date, leg.amount,
+                                  leg.description or body.description, uuid4().hex),
+        )
+        db.add(tx)
+        txs.append(tx)
+    db.commit()
+    for tx in txs:
+        db.refresh(tx)
+    return [_to_out(tx) for tx in txs]
 
 
 @router.patch("/{tx_id}")
@@ -70,14 +193,37 @@ def patch_transaction(tx_id: int, body: TransactionPatch, db: Session = Depends(
     if not tx:
         raise HTTPException(404)
     if body.category_id is not None:
+        _require_category(body.category_id, db)
         tx.category_id = body.category_id
         if tx.categorised_by == "ai":
             tx.categorised_by = "manual"
+    if body.is_refund is not None:
+        tx.is_refund = body.is_refund
     if body.confirmed is not None:
         tx.confirmed = body.confirmed
+    if body.splits is not None:
+        _apply_splits(tx, body.splits, db)
+    if tx.is_refund:
+        cat_ids = [s.category_id for s in tx.splits] if tx.splits else [tx.category_id]
+        categories = [db.get(Category, cid) for cid in cat_ids if cid is not None]
+        _validate_refund(tx.amount, [c for c in categories if c])
     db.commit()
     db.refresh(tx)
     return _to_out(tx)
+
+
+@router.delete("/{tx_id}")
+def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
+    tx = db.get(Transaction, tx_id)
+    if not tx:
+        raise HTTPException(404)
+    source = tx.source.value if hasattr(tx.source, "value") else str(tx.source)
+    if source != "manual":
+        raise HTTPException(status_code=422,
+                            detail="Only manual transactions can be deleted; imported rows are immutable")
+    db.delete(tx)
+    db.commit()
+    return {"deleted": tx_id}
 
 
 @router.post("/{tx_id}/create-rule")
@@ -103,11 +249,16 @@ def create_rule_from_transaction(tx_id: int, db: Session = Depends(get_db)):
     updated = 0
     for t in unconfirmed:
         if pattern in t.description.lower():
-            # Check sign compatibility
-            if t.amount > 0 and cat_type != "income":
+            # Refund-marked or split transactions carry user decisions a rule
+            # must not overwrite
+            if t.is_refund or t.splits:
                 continue
-            if t.amount <= 0 and cat_type == "income":
-                continue
+            # Check sign compatibility (exclude is allowed for any sign)
+            if cat_type != "exclude":
+                if t.amount > 0 and cat_type != "income":
+                    continue
+                if t.amount <= 0 and cat_type == "income":
+                    continue
             t.confirmed = True
             t.category_id = tx.category_id
             t.categorised_by = "rule"

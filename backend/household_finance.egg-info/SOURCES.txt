@@ -4,3 +4,14 @@ household_finance.egg-info/SOURCES.txt
 household_finance.egg-info/dependency_links.txt
 household_finance.egg-info/requires.txt
 household_finance.egg-info/top_level.txt
+tests/test_budget.py
+tests/test_categorizer.py
+tests/test_dashboard.py
+tests/test_financial_month.py
+tests/test_importers.py
+tests/test_imports.py
+tests/test_models.py
+tests/test_rules.py
+tests/test_seed.py
+tests/test_settings.py
+tests/test_transactions.py

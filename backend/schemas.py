@@ -23,6 +23,18 @@ class ImportConfirmResponse(BaseModel):
     categorised_by_ai: int
     uncategorised: int
 
+class SplitIn(BaseModel):
+    category_id: int
+    amount: Decimal
+
+class SplitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    category_id: Optional[int]
+    category_name: Optional[str]
+    amount: Decimal
+
 class TransactionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -36,10 +48,60 @@ class TransactionOut(BaseModel):
     confirmed: bool
     categorised_by: Optional[str]
     ai_confidence: Optional[float]
+    is_refund: bool = False
+    standing_adjustment_id: Optional[int] = None
+    splits: list[SplitOut] = []
 
 class TransactionPatch(BaseModel):
     category_id: Optional[int] = None
     confirmed: Optional[bool] = None
+    is_refund: Optional[bool] = None
+    # None = leave splits untouched; [] = unsplit; 2+ items = replace splits
+    splits: Optional[list[SplitIn]] = None
+
+class TransactionCreate(BaseModel):
+    date: date
+    amount: Decimal
+    description: str
+    category_id: int
+    is_refund: bool = False
+
+class AdjustmentLeg(BaseModel):
+    amount: Decimal
+    category_id: int
+    description: Optional[str] = None
+
+class AdjustmentPairCreate(BaseModel):
+    date: date
+    description: str
+    legs: list[AdjustmentLeg]
+
+class StandingAdjustmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    amount: Decimal
+    income_category_id: int
+    expense_category_id: int
+    active: bool
+    start_month: date
+
+class StandingAdjustmentCreate(BaseModel):
+    name: str
+    amount: Decimal
+    income_category_id: int
+    expense_category_id: int
+    active: bool = True
+    start_month: Optional[date] = None  # defaults to the current month
+
+class StandingAdjustmentPatch(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[Decimal] = None
+    income_category_id: Optional[int] = None
+    expense_category_id: Optional[int] = None
+    active: Optional[bool] = None
+    start_month: Optional[date] = None
 
 class CategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

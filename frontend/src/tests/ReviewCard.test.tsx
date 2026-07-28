@@ -7,6 +7,7 @@ const mockTx = {
   id: 1, date: '2026-03-12', amount: -34.99, description: 'Bol.com',
   source: 'ing', category_id: 5, category_name: 'Recreation & Entertainment',
   confirmed: false, categorised_by: 'ai', ai_confidence: 0.72,
+  is_refund: false, standing_adjustment_id: null, splits: [],
 }
 
 const mockCategories = [
@@ -29,27 +30,37 @@ test('shows AI suggestion and confidence', () => {
   expect(screen.getAllByText(/Recreation & Entertainment/).length).toBeGreaterThan(0)
 })
 
-test('calls onConfirm when confirm button clicked', () => {
+test('calls onConfirm with the decision when confirm button clicked', () => {
   const onConfirm = vi.fn()
   wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} onCreateRule={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
-  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, mockTx.category_id)
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false })
 })
 
-describe('ReviewCard sign-filtering', () => {
+describe('ReviewCard incoming-money choice', () => {
   const allCategories = [
     { id: 1, name: 'Food', type: 'needs', sort_order: 1 },
     { id: 2, name: 'Salary', type: 'income', sort_order: 20 },
     { id: 3, name: 'Fun', type: 'wants', sort_order: 7 },
+    { id: 4, name: 'Internal Transfer', type: 'exclude', sort_order: 30 },
   ]
 
+  const expenseTx = {
+    id: 1, date: '2026-03-01', amount: -45.0,
+    description: 'Albert Heijn', source: 'ing',
+    category_id: 1, category_name: 'Food',
+    confirmed: false, categorised_by: 'ai', ai_confidence: 0.85,
+    is_refund: false, standing_adjustment_id: null, splits: [],
+  }
+  const incomeTx = {
+    id: 2, date: '2026-03-01', amount: 3400.0,
+    description: 'Salaris Maart', source: 'ing',
+    category_id: 2, category_name: 'Salary',
+    confirmed: false, categorised_by: 'ai', ai_confidence: 0.9,
+    is_refund: false, standing_adjustment_id: null, splits: [],
+  }
+
   it('shows only expense categories for negative amount transactions', () => {
-    const expenseTx = {
-      id: 1, date: '2026-03-01', amount: -45.0,
-      description: 'Albert Heijn', source: 'ing',
-      category_id: 1, category_name: 'Food',
-      confirmed: false, categorised_by: 'ai', ai_confidence: 0.85,
-    }
     wrap(
       <ReviewCard
         transaction={expenseTx}
@@ -59,20 +70,16 @@ describe('ReviewCard sign-filtering', () => {
         onCreateRule={vi.fn()}
       />
     )
-    const options = screen.getAllByRole('option')
-    const optionTexts = options.map(o => o.textContent)
+    // No income/refund/transfer choice for outgoing money
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
     expect(optionTexts).toContain('Food')
     expect(optionTexts).toContain('Fun')
     expect(optionTexts).not.toContain('Salary')
   })
 
-  it('shows only income categories for positive amount transactions', () => {
-    const incomeTx = {
-      id: 2, date: '2026-03-01', amount: 3400.0,
-      description: 'Salaris Maart', source: 'ing',
-      category_id: 2, category_name: 'Salary',
-      confirmed: false, categorised_by: 'ai', ai_confidence: 0.9,
-    }
+  it('defaults positive amounts to income categories', () => {
     wrap(
       <ReviewCard
         transaction={incomeTx}
@@ -82,10 +89,120 @@ describe('ReviewCard sign-filtering', () => {
         onCreateRule={vi.fn()}
       />
     )
-    const options = screen.getAllByRole('option')
-    const optionTexts = options.map(o => o.textContent)
+    expect(screen.getByRole('radio', { name: 'Income' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /salary/i }))
+    const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
     expect(optionTexts).toContain('Salary')
     expect(optionTexts).not.toContain('Food')
     expect(optionTexts).not.toContain('Fun')
+  })
+
+  it('reveals expense categories when marked as refund and confirms with is_refund', () => {
+    const onConfirm = vi.fn()
+    wrap(
+      <ReviewCard
+        transaction={incomeTx}
+        categories={allCategories}
+        onConfirm={onConfirm}
+        onSkip={vi.fn()}
+        onCreateRule={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Refund' }))
+    // Category select now offers expense categories, defaulting to the first
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
+    expect(optionTexts).toContain('Food')
+    expect(optionTexts).toContain('Fun')
+    expect(optionTexts).not.toContain('Salary')
+    // Pick Fun and confirm
+    fireEvent.click(screen.getAllByRole('option').find(o => o.textContent === 'Fun')!)
+    fireEvent.click(screen.getByRole('button', { name: /confirm refund/i }))
+    expect(onConfirm).toHaveBeenCalledWith(incomeTx.id, { category_id: 3, is_refund: true })
+  })
+
+  it('selects transfer categories for the transfer kind', () => {
+    wrap(
+      <ReviewCard
+        transaction={incomeTx}
+        categories={allCategories}
+        onConfirm={vi.fn()}
+        onSkip={vi.fn()}
+        onCreateRule={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Transfer' }))
+    fireEvent.click(screen.getByRole('button', { name: /internal transfer/i }))
+    const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
+    expect(optionTexts).toContain('Internal Transfer')
+    expect(optionTexts).not.toContain('Salary')
+  })
+})
+
+describe('ReviewCard splitting', () => {
+  const categories = [
+    { id: 1, name: 'Food', type: 'needs', sort_order: 1 },
+    { id: 3, name: 'Fun', type: 'wants', sort_order: 7 },
+  ]
+  const expenseTx = {
+    id: 9, date: '2026-03-01', amount: -250.0,
+    description: 'Supermarket', source: 'ing',
+    category_id: 1, category_name: 'Food',
+    confirmed: false, categorised_by: null, ai_confidence: null,
+    is_refund: false, standing_adjustment_id: null, splits: [],
+  }
+
+  it('confirms a balanced split with signed parts', () => {
+    const onConfirm = vi.fn()
+    wrap(
+      <ReviewCard
+        transaction={expenseTx}
+        categories={categories}
+        onConfirm={onConfirm}
+        onSkip={vi.fn()}
+        onCreateRule={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /split…/i }))
+
+    const amountInputs = [
+      screen.getByLabelText('Split part 1 amount'),
+      screen.getByLabelText('Split part 2 amount'),
+    ]
+    fireEvent.change(amountInputs[0], { target: { value: '125' } })
+    fireEvent.change(amountInputs[1], { target: { value: '125' } })
+
+    // Pick categories for both parts
+    const selects = screen.getAllByRole('button', { name: /select category/i })
+    fireEvent.click(selects[0])
+    fireEvent.click(screen.getAllByRole('option').find(o => o.textContent === 'Food')!)
+    fireEvent.click(screen.getAllByRole('button', { name: /select category/i })[0])
+    fireEvent.click(screen.getAllByRole('option').find(o => o.textContent === 'Fun')!)
+
+    const confirmBtn = screen.getByRole('button', { name: /confirm split/i })
+    fireEvent.click(confirmBtn)
+    expect(onConfirm).toHaveBeenCalledWith(expenseTx.id, {
+      is_refund: false,
+      splits: [
+        { category_id: 1, amount: -125 },
+        { category_id: 3, amount: -125 },
+      ],
+    })
+  })
+
+  it('disables confirm while the split does not sum to the total', () => {
+    wrap(
+      <ReviewCard
+        transaction={expenseTx}
+        categories={categories}
+        onConfirm={vi.fn()}
+        onSkip={vi.fn()}
+        onCreateRule={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /split…/i }))
+    fireEvent.change(screen.getByLabelText('Split part 1 amount'), { target: { value: '100' } })
+    expect(screen.getByRole('button', { name: /confirm split/i })).toBeDisabled()
+    expect(screen.getByText(/Remaining: €150.00/)).toBeInTheDocument()
   })
 })

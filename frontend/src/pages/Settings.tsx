@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import StandingAdjustments from '../components/StandingAdjustments'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -133,6 +134,8 @@ export default function Settings() {
           Value must be between 1 and 28. Changing this will retroactively redefine all financial periods.
         </p>
       </div>
+
+      <StandingAdjustments />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import StandingAdjustments from '../components/StandingAdjustments'
+import CategoryManager from '../components/CategoryManager'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -136,6 +137,7 @@ export default function Settings() {
       </div>
 
       <StandingAdjustments />
+      <CategoryManager />
     </div>
   )
 }

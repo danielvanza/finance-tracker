@@ -109,4 +109,11 @@ pids+=($!)
 ok "Both servers running. Open http://localhost:5173  (Ctrl+C to stop)"
 
 # Wait for either process to exit; cleanup trap stops the other.
-wait -n
+# (Not `wait -n`: that needs bash 4.3+, but macOS ships bash 3.2 as /bin/sh,
+# which is what `sh dev.sh` invokes regardless of this file's shebang.)
+while :; do
+  for pid in "${pids[@]}"; do
+    kill -0 "$pid" 2>/dev/null || exit 0
+  done
+  sleep 1
+done

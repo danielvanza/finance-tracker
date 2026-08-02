@@ -82,10 +82,25 @@ export const api = {
       body: JSON.stringify({ planned_amount }),
     }).then(r => r.json()),
 
-  patchCategory: (id: number, body: { type?: string }) =>
+  patchCategory: (id: number, body: { type?: string; name?: string }) =>
     fetch(`${BASE}/categories/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+    }).then(r => r.json()),
+
+  createCategory: (body: { name: string; type: string; sort_order?: number }) =>
+    fetch(`${BASE}/categories`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json()),
+
+  deleteCategory: (id: number) =>
+    fetch(`${BASE}/categories/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
+  reorderCategories: (categoryIds: number[]) =>
+    fetch(`${BASE}/categories/reorder`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category_ids: categoryIds }),
     }).then(r => r.json()),
 
   getRules: (): Promise<import('./types').Rule[]> =>

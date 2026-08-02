@@ -45,6 +45,9 @@ STANDING_ADJUSTMENTS = [
 ]
 
 def run_seed(db: Session) -> None:
+    if db.query(Category).count() > 0:
+        return
+
     # Expense categories with default budgets
     for name, type_, order, default_amount in CATEGORIES:
         cat = db.query(Category).filter_by(name=name).first()

@@ -35,12 +35,16 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   'Internal Transfer':          ArrowLeftRight,
 }
 
-function getCategoryIcon(name: string): LucideIcon {
-  return CATEGORY_ICONS[name] ?? HelpCircle
+const TYPE_FALLBACK_ICONS: Record<string, LucideIcon> = {
+  needs: Home, wants: Gamepad2, savings: PiggyBank, income: Wallet, exclude: ArrowLeftRight,
+}
+
+function getCategoryIcon(name: string, type: string): LucideIcon {
+  return CATEGORY_ICONS[name] ?? TYPE_FALLBACK_ICONS[type] ?? HelpCircle
 }
 
 /* ── Colour mapping per category type ── */
-const TYPE_META: Record<string, { label: string; color: string; bg: string; border: string; glow: string }> = {
+export const TYPE_META: Record<string, { label: string; color: string; bg: string; border: string; glow: string }> = {
   needs:   { label: 'Needs',   color: 'var(--green)',  bg: 'var(--green-bg)',  border: 'var(--green-border)',  glow: 'var(--green-glow)' },
   wants:   { label: 'Wants',   color: 'var(--violet)', bg: 'var(--violet-bg)', border: 'var(--violet-border)', glow: 'rgba(167,139,250,0.28)' },
   savings: { label: 'Savings', color: 'var(--cyan)',   bg: 'var(--cyan-bg)',   border: 'var(--cyan-border)',   glow: 'rgba(34,211,238,0.28)' },
@@ -48,7 +52,7 @@ const TYPE_META: Record<string, { label: string; color: string; bg: string; bord
   exclude: { label: 'Exclude', color: 'var(--text-muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)', glow: 'rgba(148,163,184,0.15)' },
 }
 
-const GROUP_ORDER = ['needs', 'wants', 'savings', 'income', 'exclude']
+export const GROUP_ORDER = ['needs', 'wants', 'savings', 'income', 'exclude']
 
 interface Props {
   categories: Category[]
@@ -191,7 +195,7 @@ export default function CategorySelect({ categories, value, onChange, placeholde
   }, [open, compact])
 
   /* ── Selected icon ── */
-  const SelectedIcon = selected ? getCategoryIcon(selected.name) : null
+  const SelectedIcon = selected ? getCategoryIcon(selected.name, selected.type) : null
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }} onKeyDown={handleKeyDown}>
@@ -358,7 +362,7 @@ export default function CategorySelect({ categories, value, onChange, placeholde
                       const isHighlighted = flatIdx === highlightIdx
                       const isSelected = cat.id === value
                       const cm = TYPE_META[cat.type]
-                      const Icon = getCategoryIcon(cat.name)
+                      const Icon = getCategoryIcon(cat.name, cat.type)
                       return (
                         <div
                           key={cat.id}

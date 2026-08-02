@@ -9,6 +9,11 @@ vi.mock('../api', () => ({
   api: {
     getSettings: vi.fn(() => Promise.resolve(mockSettings)),
     patchSetting: vi.fn(() => Promise.resolve({ key: 'financial_month_start_day', value: '15' })),
+    getCategories: vi.fn(() => Promise.resolve([])),
+    getStandingAdjustments: vi.fn(() => Promise.resolve([])),
+    createCategory: vi.fn(() => Promise.resolve({})),
+    deleteCategory: vi.fn(() => Promise.resolve({})),
+    reorderCategories: vi.fn(() => Promise.resolve([])),
   },
 }))
 

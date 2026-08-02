@@ -111,6 +111,14 @@ class CategoryOut(BaseModel):
     type: str
     sort_order: int
 
+class CategoryCreate(BaseModel):
+    name: str
+    type: str
+    sort_order: Optional[int] = None
+
+class CategoryReorder(BaseModel):
+    category_ids: list[int]
+
 class BudgetRow(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

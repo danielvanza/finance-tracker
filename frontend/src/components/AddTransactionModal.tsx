@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { Category } from '../types'
 import { api } from '../api'
 import CategorySelect from './CategorySelect'
@@ -43,14 +44,21 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
   const [kind, setKind] = useState<Kind>('expense')
   const [transferOut, setTransferOut] = useState(true)
   const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [incomeCategoryId, setIncomeCategoryId] = useState<number | null>(
-    categories.find(c => c.name === 'Retained Salary')?.id ?? null
-  )
-  const [expenseCategoryId, setExpenseCategoryId] = useState<number | null>(
-    categories.find(c => c.name === 'Personal Allowance')?.id ?? null
-  )
+  const { data: standingAdjustments = [] } = useQuery({
+    queryKey: ['standing-adjustments'],
+    queryFn: api.getStandingAdjustments,
+  })
+  const defaultPair = standingAdjustments.find(sa => sa.active) ?? standingAdjustments[0]
+  const [incomeCategoryId, setIncomeCategoryId] = useState<number | null>(null)
+  const [expenseCategoryId, setExpenseCategoryId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!defaultPair) return
+    setIncomeCategoryId(prev => prev ?? defaultPair.income_category_id)
+    setExpenseCategoryId(prev => prev ?? defaultPair.expense_category_id)
+  }, [defaultPair])
 
   const kindCategories = (k: Kind) => {
     if (k === 'income') return categories.filter(c => c.type === 'income')

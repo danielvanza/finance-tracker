@@ -63,3 +63,16 @@ def test_seed_creates_financial_month_setting(db):
     setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
     assert setting is not None
     assert setting.value == "24"
+
+
+def test_seed_does_not_duplicate_renamed_category(db):
+    run_seed(db)
+    fun_account = db.query(Category).filter_by(name="Fun Account").first()
+    fun_account.name = "Dog savings"
+    db.commit()
+
+    run_seed(db)
+
+    assert db.query(Category).filter_by(name="Dog savings").count() == 1
+    assert db.query(Category).filter_by(name="Fun Account").first() is None
+    assert db.query(Category).count() == 21

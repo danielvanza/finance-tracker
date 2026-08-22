@@ -30,7 +30,9 @@ def _make_sa(client, db, name="Test allowance", amount="600.00", start_month="20
         "start_month": start_month,
     })
     assert r.status_code == 201, r.text
-    return r.json()
+    body = r.json()
+    assert body["amount_cents"] == 60000  # v2 wire: int cents, not euros
+    return body
 
 
 def test_seeded_standing_adjustments_listed(client):
@@ -38,6 +40,8 @@ def test_seeded_standing_adjustments_listed(client):
     names = {row["name"] for row in rows}
     assert "Personal allowance — partner 1" in names
     assert "Personal allowance — partner 2" in names
+    assert all(isinstance(row["amount_cents"], int) and row["amount_cents"] > 0
+               for row in rows)
 
 
 def test_create_validates_amount_and_category_types(client, db):

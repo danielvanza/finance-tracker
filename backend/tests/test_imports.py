@@ -24,6 +24,7 @@ def test_preview_returns_parsed_rows(client):
     body = r.json()
     assert body["total"] == 2
     assert body["duplicates"] == 0
+    assert [row["amount_cents"] for row in body["rows"]] == [-6740, 346026]
 
 def test_confirm_saves_transactions(client):
     r = client.post("/import/confirm", data={"source": "ing"},

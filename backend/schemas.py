@@ -77,18 +77,29 @@ class SplitOut(BaseModel):
         validation_alias=AliasChoices("amount", "amount_cents"),
         serialization_alias="amount_cents",
     )
+    # NULL DB value means inherit-parent; parent-fallback resolution happens
+    # upstream (aggregate.effective_parts), serializers expose resolved bools.
+    is_refund: bool = False
 
     @field_validator("amount_cents", mode="before")
     @classmethod
     def _amount_to_cents(cls, v):
         return _as_cents(v)
 
+    @field_validator("is_refund", mode="before")
+    @classmethod
+    def _null_refund_inherits(cls, v):
+        return v if isinstance(v, bool) else bool(v) if v is not None else False
+
 class TransactionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     date: date
-    amount: Decimal
+    amount_cents: int = Field(
+        validation_alias=AliasChoices("amount", "amount_cents"),
+        serialization_alias="amount_cents",
+    )
     description: str
     source: str
     category_id: Optional[int]
@@ -99,6 +110,11 @@ class TransactionOut(BaseModel):
     is_refund: bool = False
     standing_adjustment_id: Optional[int] = None
     splits: list[SplitOut] = []
+
+    @field_validator("amount_cents", mode="before")
+    @classmethod
+    def _amount_to_cents(cls, v):
+        return _as_cents(v)
 
 class TransactionPatch(BaseModel):
     category_id: Optional[int] = None

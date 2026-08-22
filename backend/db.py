@@ -25,6 +25,7 @@ def run_migrations(engine) -> None:
         "standing_adjustments": [
             ("start_month", "DATE"),
         ],
+        "transaction_splits": [("is_refund", "BOOLEAN")],
     }
     backfills = [
         "UPDATE standing_adjustments SET start_month = date('now', 'start of month') "

@@ -66,6 +66,10 @@ class TransactionSplit(Base):
     )
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
+    # v2: BOOLEAN NULL — NULL means inherit parent transaction.is_refund
+    # (backward compatible); set explicitly when a single part of a split
+    # is a refund.
+    is_refund = Column(Boolean, nullable=True)
     transaction = relationship("Transaction", back_populates="splits")
     category = relationship("Category")
 

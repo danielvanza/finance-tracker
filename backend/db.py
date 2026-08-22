@@ -4,6 +4,15 @@ import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/finance.db")
 
+# R7: a fresh clone has no gitignored data/ dir, so a sqlite file URL fails at
+# first connect (pytest collection dies on new checkouts). Create the parent
+# directory up front; skip the pure-memory forms.
+if DATABASE_URL.startswith("sqlite:///"):  # excludes bare "sqlite://" memory form
+    db_file = DATABASE_URL[len("sqlite:///"):]  # keeps leading "/" for absolute URLs
+    db_dir = os.path.dirname(db_file)
+    if db_file != ":memory:" and db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 

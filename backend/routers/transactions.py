@@ -6,20 +6,25 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 from db import get_db
-from models import Transaction, TransactionSplit, TransactionSource, Category, Rule, Setting
-from schemas import TransactionPatch, TransactionCreate, AdjustmentPairCreate, SplitIn
-from financial_month import get_financial_month_range
+from models import Transaction, TransactionSplit, TransactionSource, Category, Rule
+from schemas import (TransactionPatch, TransactionCreate, AdjustmentPairCreate,
+                     SplitIn, TransactionOut, SplitOut)
+import spend_service
 from importers.base import make_hash
-from adjustments import materialise_standing_adjustments
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 EXPENSE_TYPES = ("needs", "wants", "savings")
 
 
-def _get_start_day(db: Session) -> int:
-    setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
-    return int(setting.value) if setting else 24
+class SplitPartIn(SplitIn):
+    """v2: optional per-part refund flag. Router-local extension — branch B2
+    may not edit schemas.py. None -> DB NULL -> part inherits parent flag."""
+    is_refund: Optional[bool] = None
+
+
+class TransactionPatchV2(TransactionPatch):
+    splits: Optional[list[SplitPartIn]] = None
 
 
 def _cat_type(category: Category) -> str:
@@ -27,23 +32,23 @@ def _cat_type(category: Category) -> str:
 
 
 def _to_out(tx: Transaction) -> dict:
-    return {
-        "id": tx.id, "date": tx.date, "amount": tx.amount,
-        "description": tx.description, "source": tx.source,
-        "category_id": tx.category_id,
-        "category_name": tx.category.name if tx.category else None,
-        "confirmed": tx.confirmed,
-        "categorised_by": tx.categorised_by,
-        "ai_confidence": tx.ai_confidence,
-        "is_refund": tx.is_refund,
-        "standing_adjustment_id": tx.standing_adjustment_id,
-        "splits": [
-            {"id": s.id, "category_id": s.category_id,
-             "category_name": s.category.name if s.category else None,
-             "amount": s.amount}
-            for s in tx.splits
-        ],
-    }
+    return TransactionOut(
+        id=tx.id, date=tx.date, amount=tx.amount, description=tx.description,
+        source=tx.source.value if hasattr(tx.source, "value") else str(tx.source),
+        category_id=tx.category_id,
+        category_name=tx.category.name if tx.category else None,
+        confirmed=tx.confirmed,
+        categorised_by=(tx.categorised_by.value if hasattr(tx.categorised_by, "value")
+                        else str(tx.categorised_by)) if tx.categorised_by else None,
+        ai_confidence=tx.ai_confidence, is_refund=tx.is_refund,
+        standing_adjustment_id=tx.standing_adjustment_id,
+        splits=[SplitOut(
+            id=s.id, category_id=s.category_id,
+            category_name=s.category.name if s.category else None,
+            amount=s.amount,
+            is_refund=(tx.is_refund if s.is_refund is None else s.is_refund),
+        ) for s in tx.splits],
+    ).model_dump(by_alias=True)
 
 
 def _require_category(category_id: int, db: Session) -> Category:
@@ -66,7 +71,7 @@ def _validate_refund(amount: Decimal, categories: list[Category]):
             )
 
 
-def _apply_splits(tx: Transaction, splits: list[SplitIn], db: Session):
+def _apply_splits(tx: Transaction, splits: list[SplitPartIn], db: Session):
     if len(splits) == 0:
         tx.splits = []
         return
@@ -86,7 +91,14 @@ def _apply_splits(tx: Transaction, splits: list[SplitIn], db: Session):
             raise HTTPException(status_code=422,
                                 detail="Split parts must share the transaction's sign")
         _require_category(s.category_id, db)
-    tx.splits = [TransactionSplit(category_id=s.category_id, amount=s.amount) for s in splits]
+        if s.is_refund:
+            part_cat = _require_category(s.category_id, db)
+            if _cat_type(part_cat) not in EXPENSE_TYPES:
+                raise HTTPException(status_code=422, detail=(
+                    f"A refund part must reduce an expense category (needs/wants/savings), "
+                    f"but '{part_cat.name}' is {_cat_type(part_cat)}"))
+    tx.splits = [TransactionSplit(category_id=s.category_id, amount=s.amount,
+                                  is_refund=s.is_refund) for s in splits]
     tx.category_id = None
 
 
@@ -105,9 +117,8 @@ def list_transactions(
             year, mo = parsed.year, parsed.month
         except ValueError:
             raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
-        start_day = _get_start_day(db)
-        materialise_standing_adjustments(year, mo, start_day, db)
-        start_date, end_date = get_financial_month_range(year, mo, start_day)
+        start_date, end_date = spend_service.financial_month_bounds(
+            db, year, mo, materialise=True)
         q = q.filter(Transaction.date >= start_date, Transaction.date <= end_date)
     if category_id is not None:
         q = q.filter(or_(
@@ -188,7 +199,7 @@ def create_adjustment_pair(body: AdjustmentPairCreate, db: Session = Depends(get
 
 
 @router.patch("/{tx_id}")
-def patch_transaction(tx_id: int, body: TransactionPatch, db: Session = Depends(get_db)):
+def patch_transaction(tx_id: int, body: TransactionPatchV2, db: Session = Depends(get_db)):
     tx = db.get(Transaction, tx_id)
     if not tx:
         raise HTTPException(404)

@@ -48,7 +48,6 @@ with open(REPO_ROOT / "contracts" / "api-contracts.json") as _fh:
     _CONTRACTS = json.load(_fh)
 
 ENDPOINTS = {e["id"]: e for e in _CONTRACTS["endpoints"]}
-XFAIL_REASON = "legacy dict wire format; flips when B2 rewires routers"
 
 TX_OUT_KEYS = {
     "id", "date", "amount_cents", "description", "source", "category_id",
@@ -380,7 +379,7 @@ def test_seam_category_patch(client):
     assert body["type"] == "savings"
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
+@pytest.mark.xfail(strict=True, reason="v2 category-type guard ships in B2 P3")
 def test_category_type_change_guard(client):
     """v2 guard: type change blocked (422 + census detail) while dependents
     exist unless force:true — ships with B2."""
@@ -538,13 +537,12 @@ def test_seam_setting_patch(client):
 
 
 # ---------------------------------------------------------------------------
-# Round trips — xfail(strict) until B2 rewires hand-built dict responses
+# Round trips — full v2 wire shape asserted (un-xfailed in B2 P2)
 # ---------------------------------------------------------------------------
 
 LABEL_MONTH = "2026-01"
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_transactions_list(client):
     r = client.get(ep("transactions-list")["path"])
     assert r.status_code == 200
@@ -565,7 +563,6 @@ def test_seam_transactions_list(client):
             assert isinstance(s["is_refund"], bool)
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_transactions_next_review(client):
     r = client.get(ep("transactions-next-review")["path"])
     assert r.status_code == 200
@@ -585,7 +582,6 @@ def test_seam_transactions_next_review(client):
         assert set(nxt.keys()) == TX_OUT_KEYS
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_transaction_create(client, db):
     r = client.post(
         ep("transaction-create")["path"],
@@ -606,7 +602,6 @@ def test_seam_transaction_create(client, db):
     assert tx["categorised_by"] == "manual"
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_transaction_adjustment_pair(client, db):
     r = client.post(
         ep("transaction-adjustment-pair")["path"],
@@ -628,7 +623,6 @@ def test_seam_transaction_adjustment_pair(client, db):
     assert sum(t["amount_cents"] for t in pair) == 0
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_transaction_patch(client, db):
     bol = db.query(Transaction).filter_by(description="Bol.com order").one()
     utilities = db.query(Category).filter_by(name="Utilities").one()

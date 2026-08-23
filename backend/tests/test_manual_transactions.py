@@ -125,7 +125,7 @@ def test_adjustment_pair_creates_balanced_rows(client, db):
     rows = r.json()
     assert len(rows) == 2
     assert all(row["source"] == "manual" and row["confirmed"] for row in rows)
-    assert sum(Decimal(str(row["amount"])) for row in rows) == 0
+    assert sum(row["amount_cents"] for row in rows) == 0
 
 
 def test_pair_corrects_income_and_wants_but_not_left_over(client, db):

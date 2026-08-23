@@ -1,58 +1,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import type { Category } from '../types'
-import {
-  Home, Zap, UtensilsCrossed, Car, Shield, HeartPulse,
-  Coffee, Gamepad2, HelpCircle, Hammer, Shirt, Banknote,
-  TrendingUp, PiggyBank, ArrowDownToLine,
-  Wallet, RotateCcw, CircleDollarSign, ArrowLeftRight,
-  Coins, BadgeEuro,
-  type LucideIcon,
-} from 'lucide-react'
+import { getCategoryIcon } from './categorySelect/icons'
+import { TYPE_META, GROUP_ORDER } from './categorySelect/typeMeta'
 
-/* ── Icon mapping by category name ── */
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  'Taxes & Mortgage':           Home,
-  'Utilities':                  Zap,
-  'Food - Essential':           UtensilsCrossed,
-  'Transportation':             Car,
-  'Insurance':                  Shield,
-  'Medical & Healthcare':       HeartPulse,
-  'Food - Not Essential':       Coffee,
-  'Recreation & Entertainment': Gamepad2,
-  'Miscellaneous':              HelpCircle,
-  'Home & DIY':                 Hammer,
-  'Clothing':                   Shirt,
-  'Cash Withdrawal':            Banknote,
-  'DEGIRO':                     TrendingUp,
-  'Fun Account':                PiggyBank,
-  'Savings Transfer':           ArrowDownToLine,
-  'Salary':                     Wallet,
-  'Retained Salary':            BadgeEuro,
-  'Personal Allowance':         Coins,
-  'Refunds':                    RotateCcw,
-  'Other Income':               CircleDollarSign,
-  'Internal Transfer':          ArrowLeftRight,
-}
-
-const TYPE_FALLBACK_ICONS: Record<string, LucideIcon> = {
-  needs: Home, wants: Gamepad2, savings: PiggyBank, income: Wallet, exclude: ArrowLeftRight,
-}
-
-function getCategoryIcon(name: string, type: string): LucideIcon {
-  return CATEGORY_ICONS[name] ?? TYPE_FALLBACK_ICONS[type] ?? HelpCircle
-}
-
-/* ── Colour mapping per category type ── */
-export const TYPE_META: Record<string, { label: string; color: string; bg: string; border: string; glow: string }> = {
-  needs:   { label: 'Needs',   color: 'var(--green)',  bg: 'var(--green-bg)',  border: 'var(--green-border)',  glow: 'var(--green-glow)' },
-  wants:   { label: 'Wants',   color: 'var(--violet)', bg: 'var(--violet-bg)', border: 'var(--violet-border)', glow: 'rgba(167,139,250,0.28)' },
-  savings: { label: 'Savings', color: 'var(--cyan)',   bg: 'var(--cyan-bg)',   border: 'var(--cyan-border)',   glow: 'rgba(34,211,238,0.28)' },
-  income:  { label: 'Income',  color: 'var(--yellow)', bg: 'var(--yellow-bg)', border: 'var(--yellow-border)', glow: 'var(--yellow-glow)' },
-  exclude: { label: 'Exclude', color: 'var(--text-muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)', glow: 'rgba(148,163,184,0.15)' },
-}
-
-export const GROUP_ORDER = ['needs', 'wants', 'savings', 'income', 'exclude']
+export { TYPE_META, GROUP_ORDER } from './categorySelect/typeMeta'
 
 interface Props {
   categories: Category[]

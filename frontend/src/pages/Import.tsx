@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { formatCents } from '../money'
 
 const SOURCES = ['ing', 'revolut', 'degiro']
 
@@ -171,7 +172,7 @@ export default function Import() {
                 </div>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent-light)', marginBottom: 4 }}>{file.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {(file.size / 1024).toFixed(1)} KB · {source.toUpperCase()}
+                  {String(Math.round(file.size / 102.4) / 10)} KB · {source.toUpperCase()}
                 </div>
               </div>
             ) : (
@@ -296,8 +297,8 @@ export default function Import() {
                   }}>
                     <td style={{ padding: '10px 16px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontFamily: 'var(--mono)', fontSize: 12 }}>{r.date}</td>
                     <td style={{ padding: '10px 16px', color: 'var(--text-h)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.description}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', color: r.amount < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>
-                      {r.amount < 0 ? '-' : '+'}€{Math.abs(r.amount).toFixed(2)}
+                    <td style={{ padding: '10px 16px', textAlign: 'right', color: r.amount_cents < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>
+                      {r.amount_cents < 0 ? '-' : '+'}{formatCents(Math.abs(r.amount_cents))}
                     </td>
                     <td style={{ padding: '10px 16px' }}>
                       <span style={{

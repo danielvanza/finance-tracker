@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { formatCents } from '../money'
 import type { Transaction } from '../types'
 import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
 import AddTransactionModal from '../components/AddTransactionModal'
@@ -67,7 +68,7 @@ export default function Transactions() {
   }
 
   const handleDelete = async (tx: Transaction) => {
-    if (!window.confirm(`Delete manual transaction "${tx.description}" (${tx.amount < 0 ? '-' : '+'}€${Math.abs(tx.amount).toFixed(2)})?`)) return
+    if (!window.confirm(`Delete manual transaction "${tx.description}" (${tx.amount_cents < 0 ? '-' : '+'}${formatCents(Math.abs(tx.amount_cents))})?`)) return
     await api.deleteTransaction(tx.id)
     invalidate()
   }
@@ -280,7 +281,7 @@ export default function Transactions() {
                 </td>
                 <td style={{
                   padding: '12px 16px', textAlign: 'right',
-                  color: tx.amount < 0 ? 'var(--red)' : 'var(--green)',
+                  color: tx.amount_cents < 0 ? 'var(--red)' : 'var(--green)',
                   fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 12.5,
                   fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
                 }}>
@@ -297,7 +298,7 @@ export default function Transactions() {
                       }}
                     >refund</span>
                   )}
-                  {tx.amount < 0 ? '-' : '+'}€{Math.abs(tx.amount).toFixed(2)}
+                  {tx.amount_cents < 0 ? '-' : '+'}{formatCents(Math.abs(tx.amount_cents))}
                 </td>
                 <td style={{ padding: '12px 16px' }}>
                   {tx.splits.length > 0 ? (
@@ -312,10 +313,16 @@ export default function Transactions() {
                           fontSize: 11, fontWeight: 500,
                           whiteSpace: 'nowrap',
                         }}>
+                          {s.is_refund && (
+                            <span title="Refund part — nets against its category" style={{marginRight:4,
+                              fontSize:9,fontWeight:700,color:'var(--cyan)',background:'var(--cyan-bg)',
+                              border:'1px solid var(--cyan-border)',padding:'0 5px',borderRadius:'var(--radius-xs)',
+                              textTransform:'uppercase',letterSpacing:'0.06em'}}>R</span>
+                          )}
                           {s.category_name ?? '—'} <span style={{
                             fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums',
                             opacity: 0.8,
-                          }}>€{Math.abs(s.amount).toFixed(2)}</span>
+                          }}>{formatCents(Math.abs(s.amount_cents))}</span>
                         </span>
                       ))}
                     </div>

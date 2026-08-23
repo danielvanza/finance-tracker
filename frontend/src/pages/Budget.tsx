@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { api } from '../api'
+import { formatCents, parseToCents, centsToInputString, sumCents } from '../money'
 import type { Category, Transaction } from '../types'
 import CategorySelect from '../components/CategorySelect'
 
@@ -151,8 +152,8 @@ function TransactionDrillRow({ tx, categories, onRecategorise }: TransactionDril
       <td style={{ padding: '5px 8px', color: 'var(--text-h)', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {tx.description}
       </td>
-      <td style={{ padding: '5px 8px', textAlign: 'right', color: tx.amount < 0 ? 'var(--red)' : 'var(--green)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--mono)' }}>
-        {tx.amount < 0 ? '-' : '+'}€{Math.abs(tx.amount).toFixed(2)}
+      <td style={{ padding: '5px 8px', textAlign: 'right', color: tx.amount_cents < 0 ? 'var(--red)' : 'var(--green)', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--mono)' }}>
+        {tx.amount_cents < 0 ? '-' : '+'}{formatCents(Math.abs(tx.amount_cents))}
       </td>
       <td style={{ padding: '5px 8px', minWidth: 200 }} onClick={e => e.stopPropagation()}>
         <CategorySelect
@@ -264,14 +265,14 @@ export default function Budget() {
     queryFn: () => api.getDashboard(month),
   })
 
-  const totalPlanned = rows.reduce((sum, r) => sum + Number(r.planned_amount), 0)
-  const totalActual = rows.reduce((sum, r) => sum + Number(r.actual_amount ?? 0), 0)
-  const totalIncome = dashboard?.total_income ?? 0
+  const totalPlanned = sumCents(rows.map(r => r.planned_amount_cents))
+  const totalActual = sumCents(rows.map(r => r.actual_amount_cents ?? 0))
+  const totalIncome = dashboard?.total_income_cents ?? 0
   const spendPct = totalIncome > 0 ? Math.round((totalActual / totalIncome) * 100) : null
 
   const handleSave = async (id: number) => {
-    const val = parseFloat(editing[id])
-    if (!isNaN(val)) {
+    const val = parseToCents(editing[id] ?? '')
+    if (val !== null) {
       await api.patchBudget(id, val)
       qc.invalidateQueries({ queryKey: ['budget', month] })
     }
@@ -296,7 +297,7 @@ export default function Budget() {
     planned > 0 && actual != null ? Math.round((actual / planned) * 100) : 0
 
   const renderRow = (row: any, idx: number, totalRows: number) => {
-    const p = pct(row.actual_amount, row.planned_amount)
+    const p = pct(row.actual_amount_cents, row.planned_amount_cents)
     const over = p > 100
     const warn = p > 80 && !over
 
@@ -351,7 +352,7 @@ export default function Budget() {
           {row.id in editing ? (
             <input
               type="number"
-              value={editing[row.id] ?? row.planned_amount}
+              value={editing[row.id] ?? centsToInputString(row.planned_amount_cents)}
               onChange={e => setEditing(prev => ({ ...prev, [row.id]: e.target.value }))}
               onBlur={() => handleSave(row.id)}
               onKeyDown={e => e.key === 'Enter' && handleSave(row.id)}
@@ -367,7 +368,7 @@ export default function Budget() {
             />
           ) : (
             <span
-              onClick={() => setEditing(prev => ({ ...prev, [row.id]: String(row.planned_amount) }))}
+              onClick={() => setEditing(prev => ({ ...prev, [row.id]: centsToInputString(row.planned_amount_cents) }))}
               title="Click to edit"
               style={{
                 cursor: 'pointer',
@@ -395,7 +396,7 @@ export default function Budget() {
                 el.style.background = 'transparent'
               }}
             >
-              €{Number(row.planned_amount).toFixed(2)}
+              {formatCents(row.planned_amount_cents)}
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -407,11 +408,11 @@ export default function Budget() {
         {/* Actual — negative means refunded more than spent this month */}
         <td style={{
           padding: '13px 16px', textAlign: 'right',
-          color: (row.actual_amount ?? 0) < 0 ? 'var(--green)' : over ? 'var(--red)' : 'var(--text-h)',
+          color: (row.actual_amount_cents ?? 0) < 0 ? 'var(--green)' : over ? 'var(--red)' : 'var(--text-h)',
           fontWeight: 700, fontVariantNumeric: 'tabular-nums',
           fontFamily: 'var(--mono)', fontSize: 13,
         }}>
-          {(row.actual_amount ?? 0) < 0 ? '-' : ''}€{Math.abs(row.actual_amount ?? 0).toFixed(2)}
+          {(row.actual_amount_cents ?? 0) < 0 ? '-' : ''}{formatCents(Math.abs(row.actual_amount_cents ?? 0))}
         </td>
 
         {/* Progress bar */}
@@ -505,7 +506,7 @@ export default function Budget() {
               Total Planned
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-h)', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums' }}>
-              €{totalPlanned.toFixed(2)}
+              {formatCents(totalPlanned)}
             </div>
           </div>
 
@@ -525,7 +526,7 @@ export default function Budget() {
               color: totalActual > totalPlanned ? 'var(--red)' : 'var(--text-h)',
               fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums',
             }}>
-              €{totalActual.toFixed(2)}
+              {formatCents(totalActual)}
             </div>
             {totalPlanned > 0 && (
               <div style={{ fontSize: 11.5, color: totalActual > totalPlanned ? 'var(--red)' : 'var(--text-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
@@ -555,7 +556,7 @@ export default function Budget() {
                   {spendPct}%
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  of €{totalIncome.toFixed(2)} income
+                  of {formatCents(totalIncome)} income
                 </div>
                 {/* Mini bar */}
                 <div style={{ marginTop: 10, height: 4, borderRadius: 'var(--radius-full)', background: 'rgba(148,163,184,0.1)', overflow: 'hidden' }}>
@@ -624,10 +625,10 @@ export default function Budget() {
                 </td>
                 <td style={{ padding: '12px 16px' }} />
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 13.5, color: 'var(--text-secondary)' }}>
-                  €{totalPlanned.toFixed(2)}
+                  {formatCents(totalPlanned)}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 13.5, color: totalActual > totalPlanned ? 'var(--red)' : 'var(--text-h)' }}>
-                  €{totalActual.toFixed(2)}
+                  {formatCents(totalActual)}
                 </td>
                 <td style={{ padding: '12px 16px' }}>
                   {totalPlanned > 0 && (

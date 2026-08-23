@@ -5,6 +5,7 @@ import {
   Area, AreaChart, ResponsiveContainer, Legend, CartesianGrid,
 } from 'recharts'
 import { api } from '../api'
+import { formatCents } from '../money'
 import SummaryCards from '../components/SummaryCards'
 
 const PIE_COLORS = ['#f87171', '#fbbf24', '#60a5fa']
@@ -39,7 +40,7 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: {
   const y = cy + radius * Math.sin(-midAngle * RADIAN)
   return (
     <text x={x} y={y} fill="#7890aa" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" style={{ fontSize: 12, fontFamily: 'var(--sans)' }}>
-      {name} {((percent ?? 0) * 100).toFixed(0)}%
+      {name} {String(Math.round((percent ?? 0) * 100))}%
     </text>
   )
 }
@@ -97,10 +98,10 @@ export default function Dashboard() {
     { name: 'Savings', value: data.needs_wants_savings.savings },
   ]
 
-  const totalExpenses = data.total_expenses || 1
-  const needsPct = ((data.needs_wants_savings.needs / totalExpenses) * 100).toFixed(0)
-  const wantsPct = ((data.needs_wants_savings.wants / totalExpenses) * 100).toFixed(0)
-  const savingsPct = ((data.needs_wants_savings.savings / totalExpenses) * 100).toFixed(0)
+  const totalExpenses = data.total_expenses_cents || 1
+  const needsPct = String(Math.round((data.needs_wants_savings.needs / totalExpenses) * 100))
+  const wantsPct = String(Math.round((data.needs_wants_savings.wants / totalExpenses) * 100))
+  const savingsPct = String(Math.round((data.needs_wants_savings.savings / totalExpenses) * 100))
 
   return (
     <div className="animate-fade-in">
@@ -138,10 +139,10 @@ export default function Dashboard() {
 
       {/* Summary cards */}
       <SummaryCards
-        total_income={data.total_income}
-        total_expenses={data.total_expenses}
-        total_savings={data.total_savings}
-        left_over={data.left_over}
+        total_income_cents={data.total_income_cents}
+        total_expenses_cents={data.total_expenses_cents}
+        total_savings_cents={data.total_savings_cents}
+        left_over_cents={data.left_over_cents}
         income_breakdown={data.income_breakdown}
       />
 
@@ -176,11 +177,11 @@ export default function Dashboard() {
                 tick={axisStyle}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={v => `€${v}`}
+                tickFormatter={v => `€${Math.round(Number(v) / 100)}`}
                 width={56}
               />
               <Tooltip
-                formatter={(v) => [`€${Number(v).toFixed(2)}`]}
+                formatter={(v) => [formatCents(Math.round(Number(v)))]}
                 contentStyle={tooltipStyle}
                 cursor={{ fill: 'rgba(99,102,241,0.05)', radius: 6 }}
                 labelStyle={{ color: 'var(--text-h)', fontWeight: 600, marginBottom: 4 }}
@@ -226,7 +227,7 @@ export default function Dashboard() {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(v) => [`€${Number(v).toFixed(2)}`]}
+                formatter={(v) => [formatCents(Math.round(Number(v)))]}
                 contentStyle={tooltipStyle}
               />
             </PieChart>
@@ -247,7 +248,7 @@ export default function Dashboard() {
                 }} />
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>{label}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-h)', fontVariantNumeric: 'tabular-nums' }}>
-                  €{value.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  {formatCents(value)}
                 </span>
                 <span style={{
                   fontSize: 11, color: 'var(--text-muted)',
@@ -280,9 +281,9 @@ export default function Dashboard() {
             </defs>
             <CartesianGrid strokeDasharray="0" stroke={gridStroke} vertical={false} />
             <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-            <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `€${v}`} width={56} />
+            <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={v => `€${Math.round(Number(v) / 100)}`} width={56} />
             <Tooltip
-              formatter={(v) => [`€${Number(v).toFixed(2)}`, 'Total Expenses']}
+              formatter={(v) => [formatCents(Math.round(Number(v))), 'Total Expenses']}
               contentStyle={tooltipStyle}
               cursor={{ stroke: 'rgba(99,102,241,0.25)', strokeWidth: 1, strokeDasharray: '4 2' }}
               labelStyle={{ color: 'var(--text-h)', fontWeight: 600, marginBottom: 4 }}

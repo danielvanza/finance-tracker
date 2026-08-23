@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { api } from '../api'
+import { formatCents } from '../money'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const renderPieLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: {
     <text x={x} y={y} fill="#7890aa" textAnchor={x > cx ? 'start' : 'end'}
           dominantBaseline="central"
           style={{ fontSize: 12, fontFamily: 'var(--sans)' }}>
-      {name} {((percent ?? 0) * 100).toFixed(0)}%
+      {name} {String(Math.round((percent ?? 0) * 100))}%
     </text>
   )
 }
@@ -85,7 +86,7 @@ export default function Analytics() {
   const chartData = (() => {
     if (!data) return { pieItems: [], legendItems: [] }
 
-    const total = data.total_expenses || 1
+    const total = data.total_expenses_cents || 1
     const breakdown = data.category_breakdown.filter(c => c.actual > 0)
 
     // Split into above- and below-threshold
@@ -94,12 +95,12 @@ export default function Analytics() {
 
     const colors = assignColors(above)
 
-    const pieItems = [
+    const pieItems: Array<{ name: string; value: number; color: string; pct: string; type: string }> = [
       ...above.map((c, i) => ({
         name: c.category_name,
         value: c.actual,
         color: colors[i],
-        pct: (c.actual / total * 100).toFixed(1),
+        pct: String(Math.round(c.actual / total * 1000) / 10),
         type: c.type,
       })),
     ]
@@ -110,7 +111,7 @@ export default function Analytics() {
         name: 'Other',
         value: otherTotal,
         color: OTHER_COLOR,
-        pct: (otherTotal / total * 100).toFixed(1),
+        pct: String(Math.round(otherTotal / total * 1000) / 10),
         type: 'other',
       })
     }
@@ -216,7 +217,7 @@ export default function Analytics() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v) => [`€${Number(v).toFixed(2)}`]}
+                  formatter={(v) => [formatCents(Math.round(Number(v)))]}
                   contentStyle={tooltipStyle}
                 />
               </PieChart>
@@ -241,7 +242,7 @@ export default function Analytics() {
                     fontSize: 12, fontWeight: 600, color: 'var(--text-h)',
                     fontVariantNumeric: 'tabular-nums',
                   }}>
-                    €{item.value.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {formatCents(item.value)}
                   </span>
                   <span style={{
                     fontSize: 11, color: 'var(--text-muted)',

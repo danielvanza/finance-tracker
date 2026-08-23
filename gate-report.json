@@ -1,9 +1,9 @@
 {
   "gate": "fleet-merge-gate",
-  "generated_at": "2026-08-23T01:34:14+0000",
-  "repo": "/home/hermes/finance-tracker",
+  "generated_at": "2026-08-23T10:01:36+0000",
+  "repo": ".",
   "shas": {
-    "head": "e0330b3870461d7120bbec1f87d7af1e3f8f2a7c"
+    "head": "ad0ca2391a7c81a6b84f839f06c737d16a4e64e9"
   },
   "gates": {
     "static": {
@@ -12,7 +12,7 @@
     },
     "unit": {
       "status": "pass",
-      "detail": "194 passed in 18.32s\n"
+      "detail": "........................................................                 [100%]\n200 passed in 24.17s\n Test Files  8 passed (8)\n      Tests  50 passed (50)\nTSC_OK\nnpm notice run frontend@0.0.0 npx\nnpm notice run 'tsc' -b\n"
     },
     "contract": {
       "status": "pass",
@@ -20,13 +20,13 @@
     },
     "integration": {
       "status": "pass",
-      "detail": "3\n"
+      "detail": "health: {\"status\":\"ok\"}\nsummary: {\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"month\"],\"msg\":\"Field required\",\"inp\nbudget_rows: 1\ntx_n: 0\nalembic_version: afe0635828ba\ntables: ['alembic_version', 'budgets', 'categories', 'rules', 'settings', 'standing_adjustments', 'transaction_splits', 'transactions"
     }
   },
   "coverage": {
     "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
   },
-  "elapsed_seconds": 25.8,
+  "elapsed_seconds": 72.6,
   "verdict": "PASS",
   "not_run_count": 0,
   "fail_count": 0

@@ -49,9 +49,9 @@ Engine work happens in /home/hermes/finance-tracker on top of that baseline.
 - [x] Commit phase 3.
 
 ## Phase 4 — merge gate
-- [ ] Run ~/.hermes/fleet/merge-gate.py with this task as input; resolve any heal
+- [x] Run ~/.hermes/fleet/merge-gate.py with this task as input; resolve any heal
       ticket by re-applying against fresh base.
-- [ ] Final report: what changed, evidence (pytest counts, gate verdict, curl output).
+- [x] Final report: what changed, evidence (pytest counts, gate verdict, curl output).
 
 ## Not doing
 - Frontend/api.ts/dashboard repo changes (task boundary).

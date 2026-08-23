@@ -63,7 +63,7 @@ Open **http://localhost:5173** in your browser. The Vite dev server proxies all 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API key for Claude AI categorisation. Without it, only rule-based categorisation works. |
-| `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
+| `DATABASE_URL` | No | `sqlite:////<abs>/backend/data/finance.db` — absolute, resolved from the backend package dir | SQLAlchemy database URL. |
 
 Place these in `backend/.env` — it's loaded automatically on startup and is gitignored.
 
@@ -148,7 +148,7 @@ Only **confirmed** transactions are included in dashboard calculations.
 
 ## Database Management
 
-The database is a single SQLite file at `backend/data/finance.db`. No migration tool is used — tables are auto-created on startup.
+The database is a single SQLite file at `backend/data/finance.db`, regardless of the directory you start uvicorn from. No migration tool is used — tables are auto-created on startup.
 
 ### Reset the Database
 
@@ -162,8 +162,7 @@ rm backend/data/finance.db
 ### Direct SQLite Access
 
 ```bash
-cd backend
-sqlite3 data/finance.db
+sqlite3 backend/data/finance.db
 ```
 
 #### Useful Queries

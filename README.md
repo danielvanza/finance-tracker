@@ -16,10 +16,10 @@ backend/           FastAPI + SQLAlchemy + SQLite (port 8000)
   routers/         imports, transactions, budget, rules, dashboard, categories
   importers/       ING, Revolut, DEGIRO CSV parsers
   categorizer/     Rule engine + Claude AI fallback
-  data/finance.db  SQLite database (auto-created on startup)
+  data/finance.db  SQLite database (auto-created on startup; path pinned to backend/, CWD-independent)
 ```
 
-**Database:** SQLite file at `backend/data/finance.db`. Tables are auto-created on startup via `Base.metadata.create_all()` -- no migration tool is used. Override the path with the `DATABASE_URL` env var.
+**Database:** SQLite file at `backend/data/finance.db`, resolved absolutely from the backend package directory regardless of the launch directory. Tables are auto-created on startup via `Base.metadata.create_all()` -- no migration tool is used. Override the path with the `DATABASE_URL` env var.
 
 ## Prerequisites
 

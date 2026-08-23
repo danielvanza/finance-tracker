@@ -303,7 +303,7 @@ After:
 
 #### Automated items
 
-- [ ] No stale relative default anywhere in docs or backend source
+- [x] No stale relative default anywhere in docs or backend source
       (`-I` skips binary `.pyc` matches — e.g. the orphaned
       `backend/alembic/__pycache__/env.cpython-311.pyc` keeps the old string
       forever because nothing imports it; reviewer-pinned flag):
@@ -311,12 +311,12 @@ After:
       cd /home/hermes/finance-tracker && grep -rInF 'sqlite:///./data' README.md SETUP.md AGENTS.md contracts/schema.json backend/
       ```
       Expected: **no output, exit code 1** (grep found nothing).
-- [ ] No doc snippet depends on being inside backend/ for sqlite access:
+- [x] No doc snippet depends on being inside backend/ for sqlite access:
       ```bash
       cd /home/hermes/finance-tracker && grep -rnF 'sqlite3 data/finance.db' README.md SETUP.md AGENTS.md contracts/schema.json
       ```
       Expected: **no output, exit code 1**.
-- [ ] Every corrected file names the one true location:
+- [x] Every corrected file names the one true location:
       ```bash
       cd /home/hermes/finance-tracker && grep -rc 'backend/data/finance.db' README.md SETUP.md contracts/schema.json AGENTS.md
       ```
@@ -330,7 +330,7 @@ After:
 
 #### Live Verification items
 
-- [ ] Docs agree with the running code — print the real default next to the doc rows:
+- [x] Docs agree with the running code — print the real default next to the doc rows:
       ```bash
       cd /home/hermes/finance-tracker/backend && .venv/bin/python -c "import db; print(db.DATABASE_URL)" && grep -n 'DATABASE_URL' ../SETUP.md ../AGENTS.md ../contracts/schema.json
       ```

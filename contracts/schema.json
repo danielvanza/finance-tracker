@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "storage": {
     "engine": "SQLite",
-    "url_env": "DATABASE_URL (default sqlite:///./data/finance.db)",
+    "url_env": "DATABASE_URL (default: <repo>/backend/data/finance.db, resolved absolute from the backend package dir)",
     "table_creation": "Base.metadata.create_all() on startup + db.py::run_migrations ADD COLUMN for post-deploy column additions (no migration tool by design)",
     "seed": "backend/seed.py idempotent: categories, budgets, settings (financial_month_start_day=24), two standing adjustments (Retained Salary <-> Personal Allowance)"
   },

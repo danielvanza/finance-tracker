@@ -21,7 +21,7 @@ backend/
   categorizer/         rules.py (pattern matching), ai.py (Claude Haiku)
   routers/             API route handlers (imports, transactions, budget, rules, dashboard, categories)
   tests/               pytest test suite
-  data/finance.db      SQLite database (auto-created, gitignored)
+  data/finance.db      SQLite database (auto-created, gitignored; path pinned to backend/, CWD-independent)
 
 frontend/
   src/App.tsx           Router + QueryClient setup
@@ -67,7 +67,7 @@ frontend/
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | No | (none) | Anthropic API key for Claude AI categorisation. Without it, only rule-based categorisation works. |
-| `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
+| `DATABASE_URL` | No | `sqlite:////<abs>/backend/data/finance.db` — absolute, resolved from the backend package dir | SQLAlchemy database URL. |
 
 Place these in a `.env` file (gitignored).
 

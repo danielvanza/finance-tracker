@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from db import Base, engine, SessionLocal, run_migrations
+from db import SessionLocal, run_migrations
 import models  # noqa: F401
 from seed import run_seed
 from routers.imports import router as imports_router
@@ -24,8 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)
-run_migrations(engine)
+run_migrations()
 
 app.include_router(imports_router)
 app.include_router(transactions_router)

@@ -39,7 +39,7 @@ frontend/
 
 - **Framework:** FastAPI with dependency injection (`Depends(get_db)` for sessions).
 - **ORM:** SQLAlchemy 2.0 declarative style. Models in `models.py`, all inherit from `Base` in `db.py`.
-- **Database:** SQLite. No migration tool -- tables are auto-created via `Base.metadata.create_all()` on startup. Override location with `DATABASE_URL` env var.
+- **Database:** SQLite. Migrations via Alembic (`backend/alembic/`) -- startup runs `alembic upgrade head` programmatically, so fresh DBs are created by the baseline revision. Existing pre-Alembic DBs need a one-time `cd backend && .venv/bin/alembic stamp head` (schema already equals baseline). New migrations go in `backend/alembic/versions/`. Override location with `DATABASE_URL` env var.
 - **Schemas:** Pydantic v2 models in `schemas.py`. All API endpoints use these for request/response typing.
 - **Enums:** `CategoryType` (needs/wants/savings), `TransactionSource` (ing/revolut/degiro), `CategorisedBy` (rule/ai/manual). Defined in `models.py`.
 - **Naming:** British spelling for domain terms (`categoriser`, `categorised_by`). Standard Python snake_case everywhere else.

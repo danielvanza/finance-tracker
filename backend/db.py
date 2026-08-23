@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 import os
@@ -19,37 +23,19 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 class Base(DeclarativeBase):
     pass
 
-def run_migrations(engine) -> None:
-    """Minimal schema upgrades for a pre-existing SQLite database.
+def run_migrations() -> None:
+    """Bring the database up to the current schema via Alembic.
 
-    Base.metadata.create_all() only creates missing tables — it never alters
-    existing ones, so columns added to a table after first deploy are applied
-    here with ADD COLUMN.
+    Runs `alembic upgrade head` programmatically against DATABASE_URL
+    (same precedence as this module's DATABASE_URL: env var, else
+    sqlite:///./data/finance.db). Fresh databases are created entirely by the
+    baseline revision; existing pre-Alembic databases whose schema already
+    equals baseline must be registered once with `.venv/bin/alembic stamp head`.
     """
-    new_columns = {
-        "transactions": [
-            ("is_refund", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("standing_adjustment_id", "INTEGER REFERENCES standing_adjustments(id)"),
-        ],
-        "standing_adjustments": [
-            ("start_month", "DATE"),
-        ],
-        "transaction_splits": [("is_refund", "BOOLEAN")],
-    }
-    backfills = [
-        "UPDATE standing_adjustments SET start_month = date('now', 'start of month') "
-        "WHERE start_month IS NULL",
-    ]
-    with engine.begin() as conn:
-        for table, columns in new_columns.items():
-            existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
-            if not existing:
-                continue  # table doesn't exist yet; create_all will build it complete
-            for name, ddl in columns:
-                if name not in existing:
-                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
-        for statement in backfills:
-            conn.exec_driver_sql(statement)
+    backend_dir = Path(__file__).resolve().parent
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+    command.upgrade(cfg, "head")
 
 def get_db():
     db = SessionLocal()

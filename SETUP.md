@@ -148,7 +148,21 @@ Only **confirmed** transactions are included in dashboard calculations.
 
 ## Database Management
 
-The database is a single SQLite file at `backend/data/finance.db`. No migration tool is used — tables are auto-created on startup.
+The database is a single SQLite file at `backend/data/finance.db`. Schema is managed by [Alembic](https://alembic.sqlalchemy.org/) (`backend/alembic/`); on startup the backend runs `alembic upgrade head` programmatically, so fresh databases are created and migrated automatically.
+
+### Existing Database (created before Alembic)
+
+Register it once so Alembic knows it is already at the baseline schema:
+
+```bash
+cd backend && .venv/bin/alembic stamp head
+```
+
+Its schema already equals the baseline revision, so the first `upgrade head` after stamping is a clean no-op. Note: a database that predates the R7 columns must first be brought to the current schema (check out the pre-Alembic code and run the backend once so its migrations apply) before stamping.
+
+### Adding a Migration
+
+New schema changes go in `backend/alembic/versions/` and are applied automatically on the next backend start (or manually via `cd backend && .venv/bin/alembic upgrade head`).
 
 ### Reset the Database
 
@@ -330,7 +344,7 @@ Both accept `multipart/form-data` with fields `source` (`ing`/`revolut`/`degiro`
 
 ## Architecture Notes
 
-- **No migration tool**: Tables are auto-created via `Base.metadata.create_all()` on startup. Schema changes require deleting the DB and restarting, or manual `ALTER TABLE` via sqlite3.
+- **Alembic migrations**: Schema is versioned in `backend/alembic/versions/` and `alembic upgrade head` runs automatically on startup (fresh DBs are created by the baseline revision). Existing pre-Alembic databases need a one-time `cd backend && .venv/bin/alembic stamp head`.
 - **Deduplication**: Import hashes are SHA-256 of `source|date|amount|description` (plus bank-specific fields for ING). Identical rows within the same CSV get occurrence-counter-based dedup.
 - **AI fallback**: If `ANTHROPIC_API_KEY` is missing or the API fails, transactions just won't get AI categorisation — the app continues working with rules only.
 - **Frontend re-sends CSV**: The confirm step re-uploads and re-parses the file (it's not cached from preview).

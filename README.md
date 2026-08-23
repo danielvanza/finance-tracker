@@ -17,7 +17,7 @@ backend/           FastAPI + SQLAlchemy + SQLite (port 8000)
   data/finance.db  SQLite database (auto-created on startup)
 ```
 
-**Database:** SQLite file at `backend/data/finance.db`. Tables are auto-created on startup via `Base.metadata.create_all()` -- no migration tool is used. Override the path with the `DATABASE_URL` env var.
+**Database:** SQLite file at `backend/data/finance.db`. Schema is managed by Alembic (`backend/alembic/`): fresh databases are migrated automatically to head on startup. An EXISTING database must be registered once: `cd backend && .venv/bin/alembic stamp head` (its schema already equals the baseline; the first upgrade after stamping is a no-op). Override the path with the `DATABASE_URL` env var.
 
 ## Prerequisites
 

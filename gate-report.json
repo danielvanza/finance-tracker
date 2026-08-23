@@ -1,0 +1,33 @@
+{
+  "gate": "fleet-merge-gate",
+  "generated_at": "2026-08-23T00:15:34+0000",
+  "repo": "/home/hermes/finance-tracker",
+  "shas": {
+    "head": "e8428dc3b28893856469779934241fe903191fd0"
+  },
+  "gates": {
+    "static": {
+      "status": "pass",
+      "detail": "static checks ok"
+    },
+    "unit": {
+      "status": "not_run",
+      "detail": "no test command configured"
+    },
+    "contract": {
+      "status": "pass",
+      "detail": "no_seams: single-branch build, no parallel surfaces to reconcile"
+    },
+    "integration": {
+      "status": "not_run",
+      "detail": "no build command configured"
+    }
+  },
+  "coverage": {
+    "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
+  },
+  "elapsed_seconds": 0.0,
+  "verdict": "FAIL",
+  "not_run_count": 2,
+  "fail_count": 0
+}

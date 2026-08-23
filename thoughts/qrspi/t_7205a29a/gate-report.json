@@ -1,0 +1,33 @@
+{
+  "gate": "fleet-merge-gate",
+  "generated_at": "2026-08-23T00:16:36+0000",
+  "repo": "/home/hermes/finance-tracker",
+  "shas": {
+    "head": "e8428dc3b28893856469779934241fe903191fd0"
+  },
+  "gates": {
+    "static": {
+      "status": "pass",
+      "detail": "static checks ok"
+    },
+    "unit": {
+      "status": "pass",
+      "detail": "...................................................x..........xxxxxxxxx. [ 40%]\n........................................................................ [ 81%]\n.................................                                        [100%]\n167 passed, 10 xfailed in 18.17s\n\n RUN  v3.2.4 /home/hermes/"
+    },
+    "contract": {
+      "status": "pass",
+      "detail": "no_seams: single-branch build, no parallel surfaces to reconcile"
+    },
+    "integration": {
+      "status": "pass",
+      "detail": "vite v8.1.5 building client environment for production...\n\u001b[2K\ntransforming...\u2713 2357 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.83 kB \u2502 gzip:   0.44 kB\ndist/assets/index-CZfRUPdy.css    5.69 kB \u2502 gzip:   2.18 kB\ndist/assets/index-Bvofq3jn.js  "
+    }
+  },
+  "coverage": {
+    "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
+  },
+  "elapsed_seconds": 48.0,
+  "verdict": "PASS",
+  "not_run_count": 0,
+  "fail_count": 0
+}

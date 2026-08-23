@@ -151,7 +151,7 @@ regression back to `./data` cannot pass.
 
 #### Automated items
 
-- [ ] Run: `cd /home/hermes/finance-tracker/backend && .venv/bin/python -m pytest tests/test_db_engine.py -v`
+- [x] Run: `cd /home/hermes/finance-tracker/backend && .venv/bin/python -m pytest tests/test_db_engine.py -v`
       Expected: exactly `2 passed` (R7 `test_import_creates_missing_sqlite_dirs`
       + new `test_default_db_path_is_cwd_independent`), 0 failed.
 
@@ -159,27 +159,27 @@ regression back to `./data` cannot pass.
 
 Each command is literal; expected stdout shown after `# ->`.
 
-- [ ] Probe from an unrelated CWD:
+- [x] Probe from an unrelated CWD:
       ```bash
       cd /tmp/opencode && /home/hermes/finance-tracker/backend/.venv/bin/python -c "import sys; sys.path.insert(0,'/home/hermes/finance-tracker/backend'); import db; print(db.DATABASE_URL)"
       ```
       Expected: `# -> sqlite:////home/hermes/finance-tracker/backend/data/finance.db` (exactly this line, nothing else)
-- [ ] Probe from repo root:
+- [x] Probe from repo root:
       ```bash
       cd /home/hermes/finance-tracker && backend/.venv/bin/python -c "import sys; sys.path.insert(0,'/home/hermes/finance-tracker/backend'); import db; print(db.DATABASE_URL)"
       ```
       Expected: identical line — `# -> sqlite:////home/hermes/finance-tracker/backend/data/finance.db`
-- [ ] Probe from backend/ (bare import, no sys.path injection needed):
+- [x] Probe from backend/ (bare import, no sys.path injection needed):
       ```bash
       cd /home/hermes/finance-tracker/backend && .venv/bin/python -c "import db; print(db.DATABASE_URL)"
       ```
       Expected: identical line — `# -> sqlite:////home/hermes/finance-tracker/backend/data/finance.db`
-- [ ] Override semantics byte-for-byte unchanged (D2 — set value wins verbatim, no normalisation):
+- [x] Override semantics byte-for-byte unchanged (D2 — set value wins verbatim, no normalisation):
       ```bash
       cd /tmp/opencode && DATABASE_URL='sqlite:///./weird.db' /home/hermes/finance-tracker/backend/.venv/bin/python -c "import sys; sys.path.insert(0,'/home/hermes/finance-tracker/backend'); import db; print(db.DATABASE_URL)"
       ```
       Expected: `# -> sqlite:///./weird.db` (relative override kept CWD-relative, as documented)
-- [ ] Memory form still bypasses the mkdir guard (imports cleanly, value untouched):
+- [x] Memory form still bypasses the mkdir guard (imports cleanly, value untouched):
       ```bash
       cd /tmp/opencode && DATABASE_URL='sqlite://' /home/hermes/finance-tracker/backend/.venv/bin/python -c "import sys; sys.path.insert(0,'/home/hermes/finance-tracker/backend'); import db; print(db.DATABASE_URL)"
       ```

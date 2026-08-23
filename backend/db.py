@@ -1,8 +1,11 @@
+import os
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/finance.db")
+_DEFAULT_DB_FILE = Path(__file__).resolve().parent / "data" / "finance.db"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_DEFAULT_DB_FILE.as_posix()}")
 
 # R7: a fresh clone has no gitignored data/ dir, so a sqlite file URL fails at
 # first connect (pytest collection dies on new checkouts). Create the parent

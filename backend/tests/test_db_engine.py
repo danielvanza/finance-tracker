@@ -34,3 +34,27 @@ def test_import_creates_missing_sqlite_dirs(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip().endswith("1")  # SELECT 1 worked end-to-end
     assert target.parent.is_dir()
+
+
+PROBE_URL = (
+    f"import sys; sys.path.insert(0, r'{BACKEND_DIR}'); "
+    "import db; print(db.DATABASE_URL)"
+)
+
+
+def test_default_db_path_is_cwd_independent(tmp_path):
+    expected = f"sqlite:///{(BACKEND_DIR / 'data' / 'finance.db')}"
+    seen = set()
+    for cwd in (BACKEND_DIR, tmp_path):
+        result = subprocess.run(
+            [sys.executable, "-c", PROBE_URL],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={k: v for k, v in os.environ.items() if k != "DATABASE_URL"},
+        )
+        assert result.returncode == 0, result.stderr
+        seen.add(result.stdout.strip())
+    assert len(seen) == 1
+    assert seen.pop() == expected

@@ -1,0 +1,33 @@
+{
+  "gate": "fleet-merge-gate",
+  "generated_at": "2026-08-23T20:26:35+0000",
+  "repo": ".",
+  "shas": {
+    "head": "4a857c42ba3430d0d527b29e32e1299230558661"
+  },
+  "gates": {
+    "static": {
+      "status": "pass",
+      "detail": "manifest lists unbuilt file: shared"
+    },
+    "unit": {
+      "status": "pass",
+      "detail": "........................................................................ [ 36%]\n........................................................................ [ 73%]\n...................................................                      [100%]\n195 passed in 19.45s\n"
+    },
+    "contract": {
+      "status": "pass",
+      "detail": "no_seams: single-branch build, no parallel surfaces to reconcile"
+    },
+    "integration": {
+      "status": "pass",
+      "detail": "openapi=200 categories=200\nINTEGRATION_OK\n"
+    }
+  },
+  "coverage": {
+    "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
+  },
+  "elapsed_seconds": 26.9,
+  "verdict": "PASS",
+  "not_run_count": 0,
+  "fail_count": 0
+}

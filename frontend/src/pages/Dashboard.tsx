@@ -6,20 +6,11 @@ import {
 } from 'recharts'
 import { api } from '../api'
 import { formatCents } from '../money'
+import { tooltipStyle } from '../styles/shared'
 import SummaryCards from '../components/SummaryCards'
 
 const PIE_COLORS = ['#f87171', '#fbbf24', '#60a5fa']
 const PIE_GLOWS = ['rgba(248,113,113,0.5)', 'rgba(251,191,36,0.5)', 'rgba(96,165,250,0.5)']
-
-const tooltipStyle = {
-  background: '#07101e',
-  border: '1px solid rgba(148,163,184,0.14)',
-  borderRadius: 12,
-  color: '#eef2fa',
-  fontSize: 13,
-  boxShadow: '0 12px 40px rgba(0,0,0,0.65)',
-  padding: '10px 14px',
-}
 
 function currentMonth() {
   const d = new Date()

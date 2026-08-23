@@ -290,7 +290,30 @@ flips + 1 category-type guard, all `xfail(strict)`).
 
 ## Verification record (fill during execution)
 - Baseline: 167 passed, 10 xfailed @ f1f0a16 (orchestrator-verified pre-work).
-- P1: — · P2: — · P3: — · P4: —
+- P1: commit 5369204 — spend_service.py NEW + dashboard/budget rewired + cents wire;
+  engine-run + orchestrator heals (missed test_standing_adjustments key renames; leftover
+  xfail decorator on budget_patch_month; service-test fixture wiring);
+  177 passed / 6 xfailed.
+- P2: commits 2a944c8 (+ aborted-first-attempt router work folded in atomically) —
+  transactions v2 wire via TransactionOut/SplitOut model_dump(by_alias), SplitPartIn/
+  TransactionPatchV2 router-local subclasses (schemas frozen), _apply_splits stores
+  per-part is_refund + rejects refund parts on non-expense cats, month filter →
+  spend_service.financial_month_bounds; test_split_part_refunds.py (mixed-refund netting
+  prior spend: food 12500 / misc 0 / total 12500; salary refund part 422; NULL-part
+  parent-flag inheritance); 5 seam xfails removed, XFAIL_REASON deleted,
+  guard xfail kept w/ literal reason; engine stop-question adjudicated (option 1:
+  seed prior misc spend); 185 passed / 1 xfailed.
+- P3: commit 4e4f3ce — CategoryPatch.force, _usage_counts extracted verbatim
+  (delete_category reuses it), patch_category parse→census→block/force order,
+  rename/same-type bypass, no budget side effects; test_category_type_guard.py 8 cases;
+  last seam un-xfailed; 194 passed / 0 xfailed.
+- P4: LIVE PROBE (real uvicorn :8011, throwaway sqlite): /health ok; rule-guarded type
+  flip → 422 census ("in use by 1 rule(s)"); force:true → 200; manual tx amount_cents
+  -1234 round-trips int; dashboard/budget all-int *_cents payloads incl. SA
+  materialisation (Retained Salary 120000). Merge gate (--no-seams, unit=pytest,
+  build=live probe): **PASS** at e0330b3 (static/unit/contract/integration all pass).
+- Push: NOT done by this branch — F1's in-progress commits are interleaved on local main
+  (atomic tip push would publish them); orchestrator decides push timing.
 
 ## Explicitly out of scope (report, don't build)
 Sign-aware census refinement; budget-row maintenance on type flip; single-query trend;

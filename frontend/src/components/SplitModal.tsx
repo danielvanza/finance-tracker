@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Transaction, Category } from '../types'
 import { api } from '../api'
+import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
 
@@ -12,7 +13,7 @@ interface Props {
 }
 
 export default function SplitModal({ transaction: tx, categories, onClose, onSaved }: Props) {
-  const isPositive = tx.amount > 0
+  const isPositive = tx.amount_cents > 0
   const filteredCategories = isPositive
     ? (tx.is_refund
         ? categories.filter(c => ['needs', 'wants', 'savings'].includes(c.type))
@@ -21,7 +22,7 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
 
   const [rows, setRows] = useState<SplitRow[]>(() =>
     tx.splits.length > 0
-      ? tx.splits.map(s => ({ category_id: s.category_id, amount: Math.abs(s.amount).toFixed(2) }))
+      ? tx.splits.map(s => ({ category_id: s.category_id, amount: centsToInputString(Math.abs(s.amount_cents)) }))
       : [{ category_id: null, amount: '' }, { category_id: null, amount: '' }]
   )
   const [unsplitCategory, setUnsplitCategory] = useState<number | null>(tx.category_id)
@@ -29,18 +30,18 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
   const [saving, setSaving] = useState(false)
 
   const sign = isPositive ? 1 : -1
-  const valid = splitRowsValid(rows, tx.amount)
+  const valid = splitRowsValid(rows, tx.amount_cents)
 
   const save = async () => {
     if (!valid) return
     setError('')
     setSaving(true)
-    const res = await api.patchTransaction(tx.id, {
+    const res = (await api.patchTransaction(tx.id, {
       splits: rows.map(r => ({
         category_id: r.category_id!,
-        amount: Math.round(parseFloat(r.amount) * 100) / 100 * sign,
+        amount_cents: parseToCents(r.amount)! * sign,
       })),
-    })
+    })) as { detail?: unknown }
     if (res.detail) {
       setError(typeof res.detail === 'string' ? res.detail : 'Could not save split')
       setSaving(false)
@@ -54,7 +55,7 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
     if (unsplitCategory == null) { setError('Pick the single category to keep'); return }
     setError('')
     setSaving(true)
-    const res = await api.patchTransaction(tx.id, { splits: [], category_id: unsplitCategory })
+    const res = (await api.patchTransaction(tx.id, { splits: [], category_id: unsplitCategory })) as { detail?: unknown }
     if (res.detail) {
       setError(typeof res.detail === 'string' ? res.detail : 'Could not unsplit')
       setSaving(false)
@@ -100,16 +101,17 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
           }}>
             {tx.description} · <span style={{
               fontFamily: 'var(--mono)', fontWeight: 700,
-              color: tx.amount < 0 ? 'var(--red)' : 'var(--green)',
-            }}>{tx.amount < 0 ? '-' : '+'}€{Math.abs(tx.amount).toFixed(2)}</span>
+              color: tx.amount_cents < 0 ? 'var(--red)' : 'var(--green)',
+            }}>{tx.amount_cents < 0 ? '-' : '+'}{formatCents(Math.abs(tx.amount_cents))}</span>
             {tx.is_refund && <span style={{ marginLeft: 8, color: 'var(--cyan)' }}>refund</span>}
           </p>
 
           <SplitEditor
-            totalAmount={tx.amount}
+            totalAmount={tx.amount_cents}
             categories={filteredCategories}
             rows={rows}
             onChange={setRows}
+            seededRefunds={tx.splits.map(s => s.is_refund)}
           />
 
           {error && (

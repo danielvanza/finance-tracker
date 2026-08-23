@@ -1,4 +1,5 @@
 import type { Category } from '../types'
+import { parseToCents, centsToInputString, formatCents, sumCents } from '../money'
 import CategorySelect from './CategorySelect'
 
 export interface SplitRow {
@@ -6,30 +7,42 @@ export interface SplitRow {
   amount: string // positive magnitude as typed by the user
 }
 
-export function splitRowsTotal(rows: SplitRow[]): number {
-  return rows.reduce((sum, r) => {
-    const n = parseFloat(r.amount)
-    return sum + (isNaN(n) ? 0 : n)
-  }, 0)
+export function splitRowsTotalCents(rows: SplitRow[]): number {
+  return sumCents(rows.map(r => parseToCents(r.amount) ?? 0))
 }
 
-export function splitRowsValid(rows: SplitRow[], totalAmount: number): boolean {
+export function splitRowsValid(rows: SplitRow[], totalAmountCents: number): boolean {
   if (rows.length < 2) return false
   if (rows.some(r => r.category_id == null)) return false
-  if (rows.some(r => { const n = parseFloat(r.amount); return isNaN(n) || n <= 0 })) return false
-  // Compare in cents to dodge float noise
-  return Math.round(splitRowsTotal(rows) * 100) === Math.round(Math.abs(totalAmount) * 100)
+  if (rows.some(r => { const c = parseToCents(r.amount); return c == null || c <= 0 })) return false
+  // Exact integer comparison — magnitudes must sum to the parent's magnitude
+  return sumCents(rows.map(r => Math.abs(parseToCents(r.amount) ?? 0))) === Math.abs(totalAmountCents)
 }
 
 interface Props {
-  totalAmount: number // signed parent amount
+  totalAmount: number // signed parent amount in cents
   categories: Category[]
   rows: SplitRow[]
   onChange: (rows: SplitRow[]) => void
+  /** Display-only flags parallel to rows; marks parts that net against their category */
+  seededRefunds?: boolean[]
 }
 
-export default function SplitEditor({ totalAmount, categories, rows, onChange }: Props) {
-  const remaining = Math.round((Math.abs(totalAmount) - splitRowsTotal(rows)) * 100) / 100
+const refundPillStyle: React.CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  color: 'var(--cyan)',
+  background: 'var(--cyan-bg)',
+  border: '1px solid var(--cyan-border)',
+  padding: '1px 6px',
+  borderRadius: 'var(--radius-xs)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  flexShrink: 0,
+}
+
+export default function SplitEditor({ totalAmount, categories, rows, onChange, seededRefunds }: Props) {
+  const remaining = Math.abs(totalAmount) - splitRowsTotalCents(rows)
   const balanced = remaining === 0
 
   const update = (idx: number, patch: Partial<SplitRow>) =>
@@ -38,9 +51,8 @@ export default function SplitEditor({ totalAmount, categories, rows, onChange }:
   const assignRemaining = () => {
     if (remaining <= 0 || rows.length === 0) return
     const idx = rows.length - 1
-    const current = parseFloat(rows[idx].amount)
-    const next = (isNaN(current) ? 0 : current) + remaining
-    update(idx, { amount: next.toFixed(2) })
+    const next = (parseToCents(rows[idx].amount) ?? 0) + remaining
+    update(idx, { amount: centsToInputString(next) })
   }
 
   return (
@@ -80,6 +92,9 @@ export default function SplitEditor({ totalAmount, categories, rows, onChange }:
               }}
             />
           </div>
+          {seededRefunds?.[idx] && (
+            <span title="This part nets against its category (refund)" style={refundPillStyle}>refund</span>
+          )}
           <button
             type="button"
             onClick={() => onChange(rows.filter((_, i) => i !== idx))}
@@ -129,7 +144,7 @@ export default function SplitEditor({ totalAmount, categories, rows, onChange }:
             cursor: balanced ? 'default' : 'pointer',
           }}
         >
-          {balanced ? 'Balanced ✓' : `Remaining: €${remaining.toFixed(2)}`}
+          {balanced ? 'Balanced ✓' : `Remaining: ${formatCents(remaining)}`}
         </button>
       </div>
     </div>

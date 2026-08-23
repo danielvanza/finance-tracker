@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Transaction, Category, SplitInput } from '../types'
+import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
 
@@ -26,7 +27,7 @@ const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
 }
 
 export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip, onCreateRule }: Props) {
-  const isPositive = tx.amount > 0
+  const isPositive = tx.amount_cents > 0
 
   const initialKind: PositiveKind = useMemo(() => {
     if (tx.is_refund) return 'refund'
@@ -51,7 +52,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
   const [splitMode, setSplitMode] = useState(tx.splits.length > 0)
   const [splitRows, setSplitRows] = useState<SplitRow[]>(() =>
     tx.splits.length > 0
-      ? tx.splits.map(s => ({ category_id: s.category_id, amount: Math.abs(s.amount).toFixed(2) }))
+      ? tx.splits.map(s => ({ category_id: s.category_id, amount: centsToInputString(Math.abs(s.amount_cents)) }))
       : [{ category_id: null, amount: '' }, { category_id: null, amount: '' }]
   )
   const [confirmHover, setConfirmHover] = useState(false)
@@ -73,10 +74,10 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
   const sign = isPositive ? 1 : -1
   const splitsPayload: SplitInput[] = splitRows.map(r => ({
     category_id: r.category_id!,
-    amount: Math.round(parseFloat(r.amount || '0') * 100) / 100 * sign,
+    amount_cents: parseToCents(r.amount)! * sign,
   }))
   const canConfirm = splitMode
-    ? splitRowsValid(splitRows, tx.amount)
+    ? splitRowsValid(splitRows, tx.amount_cents)
     : selectedCategory != null
 
   const handleConfirm = () => {
@@ -88,7 +89,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
     }
   }
 
-  const isExpense = tx.amount < 0
+  const isExpense = tx.amount_cents < 0
   const amountColor = isExpense ? 'var(--red)' : 'var(--green)'
   const amountGlow = isExpense ? 'rgba(248,113,113,0.3)' : 'rgba(34,197,94,0.3)'
 
@@ -136,7 +137,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
             flexShrink: 0,
             fontVariantNumeric: 'tabular-nums',
           }}>
-            {isExpense ? '-' : '+'}€{Math.abs(tx.amount).toFixed(2)}
+            {isExpense ? '-' : '+'}{formatCents(Math.abs(tx.amount_cents))}
           </div>
         </div>
 
@@ -238,10 +239,11 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           </div>
           {splitMode ? (
             <SplitEditor
-              totalAmount={tx.amount}
+              totalAmount={tx.amount_cents}
               categories={filteredCategories}
               rows={splitRows}
               onChange={setSplitRows}
+              seededRefunds={tx.splits.map(s => s.is_refund)}
             />
           ) : (
             <CategorySelect

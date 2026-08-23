@@ -1,0 +1,121 @@
+{
+  "$comment": "DB/domain schema for the finance-tracker re-platform. Current state extracted from backend/models.py at commit 18c3530, plus the v2 delta this re-platform introduces (marked 'v2_change'). The merge gate verifies: (a) migrations produce exactly these columns, (b) TS mirror in frontend/src/types.ts matches ts_mirror shapes, (c) contract tests assert endpoint schemas against api-contracts.json.",
+  "version": "2.0.0",
+  "storage": {
+    "engine": "SQLite",
+    "url_env": "DATABASE_URL (default sqlite:///./data/finance.db)",
+    "table_creation": "Base.metadata.create_all() on startup + db.py::run_migrations ADD COLUMN for post-deploy column additions (no migration tool by design)",
+    "seed": "backend/seed.py idempotent: categories, budgets, settings (financial_month_start_day=24), two standing adjustments (Retained Salary <-> Personal Allowance)"
+  },
+  "enums": {
+    "CategoryType": ["needs", "wants", "savings", "income", "exclude"],
+    "TransactionSource": ["ing", "revolut", "degiro", "manual"],
+    "CategorisedBy": ["rule", "ai", "manual"]
+  },
+  "tables": {
+    "categories": {
+      "columns": {
+        "id": "INTEGER PK",
+        "name": "STRING NOT NULL UNIQUE",
+        "type": "ENUM CategoryType NOT NULL",
+        "sort_order": "INTEGER DEFAULT 0"
+      },
+      "relationships": ["transactions (1:N, FK ondelete SET NULL)", "rules (1:N, CASCADE)", "budgets (1:N, CASCADE)"]
+    },
+    "transactions": {
+      "columns": {
+        "id": "INTEGER PK",
+        "date": "DATE NOT NULL",
+        "amount": "NUMERIC(12,2) NOT NULL (negative=expense; positive=income or refund)",
+        "description": "STRING NOT NULL",
+        "source": "ENUM TransactionSource NOT NULL",
+        "category_id": "INTEGER FK categories.id ON DELETE SET NULL, nullable (NULL when split)",
+        "confirmed": "BOOLEAN DEFAULT false",
+        "categorised_by": "ENUM CategorisedBy nullable",
+        "ai_confidence": "FLOAT nullable",
+        "import_hash": "STRING NOT NULL UNIQUE (SHA-256 of source|date|amount|description[|extra])",
+        "is_refund": "BOOLEAN NOT NULL DEFAULT false (positive amount netting against its expense category)",
+        "standing_adjustment_id": "INTEGER FK standing_adjustments.id ON DELETE SET NULL nullable"
+      },
+      "relationships": ["category", "splits (1:N TransactionSplit, CASCADE, order_by id)", "standing_adjustment"],
+      "invariants": [
+        "imported rows immutable (only source=manual deletable)",
+        "is_refund=true requires amount>0 and category type in needs/wants/savings",
+        "when splits exist, category_id is NULL and aggregates read splits only"
+      ]
+    },
+    "transaction_splits": {
+      "columns": {
+        "id": "INTEGER PK",
+        "transaction_id": "INTEGER FK transactions.id ON DELETE CASCADE NOT NULL",
+        "category_id": "INTEGER FK categories.id ON DELETE SET NULL nullable",
+        "amount": "NUMERIC(12,2) NOT NULL",
+        "is_refund": "v2_change: BOOLEAN NULL — NULL means inherit parent transaction.is_refund (backward compatible); set explicitly when a single part of a split is a refund"
+      },
+      "invariants": [
+        "parts sum exactly to parent amount (validated in routers/transactions.py::_apply_splits)",
+        ">= 2 parts to be a split; parts share parent's sign; no zero parts",
+        "v2: effective_parts (backend/aggregate.py) reads per-part is_refund with parent fallback"
+      ]
+    },
+    "standing_adjustments": {
+      "columns": {
+        "id": "INTEGER PK",
+        "name": "STRING NOT NULL UNIQUE",
+        "amount": "NUMERIC(12,2) NOT NULL positive; materialises +amount income leg / -amount expense leg",
+        "income_category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL (must be income type)",
+        "expense_category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL (must be needs/wants/savings)",
+        "active": "BOOLEAN NOT NULL DEFAULT true",
+        "start_month": "DATE NOT NULL (1st of first label month; earlier months never materialise)"
+      },
+      "invariants": [
+        "materialisation idempotent per financial month (backend/adjustments.py)",
+        "future months never materialise; deleting a materialised row = opt-out for that month"
+      ]
+    },
+    "rules": {
+      "columns": {
+        "id": "INTEGER PK",
+        "pattern": "STRING NOT NULL (case-insensitive substring match on description)",
+        "category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL",
+        "priority": "INTEGER DEFAULT 0 (higher wins)"
+      }
+    },
+    "budgets": {
+      "columns": {
+        "id": "INTEGER PK",
+        "category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL",
+        "month": "DATE nullable (NULL = default template, auto-populated per month)",
+        "planned_amount": "NUMERIC(12,2) NOT NULL"
+      },
+      "constraints": ["UNIQUE(category_id, month)"],
+      "notes": "income/exclude categories get no budget rows"
+    },
+    "settings": {
+      "columns": {
+        "key": "STRING(100) PK",
+        "value": "STRING(500) NOT NULL"
+      },
+      "known_keys": { "financial_month_start_day": "1-28, default 24" }
+    }
+  },
+  "domain_rules": {
+    "financial_month": "label (Y,M) + start_day -> date range [prev-month start_day .. this-month start_day-1]; start_day=1 means calendar month (backend/financial_month.py)",
+    "effective_parts": "every aggregate expands a transaction into (category_id, amount, is_refund) parts: splits yield one part per row, unsplit yields the row itself (backend/aggregate.py)",
+    "spend_contribution": "-amount for expense parts and refund parts (refunds reduce category spend, may go below zero); refunds never count as income",
+    "sign_policy": "rules/AI only auto-assign sign-compatible categories; user may override via review UI (refund/income/transfer three-way for positives)",
+    "net_zero_adjustments": "adjustment pairs must sum to exactly zero so left_over is unchanged; standing adjustments are the stored template form"
+  },
+  "v2_migration_delta": {
+    "run_migrations_add_columns": {
+      "transaction_splits": [["is_refund", "BOOLEAN"]]
+    },
+    "backfill": "none required (NULL = inherit parent)",
+    "wire_format": "monetary fields cross the API as integer cents (see api-contracts.json conventions.money_wire_format_v2); DB columns stay NUMERIC(12,2)"
+  },
+  "ts_mirror": {
+    "$comment": "frontend/src/types.ts must stay shape-compatible with these; F1 updates it for cents + split is_refund",
+    "files": ["frontend/src/types.ts"],
+    "v2_changes": ["all *_amount/amount/planned/actual fields become integer cents", "TransactionSplit gains is_refund: boolean"]
+  }
+}

@@ -1,0 +1,22 @@
+CONTINUATION of qrspi phase 7_implement for t_7205a29a. A previous session spent its whole turn READING files and wrote NOTHING. Do not repeat that. Act now, in this order, minimal further reading:
+
+1. CREATE backend/tests/test_contract_seams.py per thoughts/qrspi/t_7205a29a/spec.md (authoritative). Requirements recap:
+   - Module-level suppression guard: repo_root = Path(__file__).resolve().parents[2]; if any of contracts/manifest.json, contracts/api-contracts.json, contracts/schema.json, frontend/src/tests/contract.test.ts is missing -> pytest.exit("suppression guard: contract substrate removed", returncode=4).
+   - Load contracts/api-contracts.json into ENDPOINTS; ep(id) helper that raises KeyError naming the id.
+   - Fixtures in conftest.py style: in-memory sqlite StaticPool engine, Base.metadata.create_all, dependency_overrides[get_db] -> db, run_seed(db), TestClient(app). Seed extra transactions: confirmed ing -45.00 "Albert Heijn weekly" cat Food - Essential; unconfirmed revolut -10.00 "Bol.com order" same cat; unconfirmed ing "ALBERT HEIJN extra" same cat.
+   - Route-existence test iterating ALL 28 endpoint ids from api-contracts.json: expected path = router prefix + contract path ({x} templates match APIRoute.path_format); assert every (method, path) resolves on app.routes; assert message names missing ids. Prefix map: /import /transactions /budget /rules /dashboard /categories /settings /standing-adjustments; health has no prefix.
+   - Round-trip test per endpoint id (test_seam_<id>) with real TestClient requests and exact key-set/type assertions per spec 'Endpoint inventory'. Money request bodies as v2 cents ints. xfail(strict=True, reason="legacy dict wire format; flips when B2 rewires routers") EXACTLY on: transactions-list (incl. TransactionOut/SplitOut envelope asserts), transactions-next-review, transaction-create, transaction-adjustment-pair, transaction-patch, budget-get, budget-patch-month, budget-patch-default, dashboard-summary, and category-type-guard (separate test; base category-patch seam passes WITHOUT xfail). Everything else must pass today.
+   - Error-contract seams: transaction-delete 422 for imported rows; create-rule 400 without category; setting-patch 404 unknown key + 422 invalid value ("29"); category-delete 422 when in use.
+   - Import endpoints: multipart ING CSV copied from backend/tests/test_importers.py sample.
+   - Dashboard/budget month "2026-01": structure-only asserts (dashboard top-level key set exactly {month,total_income,total_expenses,total_savings,left_over,category_breakdown,income_breakdown,needs_wants_savings,monthly_trend}; needs_wants_savings keys {needs,wants,savings}; monthly_trend length 6 entries {month,total}; budget rows non-empty each with key set {id,category_id,category_name,category_type,month,planned_amount,actual_amount}).
+2. CREATE frontend/src/tests/contract.test.ts:
+   - Module-scope guard: throw if contracts/api-contracts.json or backend/tests/test_contract_seams.py missing (paths via node:path resolve from import.meta.url ../../..).
+   - Read api.ts text; parse exported members of the `api` object (name: (...) blocks); extract URL template literal (${BASE}/...) + method ('POST'|'PATCH'|'DELETE' literal in fetch init, else GET); strip query strings; normalise ${...} to {param}.
+   - Load api-contracts.json; build declared map from endpoints whose frontend_caller is non-null ("api.<name>").
+   - Assert: every parsed call maps to a declared id (method equal, path equal modulo placeholder syntax) AND every declared caller exists in api.ts. Mismatch messages name call/id. Expect ~24 callers.
+3. VERIFY (iterate until clean):
+   cd backend && python -m pytest tests/test_contract_seams.py -v
+   cd ../frontend && npx vitest run src/tests/contract.test.ts
+   cd ../backend && python -m pytest -q
+   cd ../frontend && npx vitest run
+4. REPORT verbatim output tails of all four commands + files created. Do not stop before the files exist and the commands have been run.

@@ -1,0 +1,19 @@
+You are executing qrspi phase 7_implement for task t_7205a29a (branch G: contract-seam tests) in this repo (/home/hermes/finance-tracker).
+
+CONTEXT CHANGE: branch B1 landed on main mid-run (HEAD 6495e17). The spec at thoughts/qrspi/t_7205a29a/spec.md was RE-VERIFIED against current HEAD by live probes — trust it exactly. The xfail(strict) set is now SMALLER than the contract's v2 markers suggest: only routers returning hand-built dicts (transactions, budget, dashboard) still emit legacy euro floats; response_model routers already emit cents.
+
+READ FIRST (in order): thoughts/qrspi/t_7205a29a/plan.md, thoughts/qrspi/t_7205a29a/spec.md, contracts/api-contracts.json, contracts/manifest.json, backend/tests/conftest.py, backend/tests/test_transactions.py (style), frontend/src/api.ts, frontend/src/tests/Settings.test.tsx (style).
+
+HARD CONSTRAINTS:
+- You may ONLY create these two files: backend/tests/test_contract_seams.py and frontend/src/tests/contract.test.ts. NO production code edits, NO edits to existing tests, NO new dependencies.
+- spec.md section 'Endpoint inventory' is authoritative for which seams PASS vs xfail(strict): PASS = health, import-preview, import-confirm, standing-adjustments-list/-create/-patch/-delete, categories-list/-create/-reorder/-delete, rules-list/-create/-update/-delete, rule-test, settings-get, setting-patch, transaction-delete, transaction-create-rule. xfail(strict) = transactions-list (+ TransactionOut/SplitOut envelope asserts inside it), transactions-next-review, transaction-create, transaction-adjustment-pair, transaction-patch, budget-get, budget-patch-month, budget-patch-default, dashboard-summary. category-patch: base seam PASSES; a SEPARATE test for the v2 type-change guard (422+counts without force / force:true override) carries the xfail(strict).
+- All money REQUEST bodies send v2 cents ints (B1 accepts them).
+- Suppression guard exactly as specced: module-level check that contracts/manifest.json, contracts/api-contracts.json, contracts/schema.json AND frontend/src/tests/contract.test.ts exist; else pytest.exit(..., returncode=4). Mirror in vitest file: throw at module scope if contracts/api-contracts.json OR backend/tests/test_contract_seams.py missing.
+- Route-existence sweep covers ALL 28 endpoint ids from api-contracts.json; failures name the id.
+- Round trips: real TestClient requests, exact key-set + type assertions per spec inventory. Fixtures follow conftest.py pattern (in-memory sqlite StaticPool, dependency_overrides[get_db], run_seed); flat imports ('from main import app'). Python venv is active as 'python'; fallback /home/hermes/finance-tracker/backend/.venv/bin/python.
+- Frontend file: node:fs text-parse of api.ts relative to import.meta.url + api-contracts.json; assert every exported api.* call maps to declared endpoint (method + path modulo placeholder syntax) AND every endpoint with non-null frontend_caller has a caller. Pure fs/text analysis, no network.
+- After writing both files RUN verification yourself and iterate until green:
+    cd backend && python -m pytest tests/test_contract_seams.py -v
+    cd ../frontend && npx vitest run src/tests/contract.test.ts
+    then full suites once: cd ../backend && python -m pytest -q ; cd ../frontend && npx vitest run
+- Final report: verbatim tail of both outputs, files created, any deviations.

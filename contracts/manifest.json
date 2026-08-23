@@ -1,0 +1,104 @@
+{
+  "$comment": "Owned-surface manifest for the finance-tracker re-platform. Each parallel branch may ONLY modify paths in its own surface plus 'shared'. The merge gate's static stage rejects any diff outside a branch's declared manifest. Paths are git-style globs relative to repo root.",
+  "version": "1.0.0",
+  "generated_by": "t_6595d7cc (T8-recon design-gate)",
+  "owned_surfaces": {
+    "backend": [
+      "backend/**"
+    ],
+    "frontend": [
+      "frontend/**"
+    ],
+    "shared": [
+      "contracts/**",
+      "design/**",
+      "README.md",
+      "SETUP.md",
+      "AGENTS.md",
+      ".gitignore",
+      "dev.sh"
+    ]
+  },
+  "branch_manifests": {
+    "B1-backend-schema-money": {
+      "may_touch": [
+        "backend/models.py",
+        "backend/schemas.py",
+        "backend/db.py",
+        "backend/money.py",
+        "backend/aggregate.py",
+        "backend/tests/**"
+      ],
+      "must_not_touch": [
+        "frontend/**",
+        "backend/routers/**",
+        "backend/importers/**",
+        "backend/categorizer/**"
+      ],
+      "satisfies_contracts": ["schema.json", "api-contracts.json#money-wire-format"],
+      "notes": "Adds TransactionSplit.is_refund, cents wire serializers, run_migrations entry. Routers untouched; existing router tests must stay green unchanged except where schemas change response field names per contract v2."
+    },
+    "B2-backend-routers-service": {
+      "may_touch": [
+        "backend/routers/**",
+        "backend/spend_service.py",
+        "backend/adjustments.py",
+        "backend/tests/**"
+      ],
+      "must_not_touch": ["frontend/**", "backend/models.py", "backend/schemas.py"],
+      "satisfies_contracts": ["api-contracts.json#endpoints", "api-contracts.json#category-type-guard"],
+      "depends_on": ["B1-backend-schema-money"],
+      "notes": "Extracts spend_service aggregation (S4) and adds category-type guard (S1). Builds on B1's schema changes."
+    },
+    "F1-frontend-types-money": {
+      "may_touch": [
+        "frontend/src/types.ts",
+        "frontend/src/api.ts",
+        "frontend/src/money.ts",
+        "frontend/src/pages/**",
+        "frontend/src/components/**",
+        "frontend/src/tests/**"
+      ],
+      "must_not_touch": ["backend/**"],
+      "satisfies_contracts": ["api-contracts.json#endpoints", "schema.json#ts-mirror", "api-contracts.json#money-wire-format"],
+      "depends_on": ["B1-backend-schema-money"],
+      "notes": "Atomic cents migration across types+api+all pages (S3). Single PR, no partial states."
+    },
+    "F2-frontend-decompose": {
+      "may_touch": [
+        "frontend/src/pages/**",
+        "frontend/src/components/**",
+        "frontend/src/styles/**"
+      ],
+      "must_not_touch": ["backend/**", "frontend/src/api.ts", "frontend/src/types.ts"],
+      "satisfies_contracts": [],
+      "depends_on": ["F1-frontend-types-money"],
+      "notes": "Move-only decomposition + style dedup (S5). No behaviour or styling change; verified by vitest suite staying green."
+    },
+    "G-contract-tests": {
+      "may_touch": [
+        "backend/tests/test_contract_seams.py",
+        "frontend/src/tests/contract.test.ts"
+      ],
+      "must_not_touch": ["backend/main.py", "backend/routers/**", "frontend/src/api.ts"],
+      "satisfies_contracts": ["api-contracts.json", "manifest.json"],
+      "depends_on": [],
+      "notes": "Contract-seam test suite (S6) reading contracts/*.json as fixtures. Runs against main immediately; this is what makes the merge gate's contract-seam stage deterministic."
+    }
+  },
+  "conflict_matrix": {
+    "$comment": "Files two branches both want = forbidden by manifests above. transactions.py is owned solely by B2; types.ts/api.ts solely by F1. This is why the DAG sequences instead of parallelising those.",
+    "hot_files": [
+      "backend/routers/transactions.py",
+      "frontend/src/types.ts",
+      "frontend/src/api.ts",
+      "backend/models.py"
+    ]
+  },
+  "gate_rules": {
+    "static_owned_surface_check": "git diff --name-only MERGE_BASE..HEAD must be subset of branch may_touch globs",
+    "not_run_is_fail": true,
+    "suppression_guard": "deleting contracts/ or tests/test_contract_seams.py fails the gate",
+    "attempt_cap": 3
+  }
+}

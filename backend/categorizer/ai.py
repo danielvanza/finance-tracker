@@ -1,11 +1,18 @@
 import json
+import logging
 import re
+import time
 import anthropic
 from sqlalchemy.orm import Session
 from models import Category
 
 AI_MODEL = "claude-haiku-4-5-20251001"
 BATCH_SIZE = 50  # Max transactions per AI call
+AI_TIMEOUT_SECONDS = 30
+AI_MAX_RETRIES = 2
+AI_TIME_BUDGET_SECONDS = 60
+
+logger = logging.getLogger(__name__)
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -49,12 +56,13 @@ def batch_categorise_with_ai(
     cat_by_name = {c.name: c for c in all_categories}
 
     try:
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(timeout=AI_TIMEOUT_SECONDS, max_retries=AI_MAX_RETRIES)
     except TypeError as e:
-        print(f"[AI categoriser] Configuration error: {e}")
+        logger.error(f"[AI categoriser] Configuration error: {e}")
         return {}
 
     results: dict[int, tuple[Category, float]] = {}
+    deadline = time.monotonic() + AI_TIME_BUDGET_SECONDS
 
     # Group by sign: positive (income) and negative (expense)
     income_txs = [(i, tx) for i, tx in enumerate(transactions) if tx.amount > 0]
@@ -72,6 +80,8 @@ def batch_categorise_with_ai(
         category_names = [c.name for c in filtered_cats]
 
         for batch_start in range(0, len(group), BATCH_SIZE):
+            if time.monotonic() >= deadline:
+                break
             batch = group[batch_start: batch_start + BATCH_SIZE]
             tx_lines = []
             for _, (global_idx, tx) in enumerate(batch):
@@ -96,7 +106,7 @@ def batch_categorise_with_ai(
                 cleaned = _strip_markdown_fences(raw_text)
                 items = json.loads(cleaned)
                 if not isinstance(items, list):
-                    print("[AI categoriser] Expected JSON array, got:", type(items).__name__)
+                    logger.warning(f"[AI categoriser] Expected JSON array, got: {type(items).__name__}")
                     continue
                 for item in items:
                     idx = int(item["index"])
@@ -108,10 +118,10 @@ def batch_categorise_with_ai(
                         continue
                     results[idx] = (cat, confidence)
             except anthropic.APIError as e:
-                print(f"[AI categoriser] Anthropic API error: {e}")
+                logger.warning(f"[AI categoriser] Anthropic API error: {e}")
             except (json.JSONDecodeError, KeyError, ValueError) as e:
-                print(f"[AI categoriser] Parse error: {e}")
+                logger.warning(f"[AI categoriser] Parse error: {e}")
             except TypeError as e:
-                print(f"[AI categoriser] Configuration error: {e}")
+                logger.error(f"[AI categoriser] Configuration error: {e}")
 
     return results

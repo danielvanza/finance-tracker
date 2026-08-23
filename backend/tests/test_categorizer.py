@@ -1,8 +1,11 @@
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
 from datetime import date
+from pathlib import Path
+import time as time_module
 from categorizer.rules import apply_rules
-from categorizer.ai import categorise_with_ai, _strip_markdown_fences
+from categorizer.ai import categorise_with_ai, _strip_markdown_fences, batch_categorise_with_ai
+import categorizer.ai
 from models import Rule, Category
 from importers.base import ParsedTransaction
 
@@ -241,3 +244,46 @@ def test_ai_categoriser_includes_sign_in_prompt(db):
     # Verify the prompt includes sign context (e.g. "expense, €10.00")
     assert "expense" in prompt.lower()
     assert "€" in prompt
+
+
+def test_ai_client_configured_with_timeout_and_retries(db):
+    """The Anthropic client must be constructed with the module timeout/retry constants."""
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text='[{"index": 0, "category": "Food - Essential", "confidence": 0.9}]')]
+
+    with patch("categorizer.ai.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.create.return_value = mock_response
+        batch_categorise_with_ai([make_tx("Albert Heijn")], db)
+
+    _, constructor_kwargs = MockClient.call_args
+    assert constructor_kwargs["timeout"] == categorizer.ai.AI_TIMEOUT_SECONDS
+    assert constructor_kwargs["max_retries"] == categorizer.ai.AI_MAX_RETRIES
+
+
+def test_time_budget_stops_new_batches(db):
+    """Once the wall-clock budget expires, no NEW AI calls may be issued."""
+    cat = Category(name="Other", type="wants", sort_order=1)
+    db.add(cat)
+    db.flush()
+    txs = [make_tx(f"Unknown Merchant {i}") for i in range(120)]  # 3 expense batches: 50/50/20
+
+    def slow_create(*args, **kwargs):
+        time_module.sleep(0.08)  # one call must exceed the whole budget
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="[]")]
+        return mock_response
+
+    with patch("categorizer.ai.anthropic.Anthropic") as MockClient, \
+         patch.object(categorizer.ai, "AI_TIME_BUDGET_SECONDS", 0.05):
+        MockClient.return_value.messages.create.side_effect = slow_create
+        result = batch_categorise_with_ai(txs, db)
+
+    assert MockClient.return_value.messages.create.call_count == 1
+    # Only first-batch indices (0..49) can appear; later batches (50+) must be absent
+    for idx in result:
+        assert idx < 50
+
+
+def test_no_print_statements_in_ai_module():
+    source = (Path(__file__).resolve().parents[1] / "categorizer" / "ai.py").read_text()
+    assert "print(" not in source

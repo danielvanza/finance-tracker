@@ -1,5 +1,7 @@
 # Household Finance
 
+[![CI](https://github.com/danielvanza/finance-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/danielvanza/finance-tracker/actions/workflows/ci.yml)
+
 Personal finance tracker for a Dutch household. Import bank transactions from CSV, auto-categorise them with rules and AI, track budgets using the 50/30/20 rule, and visualise spending on a dashboard.
 
 ## Architecture

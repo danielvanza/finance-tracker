@@ -2,15 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ReviewCard from '../components/ReviewCard'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { Category, Transaction } from '../types'
 
-const mockTx = {
-  id: 1, date: '2026-03-12', amount: -34.99, description: 'Bol.com',
+const mockTx: Transaction = {
+  id: 1, date: '2026-03-12', amount_cents: -3499, description: 'Bol.com',
   source: 'ing', category_id: 5, category_name: 'Recreation & Entertainment',
   confirmed: false, categorised_by: 'ai', ai_confidence: 0.72,
   is_refund: false, standing_adjustment_id: null, splits: [],
 }
 
-const mockCategories = [
+const mockCategories: Category[] = [
   { id: 1, name: 'Food - Essential', type: 'needs', sort_order: 1 },
   { id: 5, name: 'Recreation & Entertainment', type: 'wants', sort_order: 8 },
 ]
@@ -38,22 +39,22 @@ test('calls onConfirm with the decision when confirm button clicked', () => {
 })
 
 describe('ReviewCard incoming-money choice', () => {
-  const allCategories = [
+  const allCategories: Category[] = [
     { id: 1, name: 'Food', type: 'needs', sort_order: 1 },
     { id: 2, name: 'Salary', type: 'income', sort_order: 20 },
     { id: 3, name: 'Fun', type: 'wants', sort_order: 7 },
     { id: 4, name: 'Internal Transfer', type: 'exclude', sort_order: 30 },
   ]
 
-  const expenseTx = {
-    id: 1, date: '2026-03-01', amount: -45.0,
+  const expenseTx: Transaction = {
+    id: 1, date: '2026-03-01', amount_cents: -4500,
     description: 'Albert Heijn', source: 'ing',
     category_id: 1, category_name: 'Food',
     confirmed: false, categorised_by: 'ai', ai_confidence: 0.85,
     is_refund: false, standing_adjustment_id: null, splits: [],
   }
-  const incomeTx = {
-    id: 2, date: '2026-03-01', amount: 3400.0,
+  const incomeTx: Transaction = {
+    id: 2, date: '2026-03-01', amount_cents: 340000,
     description: 'Salaris Maart', source: 'ing',
     category_id: 2, category_name: 'Salary',
     confirmed: false, categorised_by: 'ai', ai_confidence: 0.9,
@@ -140,12 +141,12 @@ describe('ReviewCard incoming-money choice', () => {
 })
 
 describe('ReviewCard splitting', () => {
-  const categories = [
+  const categories: Category[] = [
     { id: 1, name: 'Food', type: 'needs', sort_order: 1 },
     { id: 3, name: 'Fun', type: 'wants', sort_order: 7 },
   ]
-  const expenseTx = {
-    id: 9, date: '2026-03-01', amount: -250.0,
+  const expenseTx: Transaction = {
+    id: 9, date: '2026-03-01', amount_cents: -25000,
     description: 'Supermarket', source: 'ing',
     category_id: 1, category_name: 'Food',
     confirmed: false, categorised_by: null, ai_confidence: null,
@@ -184,8 +185,8 @@ describe('ReviewCard splitting', () => {
     expect(onConfirm).toHaveBeenCalledWith(expenseTx.id, {
       is_refund: false,
       splits: [
-        { category_id: 1, amount: -125 },
-        { category_id: 3, amount: -125 },
+        { category_id: 1, amount_cents: -12500 },
+        { category_id: 3, amount_cents: -12500 },
       ],
     })
   })
@@ -203,6 +204,6 @@ describe('ReviewCard splitting', () => {
     fireEvent.click(screen.getByRole('button', { name: /split…/i }))
     fireEvent.change(screen.getByLabelText('Split part 1 amount'), { target: { value: '100' } })
     expect(screen.getByRole('button', { name: /confirm split/i })).toBeDisabled()
-    expect(screen.getByText(/Remaining: €150.00/)).toBeInTheDocument()
+    expect(screen.getByText(/Remaining: €150,00/)).toBeInTheDocument()
   })
 })

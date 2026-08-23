@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Category } from '../types'
 import { api } from '../api'
 import CategorySelect from './CategorySelect'
+import { formatCents, parseToCents } from '../money'
 
 type Mode = 'single' | 'pair'
 type Kind = 'expense' | 'income' | 'refund' | 'transfer'
@@ -71,35 +72,35 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
     setCategoryId(kindCategories(k)[0]?.id ?? null)
   }
 
-  const parsedAmount = Math.round(parseFloat(amount || '0') * 100) / 100
+  const parsedCents = parseToCents(amount || '0')
 
   const handleSave = async () => {
     setError('')
     if (!description.trim()) { setError('Description is required'); return }
-    if (!parsedAmount || parsedAmount <= 0) { setError('Enter a positive amount'); return }
+    if (!parsedCents || parsedCents <= 0) { setError('Enter a positive amount'); return }
     setSaving(true)
     try {
       if (mode === 'single') {
         if (categoryId == null) { setError('Pick a category'); setSaving(false); return }
         const sign = kind === 'expense' || (kind === 'transfer' && transferOut) ? -1 : 1
-        const res = await api.createTransaction({
+        const res = (await api.createTransaction({
           date, description: description.trim(),
-          amount: parsedAmount * sign,
+          amount_cents: parsedCents * sign,
           category_id: categoryId,
           is_refund: kind === 'refund',
-        })
+        })) as { detail?: unknown }
         if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); setSaving(false); return }
       } else {
         if (incomeCategoryId == null || expenseCategoryId == null) {
           setError('Pick both categories'); setSaving(false); return
         }
-        const res = await api.createAdjustmentPair({
+        const res = (await api.createAdjustmentPair({
           date, description: description.trim(),
           legs: [
-            { amount: parsedAmount, category_id: incomeCategoryId },
-            { amount: -parsedAmount, category_id: expenseCategoryId },
+            { amount_cents: parsedCents, category_id: incomeCategoryId },
+            { amount_cents: -parsedCents, category_id: expenseCategoryId },
           ],
-        })
+        })) as { detail?: unknown }
         if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); setSaving(false); return }
       }
       onSaved()
@@ -246,7 +247,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
           ) : (
             <>
               <div style={{ marginBottom: 14 }}>
-                <label style={labelStyle}>Income leg (+€{parsedAmount > 0 ? parsedAmount.toFixed(2) : '…'})</label>
+                <label style={labelStyle}>Income leg (+€{parsedCents && parsedCents > 0 ? formatCents(parsedCents) : '…'})</label>
                 <CategorySelect
                   categories={categories.filter(c => c.type === 'income')}
                   value={incomeCategoryId}
@@ -254,7 +255,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
                 />
               </div>
               <div style={{ marginBottom: 18 }}>
-                <label style={labelStyle}>Expense leg (−€{parsedAmount > 0 ? parsedAmount.toFixed(2) : '…'})</label>
+                <label style={labelStyle}>Expense leg (−€{parsedCents && parsedCents > 0 ? formatCents(parsedCents) : '…'})</label>
                 <CategorySelect
                   categories={categories.filter(c => ['needs', 'wants', 'savings'].includes(c.type))}
                   value={expenseCategoryId}

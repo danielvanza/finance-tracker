@@ -59,7 +59,7 @@ export default function CategoryManager() {
       setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
       return
     }
-    const res = await api.patchCategory(cat.id, { name: trimmed })
+    const res = (await api.patchCategory(cat.id, { name: trimmed })) as { detail?: unknown }
     if (res.detail) {
       setError(typeof res.detail === 'string' ? res.detail : 'Could not rename')
       return
@@ -70,7 +70,7 @@ export default function CategoryManager() {
 
   const remove = async (cat: Category) => {
     if (!window.confirm(`Delete category "${cat.name}"?`)) return
-    const res = await api.deleteCategory(cat.id)
+    const res = (await api.deleteCategory(cat.id)) as { detail?: unknown }
     if (res?.detail) {
       setError(typeof res.detail === 'string' ? res.detail : 'Could not delete')
       return
@@ -82,7 +82,7 @@ export default function CategoryManager() {
     setError('')
     const trimmed = newName.trim()
     if (!trimmed) { setError('Name is required'); return }
-    const res = await api.createCategory({ name: trimmed, type: newType })
+    const res = (await api.createCategory({ name: trimmed, type: newType })) as { detail?: unknown }
     if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); return }
     setNewName(''); setNewType('needs'); setShowAdd(false)
     invalidate()

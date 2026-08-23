@@ -2,10 +2,10 @@ import { render, screen } from '@testing-library/react'
 import SummaryCards from '../components/SummaryCards'
 
 const mockData = {
-  total_income: 5860.26,
-  total_expenses: 3420.00,
-  total_savings: 400.00,
-  left_over: 2040.26,
+  total_income_cents: 586026,
+  total_expenses_cents: 342000,
+  total_savings_cents: 40000,
+  left_over_cents: 204026,
 }
 
 test('renders all four summary cards', () => {

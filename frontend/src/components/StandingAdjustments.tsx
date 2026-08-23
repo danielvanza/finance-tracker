@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { StandingAdjustment } from '../types'
 import CategorySelect from './CategorySelect'
+import { centsToInputString, parseToCents } from '../money'
 
 const labelStyle: React.CSSProperties = {
   display: 'block', marginBottom: 6,
@@ -56,12 +57,12 @@ export default function StandingAdjustments() {
   const saveAmount = async (sa: StandingAdjustment) => {
     const raw = editedAmounts[sa.id]
     if (raw == null) return
-    const value = Math.round(parseFloat(raw) * 100) / 100
-    if (isNaN(value) || value <= 0 || value === sa.amount) {
+    const value = parseToCents(raw)
+    if (value == null || value <= 0 || value === sa.amount_cents) {
       setEditedAmounts(prev => { const { [sa.id]: _, ...rest } = prev; return rest })
       return
     }
-    await api.patchStandingAdjustment(sa.id, { amount: value })
+    await api.patchStandingAdjustment(sa.id, { amount_cents: value })
     setEditedAmounts(prev => { const { [sa.id]: _, ...rest } = prev; return rest })
     invalidate()
   }
@@ -74,16 +75,16 @@ export default function StandingAdjustments() {
 
   const add = async () => {
     setError('')
-    const value = Math.round(parseFloat(amount || '0') * 100) / 100
+    const value = parseToCents(amount || '0')
     if (!name.trim()) { setError('Name is required'); return }
     if (!value || value <= 0) { setError('Enter a positive monthly amount'); return }
     if (incomeCategoryId == null || expenseCategoryId == null) { setError('Pick both categories'); return }
-    const res = await api.createStandingAdjustment({
-      name: name.trim(), amount: value,
+    const res = (await api.createStandingAdjustment({
+      name: name.trim(), amount_cents: value,
       income_category_id: incomeCategoryId,
       expense_category_id: expenseCategoryId,
       active: true,
-    })
+    })) as { detail?: unknown }
     if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); return }
     setName(''); setAmount(''); setShowAdd(false)
     invalidate()
@@ -128,7 +129,7 @@ export default function StandingAdjustments() {
             <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 12, pointerEvents: 'none' }}>€</span>
             <input
               type="number" min="0.01" step="0.01"
-              value={editedAmounts[sa.id] ?? String(sa.amount)}
+              value={editedAmounts[sa.id] ?? centsToInputString(sa.amount_cents)}
               onChange={e => setEditedAmounts(prev => ({ ...prev, [sa.id]: e.target.value }))}
               onBlur={() => saveAmount(sa)}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}

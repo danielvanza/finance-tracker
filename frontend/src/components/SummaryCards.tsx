@@ -1,12 +1,12 @@
+import { formatCents } from '../money'
+
 interface Props {
-  total_income: number
-  total_expenses: number
-  total_savings: number
-  left_over: number
+  total_income_cents: number
+  total_expenses_cents: number
+  total_savings_cents: number
+  left_over_cents: number
   income_breakdown?: Array<{ category_id: number; category_name: string; amount: number }>
 }
-
-const fmt = (n: number) => `€${n.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
 
 interface CardProps {
   label: string
@@ -101,14 +101,14 @@ const Card = ({ label, value, subtext, gradient, glowColor, borderColor, icon }:
   )
 }
 
-export default function SummaryCards({ total_income, total_expenses, total_savings, left_over, income_breakdown }: Props) {
+export default function SummaryCards({ total_income_cents, total_expenses_cents, total_savings_cents, left_over_cents, income_breakdown }: Props) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
       <Card
         label="Income"
-        value={fmt(total_income)}
+        value={formatCents(total_income_cents)}
         subtext={income_breakdown && income_breakdown.length > 0
-          ? income_breakdown.map(b => `${b.category_name}: €${b.amount.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`).join(' | ')
+          ? income_breakdown.map(b => `${b.category_name}: ${formatCents(b.amount)}`).join(' | ')
           : undefined}
         gradient="linear-gradient(135deg, #22c55e, #16a34a)"
         glowColor="rgba(34, 197, 94, 0.3)"
@@ -121,7 +121,7 @@ export default function SummaryCards({ total_income, total_expenses, total_savin
       />
       <Card
         label="Spent"
-        value={fmt(total_expenses)}
+        value={formatCents(total_expenses_cents)}
         gradient="linear-gradient(135deg, #f87171, #ef4444)"
         glowColor="rgba(248, 113, 113, 0.3)"
         borderColor="rgba(248, 113, 113, 0.22)"
@@ -133,7 +133,7 @@ export default function SummaryCards({ total_income, total_expenses, total_savin
       />
       <Card
         label="Saved"
-        value={fmt(total_savings)}
+        value={formatCents(total_savings_cents)}
         gradient="linear-gradient(135deg, #60a5fa, #3b82f6)"
         glowColor="rgba(96, 165, 250, 0.3)"
         borderColor="rgba(96, 165, 250, 0.22)"
@@ -145,10 +145,10 @@ export default function SummaryCards({ total_income, total_expenses, total_savin
       />
       <Card
         label="Left Over"
-        value={fmt(left_over)}
-        gradient={left_over >= 0 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : 'linear-gradient(135deg, #f87171, #ef4444)'}
-        glowColor={left_over >= 0 ? 'rgba(251, 191, 36, 0.3)' : 'rgba(248, 113, 113, 0.3)'}
-        borderColor={left_over >= 0 ? 'rgba(251, 191, 36, 0.22)' : 'rgba(248, 113, 113, 0.22)'}
+        value={formatCents(left_over_cents)}
+        gradient={left_over_cents >= 0 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : 'linear-gradient(135deg, #f87171, #ef4444)'}
+        glowColor={left_over_cents >= 0 ? 'rgba(251, 191, 36, 0.3)' : 'rgba(248, 113, 113, 0.3)'}
+        borderColor={left_over_cents >= 0 ? 'rgba(251, 191, 36, 0.22)' : 'rgba(248, 113, 113, 0.22)'}
         icon={
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>

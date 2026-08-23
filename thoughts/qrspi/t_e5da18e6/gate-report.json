@@ -1,0 +1,33 @@
+{
+  "gate": "fleet-merge-gate",
+  "generated_at": "2026-08-23T11:01:51+0000",
+  "repo": "/home/hermes/finance-tracker",
+  "shas": {
+    "head": "b7eabefe15f4f5c5b3ee00aed7e6f1e15d24f031"
+  },
+  "gates": {
+    "static": {
+      "status": "pass",
+      "detail": "static checks ok"
+    },
+    "unit": {
+      "status": "pass",
+      "detail": "........................................................................ [ 34%]\n........................................................................ [ 68%]\n...................................................................      [100%]\n211 passed in 21.71s\n"
+    },
+    "contract": {
+      "status": "pass",
+      "detail": "no_seams: single-branch build, no parallel surfaces to reconcile"
+    },
+    "integration": {
+      "status": "pass",
+      "detail": "SMOKE_OK {'status': 'ok'}\nINFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.schemas\nINFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.tables\nINFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.types\nINFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.c"
+    }
+  },
+  "coverage": {
+    "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
+  },
+  "elapsed_seconds": 28.2,
+  "verdict": "PASS",
+  "not_run_count": 0,
+  "fail_count": 0
+}

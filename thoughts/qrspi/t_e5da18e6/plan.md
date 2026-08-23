@@ -18,7 +18,7 @@ Engine work happens in /home/hermes/finance-tracker on top of that baseline.
 - [x] Commit phase 1.
 
 ## Phase 2 — GET /dashboard/trends router
-- [ ] Add endpoint to backend/routers/dashboard.py per design.md: `months` Query ge=1
+- [x] Add endpoint to backend/routers/dashboard.py per design.md: `months` Query ge=1
       le=24; optional `end_month` strict %Y-%m else 422; anchor = end_month or today's
       label month (label_month_for_date(today, start_day)); iterate oldest→newest;
       financial_month_bounds(materialise=True) per month; confirmed_parts_in_range;
@@ -27,26 +27,26 @@ Engine work happens in /home/hermes/finance-tracker on top of that baseline.
       None when income<=0; top-5 expense cats by actual desc (id tiebreak asc);
       mom_deltas embedded, None on first entry.
 - [ ] Wire format: ints only (*_cents, *_bps); no floats cross the wire.
-- [ ] Automated verify: quick TestClient probe script on seeded data — 12 entries,
+- [x] Automated verify: quick TestClient probe script on seeded data — 12 entries,
       exact expected cents/bps on a constructed month, mom_deltas[0] is None.
-- [ ] Live verify: boot uvicorn against a temp seeded sqlite DB, curl
+- [x] Live verify: boot uvicorn against a temp seeded sqlite DB, curl
       /dashboard/trends?months=12, inspect JSON.
-- [ ] Commit phase 2.
+- [x] Commit phase 2.
 
 ## Phase 3 — contract entry + seam tests
-- [ ] Append `dashboard-trends` endpoint to contracts/api-contracts.json
+- [x] Append `dashboard-trends` endpoint to contracts/api-contracts.json
       (GET /dashboard/trends, query months/end_month documented, response shape,
       frontend_caller: null so the frontend mirror ignores it).
-- [ ] Hand-written contract-seam-style tests (test_dashboard.py, matching fixture
+- [x] Hand-written contract-seam-style tests (test_dashboard.py, matching fixture
       patterns): shape of every field, savings-rate math incl. income<=0 → null,
       MoM deltas math, exclude-type categories never appear, refunds net into
       expenses, unconfirmed transactions ignored, months clamp/validation 422s,
       chronological order + correct financial-month windowing (start_day=24).
-- [ ] Automated verify: full backend suite green except the recorded pre-existing
+- [x] Automated verify: full backend suite green except the recorded pre-existing
       categorizer failure; new tests all pass.
-- [ ] Live verify: rerun the uvicorn+curl probe after contract change (route still
+- [x] Live verify: rerun the uvicorn+curl probe after contract change (route still
       serves; route-existence also enforced by test_contract_seams automatically).
-- [ ] Commit phase 3.
+- [x] Commit phase 3.
 
 ## Phase 4 — merge gate
 - [ ] Run ~/.hermes/fleet/merge-gate.py with this task as input; resolve any heal

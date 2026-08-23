@@ -87,26 +87,26 @@ export default function Analytics() {
     if (!data) return { pieItems: [], legendItems: [] }
 
     const total = data.total_expenses_cents || 1
-    const breakdown = data.category_breakdown.filter(c => c.actual > 0)
+    const breakdown = data.category_breakdown.filter(c => c.actual_cents > 0)
 
     // Split into above- and below-threshold
-    const above = breakdown.filter(c => c.actual / total >= THRESHOLD)
-    const below = breakdown.filter(c => c.actual / total < THRESHOLD)
+    const above = breakdown.filter(c => c.actual_cents / total >= THRESHOLD)
+    const below = breakdown.filter(c => c.actual_cents / total < THRESHOLD)
 
     const colors = assignColors(above)
 
     const pieItems: Array<{ name: string; value: number; color: string; pct: string; type: string }> = [
       ...above.map((c, i) => ({
         name: c.category_name,
-        value: c.actual,
+        value: c.actual_cents,
         color: colors[i],
-        pct: String(Math.round(c.actual / total * 1000) / 10),
+        pct: String(Math.round(c.actual_cents / total * 1000) / 10),
         type: c.type,
       })),
     ]
 
     if (below.length > 0) {
-      const otherTotal = below.reduce((s, c) => s + c.actual, 0)
+      const otherTotal = below.reduce((s, c) => s + c.actual_cents, 0)
       pieItems.push({
         name: 'Other',
         value: otherTotal,

@@ -72,16 +72,16 @@ export interface DashboardSummary {
   category_breakdown: Array<{
     category_id: number
     category_name: string
-    actual: number    // legacy key, integer cents value
-    planned: number   // legacy key, integer cents value
+    actual_cents: number   // integer cents (B2 wire: *_cents nested keys)
+    planned_cents: number  // integer cents
     type: CategoryType
   }>
-  needs_wants_savings: { needs: number; wants: number; savings: number }  // cents
-  monthly_trend: Array<{ month: string; total: number }>                  // total = cents
+  needs_wants_savings: { needs_cents: number; wants_cents: number; savings_cents: number } // integer cents
+  monthly_trend: Array<{ month: string; total_cents: number }> // total = integer cents
   income_breakdown: Array<{
     category_id: number
     category_name: string
-    amount: number    // legacy key, integer cents value
+    amount_cents: number // integer cents
   }>
 }
 

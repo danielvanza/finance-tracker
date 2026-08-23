@@ -93,15 +93,15 @@ export default function Dashboard() {
   )
 
   const pieData = [
-    { name: 'Needs', value: data.needs_wants_savings.needs },
-    { name: 'Wants', value: data.needs_wants_savings.wants },
-    { name: 'Savings', value: data.needs_wants_savings.savings },
+    { name: 'Needs', value: data.needs_wants_savings.needs_cents },
+    { name: 'Wants', value: data.needs_wants_savings.wants_cents },
+    { name: 'Savings', value: data.needs_wants_savings.savings_cents },
   ]
 
   const totalExpenses = data.total_expenses_cents || 1
-  const needsPct = String(Math.round((data.needs_wants_savings.needs / totalExpenses) * 100))
-  const wantsPct = String(Math.round((data.needs_wants_savings.wants / totalExpenses) * 100))
-  const savingsPct = String(Math.round((data.needs_wants_savings.savings / totalExpenses) * 100))
+  const needsPct = String(Math.round((data.needs_wants_savings.needs_cents / totalExpenses) * 100))
+  const wantsPct = String(Math.round((data.needs_wants_savings.wants_cents / totalExpenses) * 100))
+  const savingsPct = String(Math.round((data.needs_wants_savings.savings_cents / totalExpenses) * 100))
 
   return (
     <div className="animate-fade-in">
@@ -191,8 +191,8 @@ export default function Dashboard() {
                 iconType="square"
                 iconSize={10}
               />
-              <Bar dataKey="planned" fill="url(#barPlanned)" name="Planned" radius={[4, 4, 0, 0]} stroke="rgba(99,102,241,0.3)" strokeWidth={1} />
-              <Bar dataKey="actual" fill="url(#barActual)" name="Actual" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="planned_cents" fill="url(#barPlanned)" name="Planned" radius={[4, 4, 0, 0]} stroke="rgba(99,102,241,0.3)" strokeWidth={1} />
+              <Bar dataKey="actual_cents" fill="url(#barActual)" name="Actual" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -236,9 +236,9 @@ export default function Dashboard() {
           {/* Legend with percentages */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             {[
-              { label: 'Needs', pct: needsPct, color: PIE_COLORS[0], value: data.needs_wants_savings.needs },
-              { label: 'Wants', pct: wantsPct, color: PIE_COLORS[1], value: data.needs_wants_savings.wants },
-              { label: 'Savings', pct: savingsPct, color: PIE_COLORS[2], value: data.needs_wants_savings.savings },
+              { label: 'Needs', pct: needsPct, color: PIE_COLORS[0], value: data.needs_wants_savings.needs_cents },
+              { label: 'Wants', pct: wantsPct, color: PIE_COLORS[1], value: data.needs_wants_savings.wants_cents },
+              { label: 'Savings', pct: savingsPct, color: PIE_COLORS[2], value: data.needs_wants_savings.savings_cents },
             ].map(({ label, pct, color: dotColor, value }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{
@@ -290,7 +290,7 @@ export default function Dashboard() {
             />
             <Area
               type="monotone"
-              dataKey="total"
+              dataKey="total_cents"
               stroke="url(#lineGrad)"
               strokeWidth={2.5}
               fill="url(#areaGrad)"

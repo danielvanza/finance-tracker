@@ -5,7 +5,7 @@ interface Props {
   total_expenses_cents: number
   total_savings_cents: number
   left_over_cents: number
-  income_breakdown?: Array<{ category_id: number; category_name: string; amount: number }>
+  income_breakdown?: Array<{ category_id: number; category_name: string; amount_cents: number }>
 }
 
 interface CardProps {
@@ -108,7 +108,7 @@ export default function SummaryCards({ total_income_cents, total_expenses_cents,
         label="Income"
         value={formatCents(total_income_cents)}
         subtext={income_breakdown && income_breakdown.length > 0
-          ? income_breakdown.map(b => `${b.category_name}: ${formatCents(b.amount)}`).join(' | ')
+          ? income_breakdown.map(b => `${b.category_name}: ${formatCents(b.amount_cents)}`).join(' | ')
           : undefined}
         gradient="linear-gradient(135deg, #22c55e, #16a34a)"
         glowColor="rgba(34, 197, 94, 0.3)"

@@ -1,0 +1,33 @@
+{
+  "gate": "fleet-merge-gate",
+  "generated_at": "2026-08-23T02:07:25+0000",
+  "repo": "/home/hermes/finance-tracker",
+  "shas": {
+    "head": "312d18f7cb45b90428700c642adb02af7048444f"
+  },
+  "gates": {
+    "static": {
+      "status": "pass",
+      "detail": "static checks ok"
+    },
+    "unit": {
+      "status": "pass",
+      "detail": "      Tests  50 passed (50)\n   Start at  02:06:43\n   Duration  9.76s (transform 939ms, setup 1.15s, collect 4.47s, tests 7.34s, environment 8.67s, prepare 1.96s)\n\nTSC_OK\n..................................................                       [100%]\n194 passed in 16.89s\nnpm notice run frontend@0.0.0"
+    },
+    "contract": {
+      "status": "pass",
+      "detail": "no_seams: single-branch build, no parallel surfaces to reconcile"
+    },
+    "integration": {
+      "status": "pass",
+      "detail": "wire check: totals + nested breakdown keys all integer *_cents\ntransactions wire check: 4 rows, amount_cents int + splits is_refund bool\nSMOKE PASS\n"
+    }
+  },
+  "coverage": {
+    "note": "coverage honesty: not_run treated as fail; tests must EXECUTE, not be claimed"
+  },
+  "elapsed_seconds": 42.8,
+  "verdict": "PASS",
+  "not_run_count": 0,
+  "fail_count": 0
+}

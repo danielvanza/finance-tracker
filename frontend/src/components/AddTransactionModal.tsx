@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Category } from '../types'
 import { api } from '../api'
 import CategorySelect from './CategorySelect'
+import { describeApiError } from './ErrorBanner'
 import { formatCents, parseToCents } from '../money'
 
 type Mode = 'single' | 'pair'
@@ -83,30 +84,28 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
       if (mode === 'single') {
         if (categoryId == null) { setError('Pick a category'); setSaving(false); return }
         const sign = kind === 'expense' || (kind === 'transfer' && transferOut) ? -1 : 1
-        const res = (await api.createTransaction({
+        await api.createTransaction({
           date, description: description.trim(),
           amount_cents: parsedCents * sign,
           category_id: categoryId,
           is_refund: kind === 'refund',
-        })) as { detail?: unknown }
-        if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); setSaving(false); return }
+        })
       } else {
         if (incomeCategoryId == null || expenseCategoryId == null) {
           setError('Pick both categories'); setSaving(false); return
         }
-        const res = (await api.createAdjustmentPair({
+        await api.createAdjustmentPair({
           date, description: description.trim(),
           legs: [
             { amount_cents: parsedCents, category_id: incomeCategoryId },
             { amount_cents: -parsedCents, category_id: expenseCategoryId },
           ],
-        })) as { detail?: unknown }
-        if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); setSaving(false); return }
+        })
       }
       onSaved()
       onClose()
-    } catch {
-      setError('Could not save transaction')
+    } catch (e) {
+      setError(describeApiError(e))
       setSaving(false)
     }
   }

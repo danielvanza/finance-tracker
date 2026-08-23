@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GripVertical } from 'lucide-react'
 import { api } from '../api'
 import type { Category } from '../types'
+import { describeApiError } from './ErrorBanner'
 import { TYPE_META, GROUP_ORDER } from './CategorySelect'
 
 const labelStyle: React.CSSProperties = {
@@ -59,9 +60,10 @@ export default function CategoryManager() {
       setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
       return
     }
-    const res = (await api.patchCategory(cat.id, { name: trimmed })) as { detail?: unknown }
-    if (res.detail) {
-      setError(typeof res.detail === 'string' ? res.detail : 'Could not rename')
+    try {
+      await api.patchCategory(cat.id, { name: trimmed })
+    } catch (e) {
+      setError(describeApiError(e))
       return
     }
     setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
@@ -70,9 +72,10 @@ export default function CategoryManager() {
 
   const remove = async (cat: Category) => {
     if (!window.confirm(`Delete category "${cat.name}"?`)) return
-    const res = (await api.deleteCategory(cat.id)) as { detail?: unknown }
-    if (res?.detail) {
-      setError(typeof res.detail === 'string' ? res.detail : 'Could not delete')
+    try {
+      await api.deleteCategory(cat.id)
+    } catch (e) {
+      setError(describeApiError(e))
       return
     }
     invalidate()
@@ -82,8 +85,11 @@ export default function CategoryManager() {
     setError('')
     const trimmed = newName.trim()
     if (!trimmed) { setError('Name is required'); return }
-    const res = (await api.createCategory({ name: trimmed, type: newType })) as { detail?: unknown }
-    if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); return }
+    try {
+      await api.createCategory({ name: trimmed, type: newType })
+    } catch (e) {
+      setError(describeApiError(e)); return
+    }
     setNewName(''); setNewType('needs'); setShowAdd(false)
     invalidate()
   }
@@ -97,8 +103,12 @@ export default function CategoryManager() {
     ids.splice(from, 1)
     ids.splice(to, 0, draggedId)
     setDraggedId(null)
-    await api.reorderCategories(ids)
-    invalidate()
+    try {
+      await api.reorderCategories(ids)
+      invalidate()
+    } catch (e) {
+      setError(describeApiError(e))
+    }
   }
 
   return (

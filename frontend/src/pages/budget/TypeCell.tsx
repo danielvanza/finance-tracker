@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../../api'
+import { describeApiError } from '../../components/ErrorBanner'
 
 // ── Category type pill + inline dropdown ─────────────────────────────────────
 export const TYPE_CFG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -13,9 +14,10 @@ interface TypeCellProps {
   categoryId: number
   type: string
   onSaved: () => void
+  onError?: (message: string) => void
 }
 
-export function TypeCell({ categoryId, type, onSaved }: TypeCellProps) {
+export function TypeCell({ categoryId, type, onSaved, onError }: TypeCellProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const cfg = TYPE_CFG[type]
@@ -32,8 +34,16 @@ export function TypeCell({ categoryId, type, onSaved }: TypeCellProps) {
   const handleSelect = async (newType: string) => {
     setOpen(false)
     if (newType === type) return
-    await api.patchCategory(categoryId, { type: newType })
-    onSaved()
+    try {
+      await api.patchCategory(categoryId, { type: newType })
+      onSaved()
+    } catch (e) {
+      if (onError) {
+        onError(describeApiError(e))
+      } else {
+        console.error('Failed to change category type:', e)
+      }
+    }
   }
 
   return (

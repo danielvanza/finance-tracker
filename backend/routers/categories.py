@@ -30,6 +30,19 @@ def list_categories(db: Session = Depends(get_db)):
 class CategoryPatch(BaseModel):
     type: Optional[str] = None
     name: Optional[str] = None
+    force: bool = False
+
+
+def _usage_counts(db: Session, category_id: int) -> dict:
+    return {
+        "transaction": db.query(Transaction).filter_by(category_id=category_id).count(),
+        "split": db.query(TransactionSplit).filter_by(category_id=category_id).count(),
+        "rule": db.query(Rule).filter_by(category_id=category_id).count(),
+        "standing adjustment": db.query(StandingAdjustment).filter(
+            (StandingAdjustment.income_category_id == category_id)
+            | (StandingAdjustment.expense_category_id == category_id)
+        ).count(),
+    }
 
 
 @router.post("", status_code=201)
@@ -89,11 +102,21 @@ def patch_category(
     cat = db.get(Category, category_id)
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+    new_type = None
     if body.type is not None:
         try:
-            cat.type = CategoryType(body.type)
+            new_type = CategoryType(body.type)
         except ValueError:
             raise HTTPException(status_code=422, detail=f"Invalid type: {body.type}")
+        if new_type != cat.type:
+            counts = _usage_counts(db, category_id)
+            blockers = {label: n for label, n in counts.items() if n > 0}
+            if blockers and not body.force:
+                parts = ", ".join(f"{n} {label}(s)" for label, n in blockers.items())
+                raise HTTPException(status_code=422, detail=(
+                    f"Cannot change type of '{cat.name}' to '{body.type}': "
+                    f"in use by {parts}. Reassign or remove them first, or pass force:true."))
+        cat.type = new_type
     if body.name is not None:
         name = body.name.strip()
         if not name:
@@ -115,15 +138,7 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    counts = {
-        "transaction": db.query(Transaction).filter_by(category_id=category_id).count(),
-        "split": db.query(TransactionSplit).filter_by(category_id=category_id).count(),
-        "rule": db.query(Rule).filter_by(category_id=category_id).count(),
-        "standing adjustment": db.query(StandingAdjustment).filter(
-            (StandingAdjustment.income_category_id == category_id)
-            | (StandingAdjustment.expense_category_id == category_id)
-        ).count(),
-    }
+    counts = _usage_counts(db, category_id)
     blockers = {label: count for label, count in counts.items() if count > 0}
     if blockers:
         parts = ", ".join(f"{count} {label}(s)" for label, count in blockers.items())

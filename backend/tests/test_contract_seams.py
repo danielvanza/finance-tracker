@@ -379,7 +379,6 @@ def test_seam_category_patch(client):
     assert body["type"] == "savings"
 
 
-@pytest.mark.xfail(strict=True, reason="v2 category-type guard ships in B2 P3")
 def test_category_type_change_guard(client):
     """v2 guard: type change blocked (422 + census detail) while dependents
     exist unless force:true — ships with B2."""

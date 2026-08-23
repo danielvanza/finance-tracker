@@ -106,17 +106,17 @@ def test_aggregates_read_parts_not_parent(client, db):
     ], "confirmed": True})
 
     data = client.get("/dashboard/summary?month=2026-03").json()
-    assert data["total_expenses"] == 250.0  # no double counting, nothing lost
+    assert data["total_expenses_cents"] == 25000  # no double counting, nothing lost
     food_row = next(d for d in data["category_breakdown"] if d["category_id"] == food.id)
     misc_row = next(d for d in data["category_breakdown"] if d["category_id"] == misc.id)
-    assert food_row["actual"] == 125.0
-    assert misc_row["actual"] == 125.0
-    assert data["needs_wants_savings"]["needs"] == 125.0
-    assert data["needs_wants_savings"]["wants"] == 125.0
+    assert food_row["actual_cents"] == 12500
+    assert misc_row["actual_cents"] == 12500
+    assert data["needs_wants_savings"]["needs_cents"] == 12500
+    assert data["needs_wants_savings"]["wants_cents"] == 12500
 
     budget_rows = client.get("/budget?month=2026-03").json()
     food_budget = next(r for r in budget_rows if r["category_id"] == food.id)
-    assert Decimal(str(food_budget["actual_amount"])) == Decimal("125.00")
+    assert food_budget["actual_amount_cents"] == 12500
 
 
 def test_filter_by_category_matches_split_parts(client, db):
@@ -149,9 +149,9 @@ def test_split_refund_reduces_both_categories(client, db):
     data = client.get("/dashboard/summary?month=2026-03").json()
     food_row = next(d for d in data["category_breakdown"] if d["category_id"] == food.id)
     misc_row = next(d for d in data["category_breakdown"] if d["category_id"] == misc.id)
-    assert food_row["actual"] == 140.0
-    assert misc_row["actual"] == 70.0
-    assert data["total_income"] == 0.0
+    assert food_row["actual_cents"] == 14000
+    assert misc_row["actual_cents"] == 7000
+    assert data["total_income_cents"] == 0
 
 
 def test_refund_split_rejects_income_category_part(client, db):

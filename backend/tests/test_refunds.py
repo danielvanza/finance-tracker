@@ -69,14 +69,14 @@ def test_refund_nets_against_category_and_stays_out_of_income(client, db):
 
     r = client.get("/dashboard/summary?month=2026-03")
     data = r.json()
-    assert data["total_income"] == 1000.0
-    assert data["total_expenses"] == 150.0
-    assert data["left_over"] == 850.0
+    assert data["total_income_cents"] == 100000
+    assert data["total_expenses_cents"] == 15000
+    assert data["left_over_cents"] == 85000
     food_row = next(d for d in data["category_breakdown"] if d["category_id"] == food.id)
-    assert food_row["actual"] == 150.0
+    assert food_row["actual_cents"] == 15000
     # Refund must not appear as income of any category
     assert all(row["category_id"] != food.id for row in data["income_breakdown"])
-    assert data["needs_wants_savings"]["needs"] == 150.0
+    assert data["needs_wants_savings"]["needs_cents"] == 15000
 
 
 def test_over_refunded_category_goes_negative(client, db):
@@ -86,7 +86,7 @@ def test_over_refunded_category_goes_negative(client, db):
 
     r = client.get("/budget?month=2026-03")
     food_row = next(row for row in r.json() if row["category_id"] == food.id)
-    assert Decimal(str(food_row["actual_amount"])) == Decimal("-50.00")
+    assert food_row["actual_amount_cents"] == -5000
 
 
 def test_budget_actuals_net_refunds(client, db):
@@ -96,7 +96,7 @@ def test_budget_actuals_net_refunds(client, db):
 
     r = client.get("/budget?month=2026-03")
     food_row = next(row for row in r.json() if row["category_id"] == food.id)
-    assert Decimal(str(food_row["actual_amount"])) == Decimal("150.00")
+    assert food_row["actual_amount_cents"] == 15000
 
 
 def test_salary_and_transfers_unaffected(client, db):
@@ -108,8 +108,8 @@ def test_salary_and_transfers_unaffected(client, db):
 
     r = client.get("/dashboard/summary?month=2026-03")
     data = r.json()
-    assert data["total_income"] == 3000.0
-    assert data["total_expenses"] == 0.0
+    assert data["total_income_cents"] == 300000
+    assert data["total_expenses_cents"] == 0
 
 
 def test_monthly_trend_nets_refunds(client, db):
@@ -120,7 +120,7 @@ def test_monthly_trend_nets_refunds(client, db):
     r = client.get("/dashboard/summary?month=2026-03")
     trend = r.json()["monthly_trend"]
     march = next(t for t in trend if t["month"] == "2026-03")
-    assert march["total"] == 180.0
+    assert march["total_cents"] == 18000
 
 
 def test_create_rule_skips_refund_marked_transactions(client, db):

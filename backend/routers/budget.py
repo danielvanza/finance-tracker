@@ -1,20 +1,14 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 from datetime import date, datetime
 from decimal import Decimal
 from db import get_db
-from models import Budget, Category, Transaction, Setting
+from models import Budget, Category
 from schemas import BudgetPatch
-from financial_month import get_financial_month_range
-from aggregate import effective_parts, is_spend_part
-from adjustments import materialise_standing_adjustments
+import money
+import spend_service
 
 router = APIRouter(prefix="/budget", tags=["budget"])
-
-
-def _get_start_day(db: Session) -> int:
-    setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
-    return int(setting.value) if setting else 24
 
 
 def _auto_populate(month_date: date, db: Session):
@@ -53,33 +47,21 @@ def get_budget(month: str = Query(...), db: Session = Depends(get_db)):
     month_date = date(year, mo, 1)
     _auto_populate(month_date, db)
 
-    start_day = _get_start_day(db)
-    materialise_standing_adjustments(year, mo, start_day, db)
-    start_date, end_date = get_financial_month_range(year, mo, start_day)
+    start_date, end_date = spend_service.financial_month_bounds(
+        db, year, mo, materialise=True)
 
     # Actual spend for the financial month: expenses netted with refunds,
     # split transactions counted per part. May go below zero when a category
     # is refunded more than it was spent this month.
-    income_cat_ids = {
+    skip_cat_ids = {
         c.id
         for c in db.query(Category).all()
         if (c.type.value if hasattr(c.type, "value") else str(c.type))
         in ("income", "exclude")
     }
 
-    txs = db.query(Transaction).options(selectinload(Transaction.splits)).filter(
-        Transaction.date >= start_date,
-        Transaction.date <= end_date,
-        Transaction.confirmed == True,
-    ).all()
-
-    actual_by_cat: dict[int, Decimal] = {}
-    for tx in txs:
-        for cid, amount, refund in effective_parts(tx):
-            if cid is None or cid in income_cat_ids:
-                continue
-            if is_spend_part(amount, refund):
-                actual_by_cat[cid] = actual_by_cat.get(cid, Decimal("0")) - amount
+    parts = spend_service.confirmed_parts_in_range(db, start_date, end_date)
+    actual_by_cat = spend_service.spend_totals_by_category(parts, skip_cat_ids)
 
     rows = db.query(Budget).filter(Budget.month == month_date).all()
     result = []
@@ -94,8 +76,8 @@ def get_budget(month: str = Query(...), db: Session = Depends(get_db)):
                 "category_name": cat.name,
                 "category_type": cat_type,
                 "month": row.month,
-                "planned_amount": row.planned_amount,
-                "actual_amount": actual,
+                "planned_amount_cents": money.to_cents(row.planned_amount),
+                "actual_amount_cents": money.to_cents(actual),
             }
         )
     return result
@@ -108,7 +90,8 @@ def patch_default(category_id: int, body: BudgetPatch, db: Session = Depends(get
         raise HTTPException(404)
     row.planned_amount = body.planned_amount
     db.commit()
-    return {"category_id": category_id, "planned_amount": row.planned_amount}
+    return {"category_id": category_id,
+            "planned_amount_cents": money.to_cents(row.planned_amount)}
 
 
 @router.patch("/{budget_id}")
@@ -121,7 +104,7 @@ def patch_budget(budget_id: int, body: BudgetPatch, db: Session = Depends(get_db
     db.refresh(row)
     return {
         "id": row.id,
-        "planned_amount": row.planned_amount,
+        "planned_amount_cents": money.to_cents(row.planned_amount),
         "category_name": row.category.name,
         "month": row.month,
     }

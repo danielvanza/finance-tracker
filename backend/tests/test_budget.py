@@ -57,13 +57,13 @@ def test_budget_actual_uses_financial_month(client, db):
     rows = r.json()
     food_row = next(r for r in rows if r["category_name"] == "Food - Essential")
     # Only Mar 25 transaction should count for April budget
-    assert float(food_row["actual_amount"]) == 100.00
+    assert food_row["actual_amount_cents"] == 10000
 
 
 def test_budget_patch_updates_amount(client, db):
     r = client.get("/budget?month=2026-04")
     row = r.json()[0]
-    new_amount = float(row["planned_amount"]) + 100
-    r2 = client.patch(f"/budget/{row['id']}", json={"planned_amount": new_amount})
+    new_amount = row["planned_amount_cents"] + 100
+    r2 = client.patch(f"/budget/{row['id']}", json={"planned_amount_cents": new_amount})
     assert r2.status_code == 200
-    assert float(r2.json()["planned_amount"]) == new_amount
+    assert r2.json()["planned_amount_cents"] == new_amount

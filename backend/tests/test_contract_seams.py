@@ -654,7 +654,6 @@ def test_seam_transaction_patch(client, db):
         assert isinstance(s["is_refund"], bool)
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_budget_get(client):
     r = client.get(ep("budget-get")["path"], params={"month": LABEL_MONTH})
     assert r.status_code == 200
@@ -669,7 +668,6 @@ def test_seam_budget_get(client):
         assert isinstance(row["actual_amount_cents"], int)
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_budget_patch_month(client):
     rows = client.get(ep("budget-get")["path"], params={"month": LABEL_MONTH}).json()
     budget_id = rows[0]["id"]
@@ -686,7 +684,6 @@ def test_seam_budget_patch_month(client):
     assert isinstance(body["id"], int)
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_budget_patch_default(client, db):
     r = client.patch(
         ep("budget-patch-default")["path"].format(category_id=_food(db).id),
@@ -699,7 +696,6 @@ def test_seam_budget_patch_default(client, db):
     assert body["planned_amount_cents"] == 9999
 
 
-@pytest.mark.xfail(strict=True, reason=XFAIL_REASON)
 def test_seam_dashboard_summary(client):
     r = client.get(ep("dashboard-summary")["path"], params={"month": LABEL_MONTH})
     assert r.status_code == 200

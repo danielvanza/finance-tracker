@@ -148,7 +148,7 @@ def test_pair_corrects_income_and_wants_but_not_left_over(client, db):
     })
 
     data = client.get("/dashboard/summary?month=2026-03").json()
-    assert data["total_income"] == 3600.0
-    assert data["total_expenses"] == 600.0
-    assert data["left_over"] == 3000.0
-    assert data["needs_wants_savings"]["wants"] == 600.0
+    assert data["total_income_cents"] == 360000
+    assert data["total_expenses_cents"] == 60000
+    assert data["left_over_cents"] == 300000
+    assert data["needs_wants_savings"]["wants_cents"] == 60000

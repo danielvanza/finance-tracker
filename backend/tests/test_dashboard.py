@@ -48,8 +48,8 @@ def test_dashboard_uses_financial_month(client):
     assert r.status_code == 200
     body = r.json()
     # Mar 25 expense and Mar 24 income are in April financial month
-    assert float(body["total_income"]) == 3460.26
-    assert float(body["total_expenses"]) == 67.40
+    assert body["total_income_cents"] == 346026
+    assert body["total_expenses_cents"] == 6740
 
 
 def test_dashboard_excludes_out_of_range(client):
@@ -57,7 +57,7 @@ def test_dashboard_excludes_out_of_range(client):
     r = client.get("/dashboard/summary?month=2026-04")
     body = r.json()
     # Only 67.40 expense, NOT 67.40 + 20.00
-    assert float(body["total_expenses"]) == 67.40
+    assert body["total_expenses_cents"] == 6740
 
 
 def test_dashboard_income_breakdown(client):
@@ -67,7 +67,7 @@ def test_dashboard_income_breakdown(client):
     assert "income_breakdown" in body
     assert len(body["income_breakdown"]) == 1
     assert body["income_breakdown"][0]["category_name"] == "Salary"
-    assert float(body["income_breakdown"][0]["amount"]) == 3460.26
+    assert body["income_breakdown"][0]["amount_cents"] == 346026
 
 
 def test_dashboard_category_breakdown_excludes_income(client):

@@ -454,7 +454,7 @@ only touch `backend/data/finance.db`, so ordering cannot resurrect the fork).
 
 #### Automated items
 
-- [ ] Full suite green:
+- [x] Full suite green:
       ```bash
       cd /home/hermes/finance-tracker/backend && .venv/bin/python -m pytest
       ```
@@ -463,13 +463,13 @@ only touch `backend/data/finance.db`, so ordering cannot resurrect the fork).
 
 #### Live Verification items
 
-- [ ] Pre-move holder check passes (also asserted inside the script):
+- [x] Pre-move holder check passes (also asserted inside the script):
       ```bash
       lsof /home/hermes/finance-tracker/data/finance.db
       ```
       Expected (immediately before archival): **no output, exit code 1**.
       If it prints anything, STOP — investigate the holder before proceeding.
-- [ ] Archival script output matches ground truth exactly:
+- [x] Archival script output matches ground truth exactly:
       ```
       PRE_MOVE_LSOF_CLEAR
       MOVED_TO /home/hermes/finance-db-archive/root-data-finance-<STAMP>.db
@@ -485,12 +485,12 @@ only touch `backend/data/finance.db`, so ordering cannot resurrect the fork).
       alembic_version 0        <- post-probe reality; see Ground-truth correction above
       ARCHIVE_DONE
       ```
-- [ ] Root data dir is gone:
+- [x] Root data dir is gone:
       ```bash
       ls /home/hermes/finance-tracker/data
       ```
       Expected: `ls: cannot access '/home/hermes/finance-tracker/data': No such file or directory`
-- [ ] **Dual-CWD uvicorn smoke, root variant (port 8099).** Save as
+- [x] **Dual-CWD uvicorn smoke, root variant (port 8099).** Save as
       `/tmp/opencode/smoke-root-8099.sh` and run `bash /tmp/opencode/smoke-root-8099.sh`.
       (PYTHONPATH is REQUIRED from repo root — without it uvicorn exits with
       `Could not import module "main"`; `$!` is authoritative because fleet
@@ -516,7 +516,7 @@ only touch `backend/data/finance.db`, so ordering cannot resurrect the fork).
       ```
       Any line naming `/home/hermes/finance-tracker/data/finance.db` (no
       `backend/`) = FAIL, the fork is back.
-- [ ] **Dual-CWD uvicorn smoke, backend variant (port 8098).** Save as
+- [x] **Dual-CWD uvicorn smoke, backend variant (port 8098).** Save as
       `/tmp/opencode/smoke-backend-8098.sh` and run
       `bash /tmp/opencode/smoke-backend-8098.sh`:
       ```bash
@@ -534,7 +534,7 @@ only touch `backend/data/finance.db`, so ordering cannot resurrect the fork).
       ```
       Expected: exactly ONE line, same shape, naming
       `/home/hermes/finance-tracker/backend/data/finance.db`, then `BACKEND_SMOKE_OK`.
-- [ ] Live writer untouched throughout:
+- [x] Live writer untouched throughout:
       ```bash
       ps -p 462314 -o pid=,cmd= && ss -ltn | grep ':8020'
       ```

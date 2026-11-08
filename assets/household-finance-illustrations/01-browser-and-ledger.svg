@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">A browser asks the backend for a monthly statement</title>
+  <desc id="desc">Xiaohei reaches through a browser opening and retrieves a paper statement from a SQLite filing cabinet. React is the interface and FastAPI does the work.</desc>
+  <rect width="1600" height="900" fill="white"/>
+  <style>
+    .ink{fill:none;stroke:#171717;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+    .fine{fill:none;stroke:#171717;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    text{font-family:'Bradley Hand','Segoe Print',cursive;font-size:30px;fill:#171717}
+    .blue{fill:#3275a8}.orange{fill:#d97732}.red{fill:#c94c43}
+  </style>
+  <!-- The interface is an opening, not an app screenshot. -->
+  <path class="ink" d="M290 308 Q288 294 306 296 L578 291 Q596 292 593 310 L600 553 Q598 567 579 567 L301 573 Q287 570 289 552 Z"/>
+  <path class="fine" d="M291 335 Q445 332 593 329 M306 311 l1 1 M320 311 l1 1 M334 310 l1 1"/>
+  <path class="fine" d="M314 354 L568 352 L571 543 L315 547 Z"/>
+  <path class="ink" d="M420 572 l-8 43 M478 570 l12 44 M392 617 Q450 611 510 616"/>
+  <text class="blue" x="369" y="667" transform="rotate(-3 369 667)">React</text>
+  <!-- A request travels out, and a real paper statement comes back. -->
+  <path d="M500 272 Q675 161 852 279 M834 266 L852 279 L832 284" fill="none" stroke="#d97732" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="orange" x="588" y="204" transform="rotate(-5 588 204)">request</text>
+  <text x="828" y="224" transform="rotate(3 828 224)">FastAPI</text>
+  <!-- The cabinet is slightly crooked, with its middle drawer open. -->
+  <path class="ink" d="M1039 251 L1259 259 L1251 578 L1034 573 Z M1053 275 L1242 281 L1240 352 L1050 350 Z M1050 457 L1240 461 L1237 550 L1048 545 Z"/>
+  <path class="ink" d="M1028 373 L1244 378 L1256 439 L1038 433 L975 415 L967 360 Z M967 360 L1028 373 M975 415 L1038 433 M1038 433 L1028 373"/>
+  <path class="fine" d="M1127 307 Q1150 315 1170 310 M1117 489 Q1140 498 1163 493 M1100 400 Q1124 408 1149 403"/>
+  <path class="ink" d="M1053 575 l-5 30 M1233 578 l6 30"/>
+  <text x="1090" y="664" transform="rotate(3 1090 664)">SQLite</text>
+  <!-- Xiaohei physically spans the interface and the backend. -->
+  <path d="M716 376 C746 360 780 367 795 392 C810 417 805 481 786 505 C771 526 730 518 718 494 C706 468 699 399 716 376 Z" fill="#141414"/>
+  <circle cx="765" cy="404" r="4" fill="white"/><circle cx="784" cy="405" r="4" fill="white"/>
+  <path class="ink" d="M719 433 Q655 405 574 417 L550 423 M795 438 Q840 444 882 417 M739 514 Q727 558 709 587 l-20 0 M776 513 Q785 556 811 580 l19 -4"/>
+  <path class="fine" d="M544 410 l8 13 -6 12"/>
+  <!-- The returned record is conspicuously analog. -->
+  <path d="M877 327 L1002 340 L985 459 L867 446 Z" fill="white" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
+  <path class="fine" d="M894 347 l86 9 M891 361 l65 7 M884 407 l72 8 M881 422 l85 9"/>
+  <text class="blue" x="885" y="379" style="font-size:20px" transform="rotate(6 885 379)">monthly</text>
+  <text class="blue" x="882" y="399" style="font-size:20px" transform="rotate(6 882 399)">statement</text>
+  <path class="fine" d="M674 609 Q788 615 866 603 M1008 615 Q1126 623 1268 615"/>
+</svg>

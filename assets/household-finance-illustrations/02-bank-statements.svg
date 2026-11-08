@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Different bank exports become one ledger</title>
+  <desc id="desc">Xiaohei unfolds ING, Revolut and DEGIRO statements into common transaction cards, previews the ledger, and sends a duplicate into an envelope.</desc>
+  <rect width="1600" height="900" fill="white"/>
+  <style>
+    .ink{fill:none;stroke:#171717;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+    .fine{fill:none;stroke:#171717;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    text{font-family:'Bradley Hand','Segoe Print',cursive;font-size:29px;fill:#171717}
+    .blue{fill:#3275a8}.orange{fill:#d97732}.red{fill:#c94c43}
+  </style>
+  <!-- Three deliberately different paper formats. -->
+  <path class="ink" d="M291 285 L422 271 L439 390 L305 405 Z"/>
+  <path class="fine" d="M309 306 l94 -10 M312 322 l63 -7 M316 348 l101 -11 M320 367 l73 -9"/>
+  <text x="296" y="254" transform="rotate(-7 296 254)">ING</text>
+  <path class="ink" d="M279 446 L415 440 L420 498 L290 501 L294 560 L426 554 L433 616 L293 625 Z"/>
+  <path class="fine" d="M290 501 l130 -3 M294 560 l132 -6 M298 467 l94 -4 M301 483 l76 -3 M308 582 l99 -5 M311 598 l63 -3"/>
+  <text x="272" y="670" transform="rotate(-3 272 670)">Revolut</text>
+  <path class="ink" d="M473 352 L541 325 L598 350 L625 491 L550 521 L487 487 Z"/>
+  <path class="fine" d="M541 325 L557 472 L550 521 M497 377 l44 -17 M500 396 l44 -15 M567 371 l31 7 M571 392 l33 7 M574 416 l29 8"/>
+  <text x="466" y="306" transform="rotate(3 466 306)">DEGIRO</text>
+  <!-- Xiaohei pulls the last fold into a standard card. -->
+  <path d="M703 358 C736 342 776 353 787 383 C798 409 795 469 777 491 C758 513 718 506 705 481 C692 452 688 379 703 358 Z" fill="#141414"/>
+  <circle cx="751" cy="387" r="4" fill="white"/><circle cx="773" cy="387" r="4" fill="white"/>
+  <path class="ink" d="M704 419 Q665 429 607 429 M789 414 Q834 393 858 382 M725 499 Q710 552 682 575 l-19 -4 M766 500 Q776 550 807 565 l20 -6"/>
+  <path class="ink" d="M610 416 L676 401 L700 425 L752 404 L778 430 L833 410 L859 430 L911 411"/>
+  <path class="fine" d="M676 401 l-6 35 M752 404 l-4 39 M833 410 l-4 38"/>
+  <path d="M860 342 L975 347 L972 439 L857 433 Z" fill="white" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
+  <path class="fine" d="M876 361 l80 3 M876 380 l49 2 M875 410 l75 3"/>
+  <path d="M985 373 Q1020 339 1065 356 M1048 343 l17 13 -20 3" fill="none" stroke="#d97732" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- A ledger, not another software module. -->
+  <path class="ink" d="M1077 275 Q1149 264 1268 280 L1260 467 Q1165 448 1078 468 Q1034 449 1000 460 L1002 279 Q1032 270 1077 275 Z M1077 275 L1078 468"/>
+  <path class="fine" d="M1100 302 Q1173 296 1246 306 M1100 326 Q1174 321 1244 330 M1101 350 Q1175 346 1244 356 M1101 375 Q1175 368 1242 380 M1101 399 Q1177 395 1240 405 M1135 294 L1136 427 M1198 298 L1197 435"/>
+  <text class="blue" x="1109" y="239" transform="rotate(3 1109 239)">preview</text>
+  <text class="orange" x="1266" y="456" transform="rotate(6 1266 456)">save</text>
+  <!-- A rejected repeat drops into its own envelope. -->
+  <path d="M1083 488 L1162 499 L1151 559 L1074 546 Z" fill="white" stroke="#171717" stroke-width="2"/>
+  <path class="fine" d="M1092 507 l48 7 M1089 522 l47 8"/>
+  <path d="M1034 552 L1217 548 L1220 645 L1036 650 Z" fill="white" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
+  <path class="fine" d="M1034 552 L1127 608 L1217 548 M1036 650 L1100 598 M1220 645 L1154 596"/>
+  <text class="red" x="1056" y="700" transform="rotate(-3 1056 700)">duplicate</text>
+</svg>

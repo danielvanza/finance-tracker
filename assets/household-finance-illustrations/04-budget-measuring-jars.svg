@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Compare confirmed spending with the budget</title>
+  <desc id="desc">Xiaohei measures receipt piles in needs, wants and savings jars against planned marks. The calendar strip represents a configurable financial month.</desc>
+  <rect width="1600" height="900" fill="white"/>
+  <style>
+    .ink{fill:none;stroke:#171717;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+    .fine{fill:none;stroke:#171717;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    text{font-family:'Bradley Hand','Segoe Print',cursive;font-size:29px;fill:#171717}
+    .blue{fill:#3275a8}.orange{fill:#d97732}.red{fill:#c94c43}
+  </style>
+  <!-- Open, crooked jars: the budget does not lock the money away. -->
+  <path class="ink" d="M370 328 Q364 314 388 311 L530 313 Q550 315 544 331 M384 331 L380 376 Q362 390 359 416 L362 582 Q365 604 390 605 L532 603 Q550 602 550 579 L553 417 Q551 389 532 377 L530 333"/>
+  <path class="fine" d="M373 330 Q459 344 544 331"/>
+  <path class="ink" d="M700 347 Q693 333 716 331 L853 334 Q876 337 870 351 M716 352 L712 395 Q693 409 692 431 L694 582 Q697 603 720 604 L856 603 Q874 602 875 579 L877 432 Q874 407 858 395 L857 354"/>
+  <path class="fine" d="M700 351 Q785 365 870 351"/>
+  <path class="ink" d="M1023 326 Q1017 311 1040 309 L1179 312 Q1200 314 1195 329 M1040 331 L1038 376 Q1019 392 1018 414 L1020 581 Q1022 603 1045 604 L1180 601 Q1200 600 1200 579 L1202 414 Q1201 390 1183 375 L1182 331"/>
+  <path class="fine" d="M1023 329 Q1110 343 1195 329"/>
+  <!-- Receipt piles are actuals, not coin balances. -->
+  <path class="fine" d="M383 578 L392 542 L471 551 L462 590 Z M434 562 L432 511 L511 508 L512 562 Z M390 528 L400 485 L466 501 L456 543 Z M451 501 L452 466 L515 471 L514 511 Z M390 491 L398 454 L455 466 L448 503 Z M405 478 l28 6 M444 535 l45 -2 M404 565 l34 4 M465 487 l34 3"/>
+  <path class="fine" d="M717 585 L719 548 L790 550 L790 589 Z M768 564 L777 526 L846 542 L838 582 Z M723 550 L733 511 L794 527 L785 564 Z M738 533 l35 8 M786 550 l31 7 M731 567 l37 1"/>
+  <path class="fine" d="M1042 585 L1043 547 L1112 549 L1112 590 Z M1093 565 L1100 525 L1171 538 L1164 581 Z M1053 548 L1059 508 L1125 518 L1119 555 Z M1066 531 l35 5 M1115 550 l30 5 M1056 566 l37 1"/>
+  <!-- Only planned marks use blue. -->
+  <path d="M350 482 Q457 478 567 484 M682 494 Q783 490 889 496 M1005 470 Q1106 464 1214 471" fill="none" stroke="#3275a8" stroke-width="2" stroke-linecap="round" stroke-dasharray="8 8"/>
+  <text class="blue" x="611" y="261" transform="rotate(-4 611 261)">planned</text>
+  <path d="M675 276 Q679 401 687 483" fill="none" stroke="#3275a8" stroke-width="1.7" stroke-linecap="round"/>
+  <!-- Xiaohei actively measures the first jar's receipt pile. -->
+  <path d="M224 418 C253 403 287 409 300 435 C313 461 309 520 291 544 C274 563 239 558 226 535 C213 510 210 439 224 418 Z" fill="#141414"/>
+  <circle cx="267" cy="446" r="4" fill="white"/><circle cx="287" cy="446" r="4" fill="white"/>
+  <path class="ink" d="M299 475 Q329 455 341 451 M305 506 Q327 516 344 521 M241 551 Q230 588 214 610 l-19 0 M280 552 Q289 590 310 608 l17 -3"/>
+  <path d="M330 382 L354 380 L369 593 L345 594 Z" fill="white" stroke="#171717" stroke-width="2.4" stroke-linejoin="round"/>
+  <path class="fine" d="M340 402 l15 -1 M343 422 l13 -1 M344 442 l14 -1 M347 462 l12 -1 M348 482 l14 -1 M350 502 l12 -1 M352 522 l13 -1 M353 542 l12 -1 M355 562 l12 -1"/>
+  <text class="red" x="238" y="355" transform="rotate(-5 238 355)">actual</text>
+  <path d="M304 368 Q317 381 331 398" fill="none" stroke="#c94c43" stroke-width="1.7" stroke-linecap="round"/>
+  <text x="403" y="658" transform="rotate(-3 403 658)">needs</text>
+  <text x="729" y="657" transform="rotate(2 729 657)">wants</text>
+  <text x="1053" y="656" transform="rotate(-3 1053 656)">savings</text>
+  <!-- A financial-month strip, not a calendar-month assumption. -->
+  <path class="fine" d="M508 737 Q773 729 1044 739 M527 727 l0 24 M1029 729 l0 24"/>
+  <text class="blue" x="604" y="795" transform="rotate(1 604 795)">your financial month</text>
+</svg>

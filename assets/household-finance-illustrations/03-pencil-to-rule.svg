@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AI suggests in pencil, a human confirms in ink</title>
+  <desc id="desc">Rules confirm known matches first. Xiaohei writes the final category on a pencilled transaction card, then creates a reusable stencil representing an explicit categorisation rule.</desc>
+  <rect width="1600" height="900" fill="white"/>
+  <style>
+    .ink{fill:none;stroke:#171717;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+    .fine{fill:none;stroke:#171717;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    text{font-family:'Bradley Hand','Segoe Print',cursive;font-size:29px;fill:#171717}
+    .blue{fill:#3275a8}.orange{fill:#d97732}.red{fill:#c94c43}
+  </style>
+  <!-- A known transaction already carries its rule's ink mark. -->
+  <path class="ink" d="M282 362 L443 349 L455 508 L296 519 Z"/>
+  <path class="fine" d="M302 384 l120 -10 M305 402 l76 -6 M310 479 l114 -8"/>
+  <path d="M328 440 L346 457 L380 420" fill="none" stroke="#171717" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="278" y="316" transform="rotate(-5 278 316)">rules first</text>
+  <!-- A lightly pencilled category awaits the human's decision. -->
+  <path d="M603 331 L864 352 L847 561 L588 543 Z" fill="white" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M625 361 l208 16 M623 382 l139 11 M616 470 l160 12" fill="none" stroke="#3275a8" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="5 7"/>
+  <text class="blue" x="606" y="289" transform="rotate(4 606 289)">AI suggestion</text>
+  <text class="blue" x="633" y="429" font-size="30" transform="rotate(4 633 429)">groceries?</text>
+  <!-- Xiaohei is the reviewer: the giant pen is held, not decorative. -->
+  <path d="M913 381 C937 365 972 371 988 397 C1003 423 1000 482 980 504 C962 523 926 516 913 491 C899 465 897 402 913 381 Z" fill="#141414"/>
+  <circle cx="921" cy="407" r="4" fill="white"/><circle cx="941" cy="407" r="4" fill="white"/>
+  <path class="ink" d="M916 442 Q879 425 851 411 M914 465 Q875 474 837 463 M934 513 Q922 557 895 581 l-18 0 M975 511 Q990 554 1020 577 l17 -4"/>
+  <path d="M818 469 L861 298 L884 304 L841 476 L824 499 Z" fill="white" stroke="#171717" stroke-width="2.8" stroke-linejoin="round"/>
+  <path class="fine" d="M861 298 L869 276 Q881 272 890 283 L884 304 M829 469 L872 302 M818 469 L841 476 M824 499 L829 482"/>
+  <path d="M687 502 l17 16 33 -31" fill="none" stroke="#c94c43" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="red" x="597" y="625" transform="rotate(3 597 625)">confirmed in ink</text>
+  <!-- A physical stencil represents the explicit reusable rule. -->
+  <path d="M1110 359 L1268 371 L1256 526 L1098 514 Z" fill="white" stroke="#171717" stroke-width="2.8" stroke-linejoin="round"/>
+  <path class="fine" d="M1130 386 L1238 394 L1235 417 L1128 409 Z M1125 441 L1224 449 L1222 475 L1123 467 Z"/>
+  <path class="ink" d="M995 445 Q1043 414 1105 428 M1096 417 l9 11 -13 7"/>
+  <path class="fine" d="M1124 548 L1239 553 L1236 617 L1118 611 Z M1140 572 l82 4 M1140 591 l62 3"/>
+  <text class="orange" x="1092" y="671" transform="rotate(4 1092 671)">reuse rule</text>
+</svg>

@@ -11,7 +11,7 @@ export class ApiError extends Error {
   }
 }
 
-async function apiFetch<T>(pathTemplate: string, opts: { method?: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; body?: unknown } = {}): Promise<T> {
+export async function apiFetch<T>(pathTemplate: string, opts: { method?: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'; body?: unknown } = {}): Promise<T> {
   try {
     const init: RequestInit = { method: opts.method ?? 'GET' }
     if (opts.body !== undefined) {

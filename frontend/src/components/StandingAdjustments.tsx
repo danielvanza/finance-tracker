@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import type { StandingAdjustment } from '../types'
 import CategorySelect from './CategorySelect'
+import { describeApiError } from './ErrorBanner'
 import { centsToInputString, parseToCents } from '../money'
 
 const labelStyle: React.CSSProperties = {
@@ -50,8 +51,12 @@ export default function StandingAdjustments() {
   const catName = (id: number) => categories.find(c => c.id === id)?.name ?? '?'
 
   const toggleActive = async (sa: StandingAdjustment) => {
-    await api.patchStandingAdjustment(sa.id, { active: !sa.active })
-    invalidate()
+    try {
+      await api.patchStandingAdjustment(sa.id, { active: !sa.active })
+      invalidate()
+    } catch (e) {
+      setError(describeApiError(e))
+    }
   }
 
   const saveAmount = async (sa: StandingAdjustment) => {
@@ -62,15 +67,24 @@ export default function StandingAdjustments() {
       setEditedAmounts(prev => { const { [sa.id]: _, ...rest } = prev; return rest })
       return
     }
-    await api.patchStandingAdjustment(sa.id, { amount_cents: value })
+    try {
+      await api.patchStandingAdjustment(sa.id, { amount_cents: value })
+    } catch (e) {
+      setError(describeApiError(e))
+      return
+    }
     setEditedAmounts(prev => { const { [sa.id]: _, ...rest } = prev; return rest })
     invalidate()
   }
 
   const remove = async (sa: StandingAdjustment) => {
     if (!window.confirm(`Delete standing adjustment "${sa.name}"? Rows already created in past months are kept.`)) return
-    await api.deleteStandingAdjustment(sa.id)
-    invalidate()
+    try {
+      await api.deleteStandingAdjustment(sa.id)
+      invalidate()
+    } catch (e) {
+      setError(describeApiError(e))
+    }
   }
 
   const add = async () => {
@@ -79,13 +93,16 @@ export default function StandingAdjustments() {
     if (!name.trim()) { setError('Name is required'); return }
     if (!value || value <= 0) { setError('Enter a positive monthly amount'); return }
     if (incomeCategoryId == null || expenseCategoryId == null) { setError('Pick both categories'); return }
-    const res = (await api.createStandingAdjustment({
-      name: name.trim(), amount_cents: value,
-      income_category_id: incomeCategoryId,
-      expense_category_id: expenseCategoryId,
-      active: true,
-    })) as { detail?: unknown }
-    if (res.detail) { setError(typeof res.detail === 'string' ? res.detail : 'Could not save'); return }
+    try {
+      await api.createStandingAdjustment({
+        name: name.trim(), amount_cents: value,
+        income_category_id: incomeCategoryId,
+        expense_category_id: expenseCategoryId,
+        active: true,
+      })
+    } catch (e) {
+      setError(describeApiError(e)); return
+    }
     setName(''); setAmount(''); setShowAdd(false)
     invalidate()
   }
@@ -175,6 +192,8 @@ export default function StandingAdjustments() {
         </p>
       )}
 
+      {error && <p role="alert" style={{ fontSize: 12, color: 'var(--red)', margin: '10px 0' }}>{error}</p>}
+
       {showAdd ? (
         <div style={{ marginTop: 16 }}>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
@@ -210,7 +229,6 @@ export default function StandingAdjustments() {
               />
             </div>
           </div>
-          {error && <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={add} style={{
               background: 'linear-gradient(135deg, #4f46e5, #6366f1)',

@@ -41,3 +41,35 @@ def get_financial_month_range(year: int, month: int, start_day: int) -> tuple[da
     start_date = date(prev_year, prev_month, start_day)
     end_date = date(year, month, start_day - 1)
     return start_date, end_date
+
+
+def label_month_for_date(d: date, start_day: int) -> tuple[int, int]:
+    """Find the financial-month label (year, month) whose range contains d.
+
+    Inverse of get_financial_month_range: the returned label satisfies
+    get_financial_month_range(year, month, start_day) inclusive-bounds d.
+    With start_day=24, Apr 10 belongs to label April (whose range is
+    Mar 24 – Apr 23).
+
+    Args:
+        d: The date to map to a financial-month label.
+        start_day: Day of month when the financial period begins (1-28).
+
+    Returns:
+        (year, month) label of the financial month containing d.
+
+    Raises:
+        ValueError: If start_day is not between 1 and 28.
+    """
+    if not 1 <= start_day <= 28:
+        raise ValueError("start_day must be between 1 and 28")
+
+    if start_day == 1:
+        return d.year, d.month
+
+    if d.day >= start_day:
+        if d.month == 12:
+            return d.year + 1, 1
+        return d.year, d.month + 1
+
+    return d.year, d.month

@@ -4,6 +4,7 @@ import { api } from '../api'
 import { formatCents, parseToCents, centsToInputString, sumCents } from '../money'
 import { TypeCell } from './budget/TypeCell'
 import { DrillDownRow } from './budget/DrillDown'
+import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 
 function currentMonth() {
   const d = new Date()
@@ -14,6 +15,7 @@ export default function Budget() {
   const [month, setMonth] = useState(currentMonth)
   const [editing, setEditing] = useState<Record<number, string>>({})
   const [expandedCategoryId, setExpandedCategoryId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState('')
   const qc = useQueryClient()
 
   const { data: rows = [] } = useQuery({
@@ -39,8 +41,12 @@ export default function Budget() {
   const handleSave = async (id: number) => {
     const val = parseToCents(editing[id] ?? '')
     if (val !== null) {
-      await api.patchBudget(id, val)
-      qc.invalidateQueries({ queryKey: ['budget', month] })
+      try {
+        await api.patchBudget(id, val)
+        qc.invalidateQueries({ queryKey: ['budget', month] })
+      } catch (e) {
+        setActionError(describeApiError(e))
+      }
     }
     setEditing(e => { const n = { ...e }; delete n[id]; return n })
   }
@@ -49,10 +55,14 @@ export default function Budget() {
     mutationFn: ({ txId, newCategoryId }: { txId: number; newCategoryId: number }) =>
       api.patchTransaction(txId, { category_id: newCategoryId }),
     onSuccess: () => {
+      setActionError('')
       qc.invalidateQueries({
         queryKey: ['transactions', { category_id: expandedCategoryId, month }],
       })
       qc.invalidateQueries({ queryKey: ['budget', month] })
+    },
+    onError: (e) => {
+      setActionError(describeApiError(e))
     },
   })
 
@@ -110,6 +120,7 @@ export default function Budget() {
               qc.invalidateQueries({ queryKey: ['categories'] })
               qc.invalidateQueries({ queryKey: ['budget', month] })
             }}
+            onError={setActionError}
           />
         </td>
 
@@ -253,6 +264,7 @@ export default function Budget() {
       </div>
 
       {/* Summary stat strip */}
+      {actionError && <ErrorBanner message={actionError} />}
       {rows.length > 0 && (
         <div style={{
           display: 'grid',

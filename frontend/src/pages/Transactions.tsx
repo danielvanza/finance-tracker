@@ -4,6 +4,7 @@ import { api } from '../api'
 import { formatCents } from '../money'
 import type { Transaction } from '../types'
 import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
+import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import AddTransactionModal from '../components/AddTransactionModal'
 import SplitModal from '../components/SplitModal'
 import TransactionsToolbar from './transactions/TransactionsToolbar'
@@ -16,6 +17,7 @@ export default function Transactions() {
   const [showAdd, setShowAdd] = useState(false)
   const [splitTx, setSplitTx] = useState<Transaction | null>(null)
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [actionError, setActionError] = useState('')
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions', sourceFilter],
@@ -39,14 +41,26 @@ export default function Transactions() {
   }
 
   const handleConfirm = async (id: number, decision: ReviewDecision) => {
-    await api.patchTransaction(id, { ...decision, confirmed: true })
+    setActionError('')
+    try {
+      await api.patchTransaction(id, { ...decision, confirmed: true })
+    } catch (e) {
+      setActionError(describeApiError(e))
+      return
+    }
     setSkippedIds(prev => prev.filter(sid => sid !== id))
     invalidate()
   }
 
   const handleCreateRule = async (id: number, categoryId: number) => {
-    await api.patchTransaction(id, { category_id: categoryId })
-    await api.createRuleFromTransaction(id)
+    setActionError('')
+    try {
+      await api.patchTransaction(id, { category_id: categoryId })
+      await api.createRuleFromTransaction(id)
+    } catch (e) {
+      setActionError(describeApiError(e))
+      return
+    }
     setSkippedIds([])
     invalidate()
     qc.invalidateQueries({ queryKey: ['rules'] })
@@ -58,8 +72,13 @@ export default function Transactions() {
 
   const handleDelete = async (tx: Transaction) => {
     if (!window.confirm(`Delete manual transaction "${tx.description}" (${tx.amount_cents < 0 ? '-' : '+'}${formatCents(Math.abs(tx.amount_cents))})?`)) return
-    await api.deleteTransaction(tx.id)
-    invalidate()
+    setActionError('')
+    try {
+      await api.deleteTransaction(tx.id)
+      invalidate()
+    } catch (e) {
+      setActionError(describeApiError(e))
+    }
   }
 
   return (
@@ -129,6 +148,7 @@ export default function Transactions() {
       </div>
 
       {/* Review panel */}
+      {actionError && <ErrorBanner message={actionError} />}
       {showReview && reviewTx && (
         <div style={{ marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>

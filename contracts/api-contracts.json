@@ -223,6 +223,22 @@
       "frontend_caller": "api.getDashboard"
     },
     {
+      "id": "dashboard-trends",
+      "method": "GET", "path": "/dashboard/trends",
+      "query": {
+        "months": "int 1-24 optional (default 12)",
+        "end_month": "YYYY-MM optional; default = label month containing today via financial_month_start_day"
+      },
+      "response": {
+        "months_requested": "int (echoed months)",
+        "start_month": "YYYY-MM (label of series[0])",
+        "end_month": "YYYY-MM (label of last series entry)",
+        "series": "[{month, total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps, top_categories, mom_deltas}] oldest→newest; savings_rate_bps int|null (null when income <= 0); top_categories [{category_id, category_name, type, actual_cents}] top 5 expense-type; mom_deltas null on series[0] else {total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps} signed vs previous entry"
+      },
+      "error_contract": "422 months outside 1-24 (FastAPI ge/le), 422 malformed end_month ({detail: string})",
+      "frontend_caller": null
+    },
+    {
       "id": "settings-get",
       "method": "GET", "path": "/settings",
       "response": "map<string,string> e.g. { financial_month_start_day: \"24\" }",

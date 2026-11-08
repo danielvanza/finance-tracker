@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
+import { describeApiError } from '../components/ErrorBanner'
 import StandingAdjustments from '../components/StandingAdjustments'
 import CategoryManager from '../components/CategoryManager'
 
@@ -13,6 +14,7 @@ export default function Settings() {
 
   const [startDay, setStartDay] = useState('')
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     if (settings?.financial_month_start_day) {
@@ -27,14 +29,20 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['budget'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      setSaveError('')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+    },
+    onError: (e) => {
+      setSaved(false)
+      setSaveError(describeApiError(e))
     },
   })
 
   const handleSave = () => {
     const num = parseInt(startDay, 10)
     if (isNaN(num) || num < 1 || num > 28) return
+    setSaveError('')
     mutation.mutate(startDay)
   }
 
@@ -115,6 +123,11 @@ export default function Settings() {
           {saved && (
             <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>
               Saved
+            </span>
+          )}
+          {saveError && (
+            <span role="alert" style={{ fontSize: 12, color: 'var(--red)', fontWeight: 500, maxWidth: 300 }}>
+              {saveError}
             </span>
           )}
         </div>

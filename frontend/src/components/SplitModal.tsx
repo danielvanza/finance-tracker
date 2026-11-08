@@ -3,6 +3,7 @@ import type { Transaction, Category } from '../types'
 import { api } from '../api'
 import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
+import { describeApiError } from './ErrorBanner'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
 
 interface Props {
@@ -36,14 +37,15 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
     if (!valid) return
     setError('')
     setSaving(true)
-    const res = (await api.patchTransaction(tx.id, {
-      splits: rows.map(r => ({
-        category_id: r.category_id!,
-        amount_cents: parseToCents(r.amount)! * sign,
-      })),
-    })) as { detail?: unknown }
-    if (res.detail) {
-      setError(typeof res.detail === 'string' ? res.detail : 'Could not save split')
+    try {
+      await api.patchTransaction(tx.id, {
+        splits: rows.map(r => ({
+          category_id: r.category_id!,
+          amount_cents: parseToCents(r.amount)! * sign,
+        })),
+      })
+    } catch (e) {
+      setError(describeApiError(e))
       setSaving(false)
       return
     }
@@ -55,9 +57,10 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
     if (unsplitCategory == null) { setError('Pick the single category to keep'); return }
     setError('')
     setSaving(true)
-    const res = (await api.patchTransaction(tx.id, { splits: [], category_id: unsplitCategory })) as { detail?: unknown }
-    if (res.detail) {
-      setError(typeof res.detail === 'string' ? res.detail : 'Could not unsplit')
+    try {
+      await api.patchTransaction(tx.id, { splits: [], category_id: unsplitCategory })
+    } catch (e) {
+      setError(describeApiError(e))
       setSaving(false)
       return
     }
@@ -115,7 +118,7 @@ export default function SplitModal({ transaction: tx, categories, onClose, onSav
           />
 
           {error && (
-            <p style={{
+            <p role="alert" style={{
               fontSize: 12, color: 'var(--red)', margin: '12px 0 0',
               background: 'rgba(248,113,113,0.08)',
               border: '1px solid rgba(248,113,113,0.25)',

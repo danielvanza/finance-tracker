@@ -713,3 +713,54 @@ def test_seam_dashboard_summary(client):
         assert set(entry.keys()) == {"month", "total_cents"}
         assert isinstance(entry["total_cents"], int)
     assert trend[-1]["month"] == LABEL_MONTH
+
+
+TRENDS_ENTRY_KEYS = {
+    "month", "total_expenses_cents", "needs_cents", "wants_cents",
+    "savings_cents", "total_income_cents", "net_cents", "savings_rate_bps",
+    "top_categories", "mom_deltas",
+}
+TRENDS_DELTA_KEYS = {
+    "total_expenses_cents", "needs_cents", "wants_cents", "savings_cents",
+    "total_income_cents", "net_cents", "savings_rate_bps",
+}
+TRENDS_TOP_CAT_KEYS = {"category_id", "category_name", "type", "actual_cents"}
+
+
+def test_seam_dashboard_trends(client):
+    months = 12
+    r = client.get(
+        ep("dashboard-trends")["path"],
+        params={"months": months, "end_month": LABEL_MONTH},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body.keys()) == {
+        "months_requested", "start_month", "end_month", "series"}
+    assert body["months_requested"] == months
+    assert isinstance(body["months_requested"], int)
+    series = body["series"]
+    assert len(series) == months
+    labels = [entry["month"] for entry in series]
+    assert labels == sorted(labels) and len(set(labels)) == months
+    assert series[0]["month"] == body["start_month"]
+    assert series[-1]["month"] == body["end_month"] == LABEL_MONTH
+    for i, entry in enumerate(series):
+        assert set(entry.keys()) == TRENDS_ENTRY_KEYS
+        for k in ("total_expenses_cents", "needs_cents", "wants_cents",
+                  "savings_cents", "total_income_cents", "net_cents"):
+            assert isinstance(entry[k], int)
+        assert entry["savings_rate_bps"] is None or isinstance(
+            entry["savings_rate_bps"], int)
+        for top in entry["top_categories"]:
+            assert set(top.keys()) == TRENDS_TOP_CAT_KEYS
+            assert isinstance(top["actual_cents"], int)
+        if i == 0:
+            assert entry["mom_deltas"] is None
+        else:
+            deltas = entry["mom_deltas"]
+            assert set(deltas.keys()) == TRENDS_DELTA_KEYS
+            for k in TRENDS_DELTA_KEYS - {"savings_rate_bps"}:
+                assert isinstance(deltas[k], int)
+            assert deltas["savings_rate_bps"] is None or isinstance(
+                deltas["savings_rate_bps"], int)

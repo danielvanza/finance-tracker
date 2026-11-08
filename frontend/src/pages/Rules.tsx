@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../api'
+import { api, ApiError } from '../api'
+import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import CategorySelect from '../components/CategorySelect'
 
 const fieldLabel: React.CSSProperties = {
@@ -15,29 +16,48 @@ export default function Rules() {
   const [newPattern, setNewPattern] = useState('')
   const [newCategory, setNewCategory] = useState<number | null>(null)
   const [editing, setEditing] = useState<Record<number, { pattern: string; category_id: number }>>({})
+  const [error, setError] = useState('')
 
   const { data: rules = [] } = useQuery({ queryKey: ['rules'], queryFn: api.getRules })
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.getCategories })
 
   const handleCreate = async () => {
     if (!newPattern || !newCategory) return
-    await api.createRule({ pattern: newPattern, category_id: newCategory, priority: 0 })
+    try {
+      await api.createRule({ pattern: newPattern, category_id: newCategory, priority: 0 })
+    } catch (e) {
+      setError(describeApiError(e)); return
+    }
     qc.invalidateQueries({ queryKey: ['rules'] })
     setNewPattern('')
   }
 
   const handleDelete = async (id: number) => {
-    await api.deleteRule(id)
+    try {
+      await api.deleteRule(id)
+    } catch (e) {
+      setError(describeApiError(e)); return
+    }
     qc.invalidateQueries({ queryKey: ['rules'] })
   }
 
   const handleSaveEdit = async (id: number) => {
     const e = editing[id]
     if (!e) return
-    await fetch(`/api/rules/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pattern: e.pattern, category_id: e.category_id, priority: 0 }),
-    })
+    try {
+      const res = await fetch(`/api/rules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern: e.pattern, category_id: e.category_id, priority: 0 }),
+      })
+      if (!res.ok) {
+        let detail: string | null = null
+        try { detail = (await res.json()).detail ?? null } catch { /* non-JSON body */ }
+        throw new ApiError(res.status, detail ?? (res.statusText || `Request failed (${res.status})`), detail)
+      }
+    } catch (err) {
+      setError(describeApiError(err instanceof ApiError ? err : new ApiError(0, 'Network error', null)))
+      return
+    }
     qc.invalidateQueries({ queryKey: ['rules'] })
     setEditing(prev => { const n = { ...prev }; delete n[id]; return n })
   }
@@ -53,6 +73,7 @@ export default function Rules() {
       </div>
 
       {/* Add rule form */}
+      {error && <ErrorBanner message={error} />}
       <div style={{
         background: 'var(--bg-card)',
         borderRadius: 'var(--radius-lg)',

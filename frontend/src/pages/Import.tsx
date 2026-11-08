@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { formatCents } from '../money'
+import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 
 const SOURCES = ['ing', 'revolut', 'degiro']
 
@@ -36,14 +37,18 @@ export default function Import() {
   const [result, setResult] = useState<any | null>(null)
   const [loading, setLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [error, setError] = useState('')
 
   const handlePreview = async () => {
     if (!file) return
     setLoading(true)
+    setError('')
     try {
       const data = await api.previewImport(source, file)
       setPreview(data)
       setResult(null)
+    } catch (e) {
+      setError(describeApiError(e))
     } finally {
       setLoading(false)
     }
@@ -52,11 +57,14 @@ export default function Import() {
   const handleConfirm = async () => {
     if (!file) return
     setLoading(true)
+    setError('')
     try {
       const data = await api.confirmImport(source, file)
       setResult(data)
       setPreview(null)
       setFile(null)
+    } catch (e) {
+      setError(describeApiError(e))
     } finally {
       setLoading(false)
     }
@@ -232,6 +240,8 @@ export default function Import() {
           </button>
         )}
       </div>
+
+      {error && <ErrorBanner message={error} />}
 
       {/* Preview */}
       {preview && (

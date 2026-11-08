@@ -15,9 +15,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-        <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--sans)', position: 'relative', zIndex: 1 }}>
+        <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--sans)', position: 'relative', zIndex: 1 }}>
           <Nav />
-          <main style={{ maxWidth: 1320, margin: '0 auto', padding: '36px 28px 80px' }}>
+          <main className="app-main">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/analytics" element={<Analytics />} />

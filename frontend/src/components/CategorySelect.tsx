@@ -118,7 +118,7 @@ export default function CategorySelect({ categories, value, onChange, placeholde
     const update = () => {
       const rect = containerRef.current!.getBoundingClientRect()
       // Use a wider panel for grid layout (min 360px, or trigger width if wider)
-      const panelWidth = Math.max(rect.width, compact ? 320 : 400)
+      const panelWidth = Math.min(Math.max(rect.width, compact ? 320 : 400), window.innerWidth - 16)
       // Centre the panel horizontally relative to the trigger
       const left = rect.left - (panelWidth - rect.width) / 2
       // Clamp so it doesn't go off-screen horizontally

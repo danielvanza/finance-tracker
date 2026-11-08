@@ -98,7 +98,7 @@ export default function Rules() {
           <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-h)', letterSpacing: '-0.02em' }}>Add Rule</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+        <div className="rules-form">
           <div style={{ flex: 1.2 }}>
             <label style={fieldLabel}>Pattern (substring match)</label>
             <input
@@ -125,7 +125,7 @@ export default function Rules() {
               categories={categories}
               value={newCategory}
               onChange={setNewCategory}
-              placeholder="Select category\u2026"
+              placeholder="Select category…"
             />
           </div>
           <button
@@ -164,7 +164,7 @@ export default function Rules() {
         border: '1px solid var(--border)',
         boxShadow: '0 4px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)',
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <table className="card-table rules-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--bg-table-header)', borderBottom: '1px solid var(--border-strong)' }}>
               {[['Pattern', 'left'], ['Category', 'left'], ['Actions', 'right']].map(([h, align]) => (

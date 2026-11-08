@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 const links = [
@@ -69,13 +70,17 @@ const links = [
 
 export default function Nav() {
   const { pathname } = useLocation()
+  const strip = useRef<HTMLDivElement>(null)
+
+  // On a phone the links are a swipeable strip: keep the current page in view.
+  useEffect(() => {
+    const el = strip.current
+    const current = el?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (el && current) el.scrollLeft = current.offsetLeft - (el.clientWidth - current.offsetWidth) / 2
+  }, [pathname])
 
   return (
-    <nav style={{
-      position: 'sticky', top: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', gap: 2,
-      padding: '0 20px',
-      height: 58,
+    <nav className="app-nav" style={{
       background: 'rgba(4, 8, 16, 0.85)',
       backdropFilter: 'blur(24px)',
       WebkitBackdropFilter: 'blur(24px)',
@@ -83,7 +88,7 @@ export default function Nav() {
       boxShadow: '0 1px 0 rgba(255,255,255,0.03), 0 8px 32px rgba(0, 0, 0, 0.6)',
     }}>
       {/* Brand */}
-      <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, marginRight: 12, flexShrink: 0 }}>
+      <Link to="/" className="app-nav-brand" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{
           width: 32, height: 32, borderRadius: 9,
           background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
@@ -107,47 +112,14 @@ export default function Nav() {
       </Link>
 
       {/* Divider */}
-      <div style={{ width: 1, height: 22, background: 'rgba(148, 163, 184, 0.1)', margin: '0 10px' }} />
+      <div className="app-nav-divider" />
 
       {/* Nav links */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div ref={strip} className="app-nav-links">
         {links.map(({ to, label, icon }) => {
           const active = pathname === to
           return (
-            <Link
-              key={to}
-              to={to}
-              style={{
-                textDecoration: 'none',
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '6px 11px',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                color: active ? '#fff' : 'var(--text-secondary)',
-                background: active ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                border: active ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
-                boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.07)' : 'none',
-                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                cursor: 'pointer',
-              }}
-              onMouseEnter={e => {
-                if (!active) {
-                  const el = e.currentTarget as HTMLElement
-                  el.style.color = 'var(--text-h)'
-                  el.style.background = 'rgba(148, 163, 184, 0.07)'
-                  el.style.borderColor = 'rgba(148, 163, 184, 0.1)'
-                }
-              }}
-              onMouseLeave={e => {
-                if (!active) {
-                  const el = e.currentTarget as HTMLElement
-                  el.style.color = 'var(--text-secondary)'
-                  el.style.background = 'transparent'
-                  el.style.borderColor = 'transparent'
-                }
-              }}
-            >
+            <Link key={to} to={to} className="app-nav-link" aria-current={active ? 'page' : undefined}>
               {icon}
               <span>{label}</span>
             </Link>

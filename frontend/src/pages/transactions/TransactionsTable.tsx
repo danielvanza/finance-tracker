@@ -17,7 +17,7 @@ export default function TransactionsTable({ transactions, setSplitTx, handleDele
       border: '1px solid var(--border)',
       boxShadow: '0 4px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)',
     }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <table className="card-table tx-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: 'var(--bg-table-header)', borderBottom: '1px solid var(--border-strong)' }}>
             {['Date', 'Description', 'Amount', 'Category', 'Source', 'AI Conf.', 'Status', ''].map((h, i) => (

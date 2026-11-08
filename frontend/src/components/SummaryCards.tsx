@@ -44,8 +44,8 @@ const Card = ({ label, value, subtext, gradient, glowColor, borderColor, icon }:
         position: 'relative',
         overflow: 'hidden',
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={e => setHovered(e.pointerType === 'mouse')}
+      onPointerLeave={() => setHovered(false)}
     >
       {/* Gradient top border */}
       <div style={{
@@ -83,7 +83,7 @@ const Card = ({ label, value, subtext, gradient, glowColor, borderColor, icon }:
 
       {/* Value */}
       <div>
-        <div style={{
+        <div className="stat-value" style={{
           fontSize: 24,
           fontWeight: 800,
           color: 'var(--text-h)',
@@ -103,7 +103,7 @@ const Card = ({ label, value, subtext, gradient, glowColor, borderColor, icon }:
 
 export default function SummaryCards({ total_income_cents, total_expenses_cents, total_savings_cents, left_over_cents, income_breakdown }: Props) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+    <div className="grid-summary">
       <Card
         label="Income"
         value={formatCents(total_income_cents)}

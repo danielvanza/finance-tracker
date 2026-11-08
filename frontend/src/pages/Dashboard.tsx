@@ -138,7 +138,7 @@ export default function Dashboard() {
       />
 
       {/* Charts row 1: Bar + Pie */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-charts">
 
         {/* Bar chart — Planned vs Actual */}
         <ChartCard title="Planned vs Actual" subtitle="Spending by category this month">

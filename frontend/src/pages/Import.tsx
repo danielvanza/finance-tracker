@@ -112,7 +112,7 @@ export default function Import() {
         {/* Bank source */}
         <div style={{ marginBottom: 16 }}>
           <label style={fieldLabel}>Bank source</label>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {SOURCES.map(s => (
               <button
                 key={s}
@@ -287,7 +287,7 @@ export default function Import() {
 
           {/* Table */}
           <div style={{ overflow: 'hidden', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: 18 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table className="card-table import-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--bg-table-header)', borderBottom: '1px solid var(--border-strong)' }}>
                   {['Date', 'Description', 'Amount', 'Status'].map((h, i) => (

@@ -84,7 +84,7 @@ export function DrillDownRow({ categoryId, categoryName, month, categories, onRe
           )}
 
           {!isLoading && txs.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table className="card-table drill-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-label)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</th>

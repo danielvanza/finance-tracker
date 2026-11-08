@@ -259,8 +259,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           <button
             onClick={handleConfirm}
             disabled={!canConfirm}
-            onMouseEnter={() => setConfirmHover(true)}
-            onMouseLeave={() => setConfirmHover(false)}
+            onPointerEnter={e => setConfirmHover(e.pointerType === 'mouse')}
+            onPointerLeave={() => setConfirmHover(false)}
             style={{
               flex: 1,
               background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
@@ -283,8 +283,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           </button>
           <button
             onClick={onSkip}
-            onMouseEnter={() => setSkipHover(true)}
-            onMouseLeave={() => setSkipHover(false)}
+            onPointerEnter={e => setSkipHover(e.pointerType === 'mouse')}
+            onPointerLeave={() => setSkipHover(false)}
             style={{
               background: skipHover ? 'rgba(148,163,184,0.08)' : 'transparent',
               color: skipHover ? 'var(--text-h)' : 'var(--text-secondary)',
@@ -303,8 +303,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
         {!splitMode && !isRefund && (
           <button
             onClick={() => onCreateRule(tx.id, selectedCategory)}
-            onMouseEnter={() => setRuleHover(true)}
-            onMouseLeave={() => setRuleHover(false)}
+            onPointerEnter={e => setRuleHover(e.pointerType === 'mouse')}
+            onPointerLeave={() => setRuleHover(false)}
             style={{
               width: '100%',
               background: ruleHover ? 'var(--accent-bg)' : 'transparent',

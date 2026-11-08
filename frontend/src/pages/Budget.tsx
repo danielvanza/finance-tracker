@@ -245,7 +245,7 @@ export default function Budget() {
   return (
     <div className="animate-fade-in">
       {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
         <div>
           <h1 style={{ marginBottom: 4 }}>Budget</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Click a category to see transactions • Click planned amount to edit</p>
@@ -266,12 +266,7 @@ export default function Budget() {
       {/* Summary stat strip */}
       {actionError && <ErrorBanner message={actionError} />}
       {rows.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 12,
-          marginBottom: 20,
-        }}>
+        <div className="grid-stats">
           {/* Total Planned */}
           <div style={{
             background: 'var(--bg-card)',
@@ -283,7 +278,7 @@ export default function Budget() {
             <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-label)', marginBottom: 6 }}>
               Total Planned
             </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-h)', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums' }}>
+            <div className="stat-value" style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-h)', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums' }}>
               {formatCents(totalPlanned)}
             </div>
           </div>
@@ -299,7 +294,7 @@ export default function Budget() {
             <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-label)', marginBottom: 6 }}>
               Total Spent
             </div>
-            <div style={{
+            <div className="stat-value" style={{
               fontSize: 22, fontWeight: 700,
               color: totalActual > totalPlanned ? 'var(--red)' : 'var(--text-h)',
               fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums',
@@ -326,7 +321,7 @@ export default function Budget() {
             </div>
             {spendPct !== null ? (
               <>
-                <div style={{
+                <div className="stat-value" style={{
                   fontSize: 22, fontWeight: 700,
                   color: spendPct > 100 ? 'var(--red)' : spendPct > 80 ? 'var(--yellow)' : 'var(--green)',
                   fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums',
@@ -372,7 +367,7 @@ export default function Budget() {
           border: '1px solid var(--border)',
           boxShadow: '0 4px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table className="card-table budget-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: 'var(--bg-table-header)', borderBottom: '1px solid var(--border-strong)' }}>
                 {[

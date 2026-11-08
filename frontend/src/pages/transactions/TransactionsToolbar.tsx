@@ -7,7 +7,7 @@ interface TransactionsToolbarProps {
 
 export default function TransactionsToolbar({ sourceFilter, setSourceFilter }: TransactionsToolbarProps) {
   return (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+    <div className="filter-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
       {SOURCE_FILTERS.map(s => (
         <button
           key={s}

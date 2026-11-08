@@ -84,7 +84,7 @@ export default function Transactions() {
   return (
     <div className="animate-fade-in">
       {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
         <div>
           <h1 style={{ marginBottom: 4 }}>Transactions</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -96,7 +96,7 @@ export default function Transactions() {
             )}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="page-actions" style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={() => setShowAdd(true)}
             style={{

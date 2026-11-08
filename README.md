@@ -84,6 +84,14 @@ Open http://localhost:5173
 
 The Vite dev server proxies `/api` requests to the backend at port 8000.
 
+## Deployment
+
+The app has no sign-in of its own, so it runs on loopback behind something that signs people in. Here that is the life dashboard, which serves it at `/finances` to anyone with a dashboard session.
+
+- `deploy/deploy.sh` builds this checkout's HEAD into `~/apps/household-finance/releases/<sha>` (UI built for `/finances/`) and switches the `household-finance` systemd user unit to it, rolling back if `/api/health` doesn't answer.
+- `deploy/household-finance.service` runs `backend/serve.py` (API under `/api`, built UI at `/`) on `127.0.0.1:18600`. The database is outside the releases, at `~/.local/share/household-finance/finance.db`.
+- **Claude without an API key:** with `CLAUDE_CLI_HOME` set, the categoriser runs `claude -p` on the machine's existing login (`categorizer/claude_cli.py`): no tools, no settings, an allowlisted environment and a bubblewrap sandbox where `/home` is empty. It needs `bwrap` and the `claude` CLI. Without it, `ANTHROPIC_API_KEY` is used as before. `AI_TIME_BUDGET_SECONDS` limits the AI time per import; whatever it doesn't reach waits in the review queue.
+
 ## Testing
 
 ```bash

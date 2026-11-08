@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError } from '../api'
+import { api, ApiError, BASE } from '../api'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import CategorySelect from '../components/CategorySelect'
 
@@ -45,7 +45,7 @@ export default function Rules() {
     const e = editing[id]
     if (!e) return
     try {
-      const res = await fetch(`/api/rules/${id}`, {
+      const res = await fetch(`${BASE}/rules/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern: e.pattern, category_id: e.category_id, priority: 0 }),
       })

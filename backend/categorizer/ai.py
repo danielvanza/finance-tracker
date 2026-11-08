@@ -1,16 +1,21 @@
 import json
 import logging
+import os
 import re
 import time
 import anthropic
 from sqlalchemy.orm import Session
 from models import Category
+from categorizer import claude_cli
 
 AI_MODEL = "claude-haiku-4-5-20251001"
 BATCH_SIZE = 50  # Max transactions per AI call
 AI_TIMEOUT_SECONDS = 30
 AI_MAX_RETRIES = 2
-AI_TIME_BUDGET_SECONDS = 60
+AI_TIME_BUDGET_SECONDS = int(os.getenv("AI_TIME_BUDGET_SECONDS", "60"))
+CLI_MODEL = "haiku"
+CLI_TIMEOUT_SECONDS = 120
+SYSTEM_PROMPT = "You are a financial transaction categoriser. Respond with JSON only."
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,24 @@ def _get_categories_for_sign(categories: list[Category], amount) -> list[Categor
     else:
         return [c for c in categories
                 if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("needs", "wants", "savings", "exclude")]
+
+
+def _completer():
+    """A function (prompt -> text) for whichever Claude access is set up: the CLI's login or the API."""
+    if claude_cli.enabled():
+        return lambda prompt: claude_cli.complete(SYSTEM_PROMPT, prompt, CLI_MODEL, CLI_TIMEOUT_SECONDS)
+    client = anthropic.Anthropic(timeout=AI_TIMEOUT_SECONDS, max_retries=AI_MAX_RETRIES)
+
+    def complete(prompt: str) -> str:
+        response = client.messages.create(
+            model=AI_MODEL,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+
+    return complete
 
 
 def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | None:
@@ -56,7 +79,7 @@ def batch_categorise_with_ai(
     cat_by_name = {c.name: c for c in all_categories}
 
     try:
-        client = anthropic.Anthropic(timeout=AI_TIMEOUT_SECONDS, max_retries=AI_MAX_RETRIES)
+        complete = _completer()
     except TypeError as e:
         logger.error(f"[AI categoriser] Configuration error: {e}")
         return {}
@@ -96,14 +119,7 @@ def batch_categorise_with_ai(
                 '{"index": <number>, "category": "<name>", "confidence": <0.0-1.0>}'
             )
             try:
-                response = client.messages.create(
-                    model=AI_MODEL,
-                    max_tokens=4096,
-                    system="You are a financial transaction categoriser. Respond with JSON only.",
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                raw_text = response.content[0].text
-                cleaned = _strip_markdown_fences(raw_text)
+                cleaned = _strip_markdown_fences(complete(prompt))
                 items = json.loads(cleaned)
                 if not isinstance(items, list):
                     logger.warning(f"[AI categoriser] Expected JSON array, got: {type(items).__name__}")
@@ -117,8 +133,8 @@ def batch_categorise_with_ai(
                     if not (0.0 <= confidence <= 1.0):
                         continue
                     results[idx] = (cat, confidence)
-            except anthropic.APIError as e:
-                logger.warning(f"[AI categoriser] Anthropic API error: {e}")
+            except (anthropic.APIError, claude_cli.ClaudeCliError) as e:
+                logger.warning(f"[AI categoriser] Claude error: {e}")
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"[AI categoriser] Parse error: {e}")
             except TypeError as e:

@@ -1,4 +1,4 @@
-const BASE = '/api'
+export const BASE = `${import.meta.env.BASE_URL}api`
 
 export class ApiError extends Error {
   readonly status: number      // HTTP status; 0 = network failure

@@ -1,0 +1,21 @@
+# systemd user unit, on loopback only: the app has no sign-in of its own, the life dashboard's
+# /finances route signs people in. Install: systemctl --user link <this file>, enable --now.
+[Unit]
+Description=Household Finance (127.0.0.1:18600, behind the life dashboard's sign-in at /finances)
+After=network.target
+
+[Service]
+WorkingDirectory=%h/apps/household-finance/current/backend
+Environment=DATABASE_URL=sqlite:///%h/.local/share/household-finance/finance.db
+Environment=FRONTEND_DIST=%h/apps/household-finance/current/frontend/dist
+Environment=CLAUDE_CLI_HOME=%h/.local/share/household-finance/claude
+Environment=CLAUDE_BIN=%h/.local/bin/claude
+Environment=AI_TIME_BUDGET_SECONDS=240
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/apps/household-finance/current/backend/.venv/bin/uvicorn serve:app --host 127.0.0.1 --port 18600
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

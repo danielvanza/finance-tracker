@@ -28,6 +28,9 @@ healthy() {
 ln -sfn "$release" "$root/current"
 systemctl --user restart household-finance
 if healthy; then
+  if systemctl --user is-enabled -q household-finance-telegram 2>/dev/null; then
+    systemctl --user restart household-finance-telegram
+  fi
   echo "deployed $sha"
   exit 0
 fi

@@ -120,7 +120,7 @@ def _salary(db):
 
 ROUTER_PREFIXES = [
     "/import", "/transactions", "/budget", "/rules", "/dashboard",
-    "/categories", "/settings", "/standing-adjustments",
+    "/categories", "/settings", "/standing-adjustments", "/chat",
 ]
 
 

@@ -62,9 +62,12 @@ def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | Non
 
 
 def batch_categorise_with_ai(
-    transactions: list, db: Session
+    transactions: list, db: Session, cli_only: bool = False
 ) -> dict[int, tuple[Category, float]]:
     """Categorise multiple transactions in a single AI call (or batches of BATCH_SIZE).
+
+    With cli_only (chat imports) only the Claude login is used and a Claude failure is raised as
+    ClaudeCliError instead of leaving the rows uncategorised, so the import can be refused whole.
 
     Transactions are grouped by sign (income vs expense) and each group gets
     only the relevant categories in the prompt.
@@ -74,6 +77,9 @@ def batch_categorise_with_ai(
     """
     if not transactions:
         return {}
+
+    if cli_only and not claude_cli.enabled():
+        raise claude_cli.ClaudeCliError("the Claude login is not set up (CLAUDE_CLI_HOME)")
 
     all_categories = db.query(Category).all()
     cat_by_name = {c.name: c for c in all_categories}
@@ -134,6 +140,8 @@ def batch_categorise_with_ai(
                         continue
                     results[idx] = (cat, confidence)
             except (anthropic.APIError, claude_cli.ClaudeCliError) as e:
+                if cli_only:
+                    raise
                 logger.warning(f"[AI categoriser] Claude error: {e}")
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"[AI categoriser] Parse error: {e}")

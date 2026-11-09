@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Numeric, Date, Boolean, Float, ForeignKey, UniqueConstraint, Enum as SAEnum
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Text, JSON, LargeBinary, DateTime, Index, Numeric, Date, Boolean, Float, ForeignKey, UniqueConstraint, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from db import Base
 import enum
@@ -111,3 +112,50 @@ class Setting(Base):
     __tablename__ = "settings"
     key = Column(String(100), primary_key=True)
     value = Column(String(500), nullable=False)
+
+
+class ChatMessage(Base):
+    """One line of a saved conversation. Each channel (bubble, telegram) has its own.
+
+    A person's message or file starts `queued` so it survives a busy Claude or a restart; the worker
+    in assistant/service.py moves it to `running`, or `waiting` while another Claude run is going.
+    """
+    __tablename__ = "chat_messages"
+    __table_args__ = (
+        Index("ix_chat_messages_channel", "channel", "id"),
+        Index("ix_chat_messages_status", "status"),
+        {"sqlite_autoincrement": True},  # the worker holds on to ids across a Clear
+    )
+    id = Column(Integer, primary_key=True)
+    channel = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # user | assistant
+    kind = Column(String, nullable=False)  # text | file | answer | clarify | proposal | import | error
+    text = Column(Text, nullable=False, default="", server_default="")
+    status = Column(String, nullable=False, default="done", server_default="done")
+    reply_to = Column(Integer, nullable=True)
+    payload = Column(JSON, nullable=True)
+    file_content = Column(LargeBinary, nullable=True)  # cleared once the file has been handled
+    delivered_ids = Column(JSON, nullable=True)  # Telegram messages showing this reply; NULL = not shown yet
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    proposal = relationship(
+        "ChatProposal", back_populates="message", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class ChatProposal(Base):
+    """A change the assistant suggested. Only a person's Yes (apply) ever runs it."""
+    __tablename__ = "chat_proposals"
+    __table_args__ = (Index("ix_chat_proposals_channel_status", "channel", "status"), {"sqlite_autoincrement": True})
+    id = Column(Integer, primary_key=True)
+    channel = Column(String, nullable=False)
+    message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False)
+    op = Column(String, nullable=False)
+    args = Column(JSON, nullable=False)
+    summary = Column(Text, nullable=False)
+    note = Column(Text, nullable=True)
+    preview = Column(JSON, nullable=False)  # what the card shows: changes, purchase, budget effect
+    status = Column(String, nullable=False, default="pending", server_default="pending")
+    # pending | applied | failed | rejected | superseded
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    message = relationship("ChatMessage", back_populates="proposal")

@@ -20,7 +20,9 @@ backend/
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
   importers/           CSV parsers (base.py, ing.py, revolut.py, degiro.py)
-  categorizer/         rules.py (pattern matching), ai.py (Claude Haiku)
+  categorizer/         rules.py (pattern matching), ai.py (Claude Haiku), claude_cli.py (sandboxed login)
+  assistant/           The chat: actions.py (what it can change, preview + apply), brain.py (what Claude is given, running it), prompts.py (system prompt), tools.py (the tools Claude can call), figures.py (fills cited figures in), service.py (queue, Yes/No), queries.py (read-only views), charts.py (draws charts from query results)
+  telegram_bot.py      The private Telegram bot, its own process; a thin front on /chat
   routers/             API route handlers (imports, transactions, budget, rules, dashboard, categories)
   tests/               pytest test suite
   data/finance.db      SQLite database (auto-created, gitignored)
@@ -71,6 +73,11 @@ frontend/
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | No | (none) | Anthropic API key for Claude AI categorisation. Without it, only rule-based categorisation works. |
 | `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
+| `CLAUDE_CLI_HOME` | For chat | (none) | Private folder for the sandboxed Claude login. The chat only uses this login, never an API key. |
+| `CHAT_MODEL` | No | `sonnet` | Claude model behind both chats. |
+| `TELEGRAM_BOT_TOKEN` | For the bot | (none) | From BotFather. A bot of its own, separate from Hermes. |
+| `TELEGRAM_ALLOWED_USER_ID` | For the bot | (none) | The one numeric Telegram account the bot answers. |
+| `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 
 Place these in a `.env` file (gitignored).
 
@@ -92,6 +99,16 @@ Place these in a `.env` file (gitignored).
 4. Add the corresponding fetch function to `frontend/src/api.ts`
 5. Add TypeScript types to `frontend/src/types.ts` if needed
 
+### Adding Something the Chat Can Change
+
+Add an `Op` to `OPS` in `backend/assistant/actions.py` that calls the existing router function, with the argument signature the model is shown in the `propose_change` tool. Preview, before/after fields, budget effect and apply-once come for free: an action runs inside a transaction and is compared against the tables.
+
+### Questions About the Past
+
+Claude works through real tools in `assistant/tools.py`, served by the app to one run over loopback MCP; built-in tools stay off. It reads history with `run_query`, which only ever sees a private in-memory copy built per question by the Month page's own code (`assistant/queries.py`), so other tables do not exist there. In an analytical answer it cites cells such as `{q1.r3.spent_cents}` and the app fills them in, formatted by the column's name.
+
+Say what a tool does in its description and keep behaviour and judgement in `assistant/prompts.py`. Enforce rules through a tool's arguments or a check that tells Claude what to fix, rather than by pattern-matching its prose. To let Claude read something new, add a table to `_DDL`, `_TABLES`, `SCHEMA` and `_fill`. Keep the default snapshot in `build_prompt` bounded: history is fetched on demand.
+
 ### Adding a New Category
 
 Categories are seeded in `backend/seed.py`. Add to the `CATEGORIES` list with name, type (needs/wants/savings), and default budget amount.
@@ -108,4 +125,5 @@ cd frontend && npm run dev                 # port 5173
 # Tests
 cd backend && pytest
 cd frontend && npx vitest
+cd frontend && npm run build && npx playwright test   # chat E2E: uses the Claude login on synthetic data
 ```

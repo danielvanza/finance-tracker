@@ -251,6 +251,74 @@
       "response": "{ key, value }",
       "error_contract": "404 unknown key, 422 invalid value",
       "frontend_caller": "api.patchSetting"
+    },
+    {
+      "id": "chat-messages-get",
+      "method": "GET", "path": "/chat/messages",
+      "response": "{ messages, guesses_waiting, claude_busy }",
+      "error_contract": "422 unknown channel",
+      "frontend_caller": "api.getChat"
+    },
+    {
+      "id": "chat-message-post",
+      "method": "POST", "path": "/chat/messages",
+      "request": {"channel": "bubble|telegram", "text": "string", "choose_transaction_id": "int|null", "seen_message_id": "int|null"},
+      "response": "ChatMessage, plus a settled card when the text was a yes or no",
+      "error_contract": "404 unknown transaction, 422 empty",
+      "frontend_caller": "api.sendChatMessage"
+    },
+    {
+      "id": "chat-messages-clear",
+      "method": "DELETE", "path": "/chat/messages",
+      "response": "{ cleared }",
+      "error_contract": "422 unknown channel",
+      "frontend_caller": "api.clearChat"
+    },
+    {
+      "id": "chat-outbox-get",
+      "method": "GET", "path": "/chat/outbox",
+      "response": "{ replies, in_flight }: replies a pushing chat has not shown yet",
+      "error_contract": "422 unknown channel",
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-message-delivered",
+      "method": "POST", "path": "/chat/messages/{message_id}/delivered",
+      "request": { "message_ids": "[int] Telegram messages showing this reply" },
+      "response": "{ delivered }",
+      "error_contract": "404",
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-chart-get",
+      "method": "GET", "path": "/chat/messages/{message_id}/chart",
+      "request": { "theme": "day|night (query, default day)", "v": "the message's created_at (query, ignored): keeps a browser from reusing the picture of a cleared chat" },
+      "response": "image/png: the chart drawn from the numbers saved with that reply",
+      "error_contract": "404 no such message or no chart, 422 unknown theme",
+      "frontend_caller": "api.chatChartUrl"
+    },
+    {
+      "id": "chat-file-post",
+      "method": "POST", "path": "/chat/files",
+      "request": {"channel": "bubble|telegram", "file": "multipart"},
+      "response": "ChatMessage (handled in the background)",
+      "error_contract": "422 unknown channel",
+      "frontend_caller": "api.sendChatFile"
+    },
+    {
+      "id": "chat-proposal-apply",
+      "method": "POST", "path": "/chat/proposals/{proposal_id}/apply",
+      "request": { "version": "string (the card's version when tapped)" },
+      "response": "Card; idempotent; unchanged if the version was replaced",
+      "error_contract": "404, 422",
+      "frontend_caller": "api.applyChatProposal"
+    },
+    {
+      "id": "chat-proposal-reject",
+      "method": "POST", "path": "/chat/proposals/{proposal_id}/reject",
+      "response": "Card",
+      "error_contract": "404",
+      "frontend_caller": "api.rejectChatProposal"
     }
   ],
   "shared_envelope_shapes": {

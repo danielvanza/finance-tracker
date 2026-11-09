@@ -147,3 +147,56 @@ export interface ImportConfirmResponse {
   categorised_by_ai: number
   uncategorised: number
 }
+
+export interface ChatFieldChange { label: string; before: string; after: string }
+export interface ChatChange { title: string; fields: ChatFieldChange[] }
+export interface ChatEffect {
+  category: string
+  when: string
+  before_cents: number
+  after_cents: number
+  planned_before_cents: number | null
+  planned_cents: number | null
+}
+export interface ChatTransactionRef {
+  id: number
+  date_label: string
+  amount_label: string
+  description: string
+  category: string | null
+}
+export interface ChatCard {
+  id: number
+  status: 'pending' | 'applied' | 'failed' | 'rejected' | 'superseded'
+  version: string
+  summary: string
+  note: string | null
+  changes: ChatChange[]
+  purchase: ChatTransactionRef | null
+  effect: ChatEffect[]
+  error: string | null
+  result: { text: string; effect: ChatEffect[] } | null
+  heading: string
+  apply_label: string
+  reject_label: string
+}
+export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; uncategorised: number }
+export interface ChatChart {
+  type: 'line' | 'bars'
+  title: string
+  labels: string[]
+  series: { name: string; values: number[] }[]
+  unit: 'cents' | 'euros' | 'percent' | 'number'
+}
+export interface ChatMessage {
+  id: number
+  role: 'user' | 'assistant'
+  kind: 'text' | 'file' | 'answer' | 'clarify' | 'proposal' | 'import' | 'error'
+  text: string
+  status: 'queued' | 'running' | 'waiting' | 'digging' | 'done'
+  reply_to: number | null
+  created_at: string
+  payload: (ChatImportCounts & { options?: undefined }) | { options: ChatTransactionRef[] } | { chart: ChatChart } | null
+  card: ChatCard | null
+}
+export interface ChatConversation { messages: ChatMessage[]; guesses_waiting: number; claude_busy: boolean }

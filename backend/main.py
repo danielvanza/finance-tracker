@@ -17,9 +17,11 @@ from routers.dashboard import router as dashboard_router
 from routers.categories import router as categories_router
 from routers.settings import router as settings_router
 from routers.standing_adjustments import router as standing_adjustments_router
+from routers.chat import router as chat_router
 from routers.recurring import router as recurring_router
 from routers.reports import router as reports_router
 from routers.goals import router as goals_router
+from assistant import service as chat_service
 
 app = FastAPI(title="Household Finance")
 
@@ -40,12 +42,15 @@ app.include_router(dashboard_router)
 app.include_router(categories_router)
 app.include_router(settings_router)
 app.include_router(standing_adjustments_router)
+app.include_router(chat_router)
 app.include_router(recurring_router)
 app.include_router(reports_router)
 app.include_router(goals_router)
 
 with SessionLocal() as session:
     run_seed(session)
+
+chat_service.resume()
 
 @app.get("/health")
 def health():

@@ -51,13 +51,80 @@
   color: var(--text);
 }
 
-.tx-filter {
+/* Search, then one scrolling row of filter chips, then the count. */
+.tx-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
   margin-bottom: 0.9rem;
 }
 
-.tx-filter button:not(:first-child) {
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.tx-search {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.tx-search svg {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--quiet);
+  pointer-events: none;
+}
+
+.tx-search .field {
+  padding-left: 2.6rem;
+}
+
+/* The padding and negative margin leave room for the chips' shadows and the focus ring. */
+.tx-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.4rem;
+  margin: -0.4rem;
+}
+
+.tx-chips button,
+.tx-chips .cs,
+.tx-chips .tx-chipmenu {
+  flex: none;
+}
+
+.tx-chips button {
+  white-space: nowrap;
+}
+
+.tx-chips button svg {
+  vertical-align: -2px;
+  margin-left: 0.2rem;
+}
+
+.tx-chips .num {
+  margin-left: 0.25rem;
+  color: var(--quiet);
+}
+
+.tx-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2.25rem;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .tx-chips {
+    margin-inline: -1.1rem;
+    padding-inline: 1.1rem;
+  }
+
+  .tx-count {
+    min-height: var(--tap);
+  }
 }
 
 /* The review card */
@@ -276,13 +343,65 @@
   color: var(--ink);
 }
 
-/* Takes the width the other columns leave, cut off with an ellipsis. */
+/* Takes the width the other columns leave: two lines, then a tap or Enter opens the rest. */
 .tx-desc {
   width: 100%;
   max-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.tx-desc-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.tx-desc-text.is-button {
+  cursor: pointer;
+}
+
+.tx-desc-text[aria-expanded='true'] {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.tx-desc-text .tx-tag {
+  margin-left: 0.4rem;
+}
+
+/* With the merchant sheet: the shop's name, the bank's text beneath it in two lines at most (the sheet has all of it). */
+.tx-desc-merchant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.4rem;
+}
+
+.tx-desc-merchant > .mer-open {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.tx-desc-merchant .mer-raw {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.tx-desc:not(.strong) .mer-name {
+  font-weight: 400;
 }
 
 .tx-cat {
@@ -656,7 +775,8 @@
   }
 
   .tx-table > tbody > tr > td:nth-child(1):not(:only-child) { grid-area: date; color: var(--quiet); font-size: 0.8rem; }
-  .tx-table > tbody > tr > td:nth-child(2) { grid-area: desc; width: auto; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+  .tx-table > tbody > tr > td:nth-child(2) { grid-area: desc; width: auto; overflow: visible; }
+  .tx-desc-text.is-button { min-height: var(--tap); align-content: center; }
   .tx-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }
   .tx-table > tbody > tr > td:nth-child(4) { grid-area: cat; }
   .tx-table > tbody > tr > td:nth-child(5) { grid-area: source; }
@@ -675,6 +795,25 @@
   .cs-trigger.is-compact .cs-badge {
     display: none;
   }
+
+  /* Select mode: the tick column is first, so every cell moves up by one. */
+  .tx-table.has-pick > tbody > tr {
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'pick desc desc desc amount'
+      'pick date source source status'
+      'pick cat cat actions actions';
+  }
+
+  .tx-table.has-pick > tbody > tr > td:nth-child(1) { grid-area: pick; align-self: center; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(2):not(:only-child) { grid-area: date; color: var(--quiet); font-size: 0.8rem; width: auto; overflow: visible; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(3) { grid-area: desc; width: auto; overflow: visible; align-self: center; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(4) { grid-area: amount; align-self: start; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(5) { grid-area: cat; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(6) { display: block; grid-area: source; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(7) { display: none; } /* AI confidence */
+  .tx-table.has-pick > tbody > tr > td:nth-child(8) { grid-area: status; justify-self: end; }
+  .tx-table.has-pick > tbody > tr > td:nth-child(9) { grid-area: actions; justify-self: end; }
 }
 
 /* Tablet and narrow desktop: eight columns don't fit, so source and AI confidence give way.
@@ -682,6 +821,18 @@
 @media (min-width: 721px) and (max-width: 1180px) {
   .tx-table :is(th, td):nth-child(5),
   .tx-table :is(th, td):nth-child(6) {
+    display: none;
+  }
+}
+
+/* Select mode shifts them: category stays, source and AI confidence give way. */
+@media (min-width: 721px) and (max-width: 1180px) {
+  .tx-table.has-pick :is(th, td):nth-child(5) {
+    display: table-cell;
+  }
+
+  .tx-table.has-pick :is(th, td):nth-child(6),
+  .tx-table.has-pick :is(th, td):nth-child(7) {
     display: none;
   }
 }
@@ -714,4 +865,115 @@
   .rev {
     max-width: none;
   }
+}
+
+/* Select mode: a round tick on each row, and a bar for what to do with the ticked ones. */
+.tx-pick-cell {
+  width: 1%;
+  padding-right: 0 !important;
+}
+
+.tx-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin: -0.55rem 0 -0.55rem -0.6rem;
+  cursor: pointer;
+}
+
+.tx-pick input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tx-box {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--r-chip);
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+  color: transparent;
+}
+
+.tx-pick input:checked + .tx-box {
+  background: var(--ink);
+  box-shadow: none;
+  color: var(--bg);
+}
+
+.tx-pick input:focus-visible + .tx-box {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+}
+
+.tx-table tr.is-picked {
+  background: var(--raised);
+}
+
+.tx-bar {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.7rem 0.6rem 1.1rem;
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--float-pop);
+}
+
+/* The chat button sits at the bottom right: the bar stops short of it. */
+@media (min-width: 721px) {
+  .tx-bar {
+    margin-right: calc(var(--chat-fab, 56px) + 1rem);
+  }
+}
+
+.tx-bar-count {
+  color: var(--ink);
+}
+
+.tx-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tx-bar-main {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tx-bar .tx-close {
+  margin: 0;
+}
+
+/* Above the tab slab, and over the chat button while it is open. */
+@media (max-width: 720px) {
+  .tx-bar {
+    z-index: 13;
+    position: fixed;
+    left: 0.7rem;
+    right: 0.7rem;
+    bottom: calc(5.2rem + env(safe-area-inset-bottom));
+  }
+}
+
+.tx-empty-action {
+  display: block;
+  margin-top: 0.8rem;
 }

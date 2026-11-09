@@ -207,3 +207,23 @@ describe('ReviewCard splitting', () => {
     expect(screen.getByText(/Remaining: €150,00/)).toBeInTheDocument()
   })
 })
+
+describe('ReviewCard rule button', () => {
+  const show = (description: string, onCreateRule = vi.fn()) =>
+    wrap(<ReviewCard transaction={{ ...mockTx, description }} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} onCreateRule={onCreateRule} />)
+
+  it('offers the rule for the shop, not the bank text with its order number', () => {
+    const onCreateRule = vi.fn()
+    show('Albert Heijn 1403 Amsterdam NLD', onCreateRule)
+    const rule = screen.getByRole('button', { name: 'Always categorise "Albert Heijn" as this' })
+    expect(rule).toBeEnabled()
+    fireEvent.click(rule)
+    expect(onCreateRule).toHaveBeenCalledWith(mockTx.id, 5)
+  })
+
+  it('is off, with a reason, when the name is too short to match safely', () => {
+    show('AH')
+    expect(screen.getByRole('button', { name: /Always categorise "AH" as this/ })).toBeDisabled()
+    expect(screen.getByText('That name is too short to match safely.')).toBeInTheDocument()
+  })
+})

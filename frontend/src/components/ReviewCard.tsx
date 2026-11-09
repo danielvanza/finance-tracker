@@ -5,6 +5,7 @@ import type { Transaction, Category, SplitInput } from '../types'
 import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
+import { merchantFor, ruleKeyOk } from './merchants'
 
 export interface ReviewDecision {
   category_id?: number
@@ -89,6 +90,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
   }
 
   const isExpense = tx.amount_cents < 0
+  const merchant = merchantFor(tx.description)
+  const ruleOk = ruleKeyOk(merchant.key)
 
   return (
     <div className="panel rev">
@@ -172,10 +175,13 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
 
         {/* Rule creation: not for splits or refunds, which carry one-off judgement */}
         {!splitMode && !isRefund && (
-          <button type="button" className="btn btn-wide rev-rule" disabled={selectedCategory === null} onClick={() => selectedCategory !== null && onCreateRule(tx.id, selectedCategory)}>
-            <Repeat size={14} aria-hidden="true" />
-            <span>Always categorise "{tx.description}" as this</span>
-          </button>
+          <>
+            <button type="button" className="btn btn-wide rev-rule" disabled={selectedCategory === null || !ruleOk} onClick={() => selectedCategory !== null && onCreateRule(tx.id, selectedCategory)}>
+              <Repeat size={14} aria-hidden="true" />
+              <span>Always categorise "{merchant.name}" as this</span>
+            </button>
+            {!ruleOk && <p className="tx-hint">That name is too short to match safely.</p>}
+          </>
         )}
       </div>
     </div>

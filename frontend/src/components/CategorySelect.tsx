@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Search } from 'lucide-react'
 import type { Category } from '../types'
@@ -14,9 +14,11 @@ interface Props {
   placeholder?: string
   /** Compact mode for inline/table usage */
   compact?: boolean
+  /** Replaces the field-like trigger, for a chip in a row of filters. */
+  renderTrigger?: (state: { open: boolean; toggle: () => void }) => ReactNode
 }
 
-export default function CategorySelect({ categories, value, onChange, placeholder = 'Select category…', compact = false }: Props) {
+export default function CategorySelect({ categories, value, onChange, placeholder = 'Select category…', compact = false, renderTrigger }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [highlightIdx, setHighlightIdx] = useState(-1)
@@ -148,20 +150,22 @@ export default function CategorySelect({ categories, value, onChange, placeholde
 
   return (
     <div ref={containerRef} className="cs" onKeyDown={handleKeyDown}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className={`cs-trigger${compact ? ' is-compact' : ''}${selected ? '' : ' is-empty'}`}
-      >
-        {selected && SelectedIcon && (
-          <SelectedIcon className="cs-icon" size={compact ? 14 : 16} aria-hidden="true" />
-        )}
-        <span className="cs-label">{selected ? selected.name : placeholder}</span>
-        {selected && meta && <span className="cs-badge">{meta.label}</span>}
-        <ChevronDown className="cs-chevron" size={14} aria-hidden="true" />
-      </button>
+      {renderTrigger ? renderTrigger({ open, toggle: () => setOpen(o => !o) }) : (
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={`cs-trigger${compact ? ' is-compact' : ''}${selected ? '' : ' is-empty'}`}
+        >
+          {selected && SelectedIcon && (
+            <SelectedIcon className="cs-icon" size={compact ? 14 : 16} aria-hidden="true" />
+          )}
+          <span className="cs-label">{selected ? selected.name : placeholder}</span>
+          {selected && meta && <span className="cs-badge">{meta.label}</span>}
+          <ChevronDown className="cs-chevron" size={14} aria-hidden="true" />
+        </button>
+      )}
 
       {/* Portaled to body to escape overflow:hidden */}
       {open && panelPos && createPortal(

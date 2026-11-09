@@ -1,46 +1,119 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { dayLabel } from '../../dates'
 import { Check, CircleAlert } from 'lucide-react'
 import { formatCents } from '../../money'
 import type { Transaction } from '../../types'
+import { MerchantName, useMerchantSheet } from '../../components/merchants'
 
 interface TransactionsTableProps {
   transactions: Transaction[]
   setSplitTx: (tx: Transaction) => void
   handleDelete: (tx: Transaction) => void
+  /** Some filter or search is narrowing the list. */
   filtered: boolean
+  /** Select mode: a tick column leads each row. */
+  selecting: boolean
+  picked: ReadonlySet<number>
+  onPick: (id: number) => void
+  onClear: () => void
 }
 
-// Phone cards in transactions.css place these columns by position: keep the two in step.
+// Phone cards in transactions.css place these columns by position: keep the two in step. Select
+// mode puts a tick column first, which moves every other column up by one (the .has-pick rules).
 const COLUMNS = ['Date', 'Description', 'Amount', 'Category', 'Source', 'AI conf.', 'Status', '']
 
 const confidenceClass = (c: number) => (c >= 0.8 ? 'tx-conf-high' : c >= 0.5 ? '' : 'tx-conf-low')
 
 const PAGE = 60
 
-export default function TransactionsTable({ transactions, setSplitTx, handleDelete, filtered }: TransactionsTableProps) {
+/** The shop's clean name over the bank's own text (two lines at most); a tap opens the merchant sheet, which holds the whole bank text. */
+function MerchantDescription({ text, tag }: { text: string; tag: ReactNode }) {
+  return (
+    <div className="tx-desc-merchant">
+      <MerchantName description={text} />
+      {tag}
+    </div>
+  )
+}
+
+/** Two lines of the description; when there is more, tapping or pressing Enter on it opens all of it, and again closes it. */
+function Description({ text, tag }: { text: string; tag: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const [el, setEl] = useState<HTMLElement | null>(null)
+  const [clipped, setClipped] = useState(false)
+
+  const measure = useCallback(() => {
+    if (el) setClipped(el.scrollHeight > el.clientHeight + 1)
+  }, [el])
+
+  // The observer reports once when it starts watching, then whenever the width changes.
+  useEffect(() => {
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [el, measure])
+
+  const content = <>{text}{tag}</>
+  if (!clipped && !open) return <span ref={setEl} className="tx-desc-text">{content}</span>
+  return (
+    <button
+      ref={setEl}
+      type="button"
+      className="tx-desc-text is-button"
+      aria-expanded={open}
+      onClick={() => setOpen(o => !o)}
+    >
+      {content}
+    </button>
+  )
+}
+
+/** The merchant name where a merchant sheet is available, the plain two-line description where it is not. */
+function DescriptionCell({ text, tag }: { text: string; tag: ReactNode }) {
+  const { available } = useMerchantSheet()
+  return available ? <MerchantDescription text={text} tag={tag} /> : <Description text={text} tag={tag} />
+}
+
+export default function TransactionsTable({ transactions, setSplitTx, handleDelete, filtered, selecting, picked, onPick, onClear }: TransactionsTableProps) {
   const [shown, setShown] = useState(PAGE)
   const hidden = transactions.length - shown
 
   return (
     <div className="panel tx-panel">
-      <table className="table card-table tx-table">
+      <table className={`table card-table tx-table${selecting ? ' has-pick' : ''}`}>
         <thead>
           <tr>
+            {selecting && <th className="tx-pick-cell" aria-label="Select" />}
             {COLUMNS.map((h, i) => (
-              <th key={h || 'actions'} className={i === 2 ? 'right' : undefined}>{h}</th>
+              <th key={i} className={i === 2 ? 'right' : undefined}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {transactions.slice(0, shown).map(tx => (
-            <tr key={tx.id}>
+            <tr key={tx.id} className={picked.has(tx.id) ? 'is-picked' : undefined}>
+              {selecting && (
+                <td className="tx-pick-cell">
+                  <label className="tx-pick">
+                    <input
+                      type="checkbox"
+                      checked={picked.has(tx.id)}
+                      onChange={() => onPick(tx.id)}
+                      aria-label={`Select ${tx.description}`}
+                    />
+                    <span className="tx-box"><Check size={13} aria-hidden="true" /></span>
+                  </label>
+                </td>
+              )}
               <td className="num tx-date"><time dateTime={tx.date}>{dayLabel(tx.date)}</time></td>
-              <td className={`tx-desc${tx.confirmed ? ' strong' : ''}`} title={tx.description}>
-                {tx.description}
-                {tx.standing_adjustment_id != null && (
-                  <span className="tx-tag" title="Created automatically by a standing adjustment">auto</span>
-                )}
+              <td className={`tx-desc${tx.confirmed ? ' strong' : ''}`}>
+                <DescriptionCell
+                  text={tx.description}
+                  tag={tx.standing_adjustment_id != null && (
+                    <span className="tx-tag" title="Created automatically by a standing adjustment">auto</span>
+                  )}
+                />
               </td>
               <td className={`right num tx-amount${tx.amount_cents < 0 ? '' : ' is-in'}`}>
                 {tx.is_refund && (
@@ -115,8 +188,13 @@ export default function TransactionsTable({ transactions, setSplitTx, handleDele
           ))}
           {transactions.length === 0 && (
             <tr>
-              <td colSpan={8} className="empty">
-                {filtered ? 'No transactions from this source.' : 'No transactions yet. Bring in a bank file or add one by hand.'}
+              <td colSpan={selecting ? 9 : 8} className="empty">
+                {filtered ? (
+                  <>
+                    No transactions match these filters.
+                    <span className="tx-empty-action"><button type="button" className="btn" onClick={onClear}>Clear filters</button></span>
+                  </>
+                ) : 'No transactions yet. Bring in a bank file or add one by hand.'}
               </td>
             </tr>
           )}

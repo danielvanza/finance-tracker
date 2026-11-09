@@ -173,6 +173,11 @@
   gap: 1.1rem;
 }
 
+/* Review, recurring and report rows share one column (.rep-links): one even gap, whichever are shown. */
+.side-stack .rep-links > .rc-entry {
+  margin-top: 0;
+}
+
 .kinds {
   display: flex;
   flex-direction: column;
@@ -255,6 +260,15 @@
   height: 3rem;
 }
 
+/* The month on screen while the next one loads */
+.month-body {
+  transition: opacity 0.15s;
+}
+
+.month-body.is-loading {
+  opacity: 0.45;
+}
+
 /* The plan by category */
 .cat-groups {
   display: grid;
@@ -283,6 +297,13 @@
   text-align: left;
   font-size: 0.9rem;
   color: var(--ink);
+}
+
+.cat-note {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
 }
 
 .cat-row[aria-expanded='true'] .cat-name {
@@ -403,7 +424,7 @@
 
   .side-stack {
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
   }
 
   .side-stack > .panel {

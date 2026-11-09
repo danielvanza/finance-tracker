@@ -27,6 +27,7 @@ vi.mock('../api', () => ({
     getPace: vi.fn(),
     getBudget: vi.fn(() => Promise.resolve([])),
     getCategories: vi.fn(() => Promise.resolve([])),
+    getTransactions: vi.fn(() => Promise.resolve([])),
     getDashboard: vi.fn(() => Promise.resolve({
       month: '2026-11', total_income_cents: 586026, total_expenses_cents: 342000, total_savings_cents: 40000,
       left_over_cents: 204026, category_breakdown: [],
@@ -34,6 +35,9 @@ vi.mock('../api', () => ({
       needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, monthly_trend: [],
     })),
   },
+  // The recurring link asks for its own data; nothing repeating yet keeps it hidden.
+  BASE: '/api',
+  apiFetch: vi.fn(() => Promise.resolve({ status: 'none', items: [] })),
   ApiError: class extends Error {},
 }))
 
@@ -52,6 +56,19 @@ describe('Month', () => {
     expect(screen.getByText(/€133 more than planned by now/)).toBeInTheDocument()
     expect(screen.getByText('14 transactions to review').closest('a')).toHaveAttribute('href', '/transactions')
     expect(screen.queryByRole('link', { name: 'Bring in bank files' })).toBeNull()
+  })
+
+  it('keeps the month report one tap away, under the review row, whatever the status', async () => {
+    show(okPace)
+    const report = await screen.findByRole('link', { name: 'Month report' })
+    expect(report).toHaveAttribute('href', '/report?month=2026-11')
+    expect(screen.getByText('14 transactions to review').closest('a')?.parentElement).toBe(report.parentElement)
+  })
+
+  it('offers the month report with no review row and no bank files', async () => {
+    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0 })
+    expect(await screen.findByRole('link', { name: 'Month report' })).toBeInTheDocument()
+    expect(screen.queryByText(/to review/)).toBeNull()
   })
 
   it('shows the whole month from the summary wire shape', async () => {

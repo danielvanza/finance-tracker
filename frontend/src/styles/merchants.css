@@ -1,0 +1,267 @@
+/* Merchants: the sheet for one shop, the clean name in rows, and the ranked list on Transactions.
+   Sheet and list parts reuse .scrim/.sheet, .tx-sheet-head, .tx-close, .cat-row and .meter. */
+
+/* A transaction row's name: the clean shop with the bank's own text beneath. */
+.mer-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: var(--tap);
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  white-space: inherit;
+  transition: transform var(--press-out), opacity var(--press-out);
+}
+
+.mer-open:is(:active, .is-pressed) {
+  opacity: 0.7;
+  transform: scale(0.99);
+  transition: transform var(--press-in), opacity var(--press-in);
+}
+
+.mer-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mer-name-text,
+.mer-raw {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.mer-go {
+  flex: none;
+  color: var(--muted);
+}
+
+.mer-raw {
+  max-width: 100%;
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--quiet);
+}
+
+@media (hover: hover) {
+  .mer-open:hover .mer-name-text {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+
+/* Transactions | Merchants, and the period beside it. */
+.mer-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.mer-scope {
+  margin: 0 0 0.7rem;
+}
+
+.mer-skel-row {
+  height: 3rem;
+  margin: 0.5rem 0;
+}
+
+/* The sheet */
+.mer .tx-sheet-head {
+  margin-bottom: 0.3rem;
+}
+
+.mer h2 {
+  font: 400 1.45rem/1.2 var(--serif);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.mer-skel {
+  height: 12rem;
+}
+
+.mer-seen {
+  margin-bottom: 1.1rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--quiet);
+  overflow-wrap: anywhere;
+}
+
+.mer-seen span {
+  color: var(--text);
+}
+
+.mer-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.mer-figures strong {
+  font-size: 1.6rem;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mer-figures span {
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.mer-sentence {
+  margin: 0 0 1.1rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.mer-bars {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.45rem;
+  margin-bottom: 1.1rem;
+}
+
+.mer-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.mer-col.is-partial .mer-track {
+  outline: 1px dashed var(--dash);
+  outline-offset: -1px;
+}
+
+.mer-amt {
+  font-size: 0.72rem;
+  color: var(--quiet);
+}
+
+.mer-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 4.2rem;
+  border-radius: var(--r-chip);
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+  overflow: hidden;
+}
+
+.mer-track i {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--r-chip);
+  background: var(--fill);
+}
+
+.mer-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mer-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.mer-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.4rem;
+}
+
+.mer-rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.mer-rule-row .cs {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.mer-rule-text {
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.mer-error {
+  font-size: 0.82rem;
+  color: var(--error);
+}
+
+.mer-hist {
+  margin-top: 0.6rem;
+}
+
+.mer-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2.25rem;
+  margin-top: 0.9rem;
+}
+
+.mer-tx {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.mer-tx time {
+  font-size: 0.8rem;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.mer-tx-raw {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.mer-tx-cat {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.mer .tx-more {
+  margin-top: 0.6rem;
+}

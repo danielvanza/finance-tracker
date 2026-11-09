@@ -8,6 +8,10 @@ import Import from './pages/Import'
 import Transactions from './pages/Transactions'
 import Trends from './pages/Trends'
 import Setup from './pages/Setup'
+import ReportPage from './components/reports/ReportPage'
+import { AddChip, AddRow, FindButtons } from './components/shell/Entries'
+import { scrollToTop, useOpenAtTop } from './components/shell/scroll'
+import { useShellTools } from './components/shell/useShellTools'
 
 const queryClient = new QueryClient()
 
@@ -70,23 +74,40 @@ function useTabWell(current: string | undefined) {
 }
 
 function Shell() {
-  const { pathname } = useLocation()
-  const current = TABS.find(t => t.to === pathname)?.to
+  const { pathname, search } = useLocation()
+  // The month report belongs to Month, so Month stays the current tab there.
+  const current = TABS.find(t => t.to === pathname)?.to ?? (pathname === '/report' ? '/' : undefined)
   const { nav, well } = useTabWell(current)
+  const { openFind, openAdd, overlays } = useShellTools()
+  useOpenAtTop(pathname)
 
   return (
     <div className="shell">
       <aside className="side">
         <Link to="/" className="brand">Finances</Link>
-        <a href="/" className="back"><ChevronLeft size={13} aria-hidden="true" />Dashboard</a>
+        <FindButtons onOpen={openFind} />
+        <AddChip onOpen={openAdd} />
         <nav className="tabbar" aria-label="Main" ref={nav}>
           <span className="tab-well" ref={well} aria-hidden="true" />
           {TABS.map(t => (
-            <Link key={t.to} to={t.to} aria-current={t.to === current ? 'page' : undefined}>
+            <Link
+              key={t.to}
+              to={t.to}
+              aria-current={t.to === current ? 'page' : undefined}
+              onClick={e => {
+                // The tab you are on: back to the top of it, unless a search is there to clear.
+                if (t.to === current && pathname === t.to && !search) {
+                  e.preventDefault()
+                  scrollToTop()
+                }
+              }}
+            >
               <span className="tab-label">{t.label}</span>
             </Link>
           ))}
         </nav>
+        <AddRow onOpen={openAdd} />
+        <a href="/" className="back" aria-label="Dashboard"><ChevronLeft size={13} aria-hidden="true" /><span className="back-label">Dashboard</span></a>
       </aside>
       <main className="content" key={pathname}>
         <Routes>
@@ -94,6 +115,7 @@ function Shell() {
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/trends" element={<Trends />} />
           <Route path="/setup" element={<Setup />} />
+          <Route path="/report" element={<ReportPage />} />
           <Route path="/import" element={<Import />} />
           {/* The old pages, so bookmarks still land somewhere sensible. */}
           <Route path="/budget" element={<Navigate to="/" replace />} />
@@ -103,6 +125,7 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {overlays}
     </div>
   )
 }

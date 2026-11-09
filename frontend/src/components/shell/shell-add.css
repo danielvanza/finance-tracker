@@ -1,0 +1,26 @@
+/* Add from anywhere: the line that says it was saved (the buttons are in shell-entries.css). */
+.qa-saved {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Above the chat button, which sits at the bottom right. */
+  bottom: calc(var(--chat-fab-bottom, var(--bar-h) + 0.75rem) + var(--chat-fab, 56px) + 0.75rem);
+  width: max-content;
+  max-width: calc(100% - 2.2rem);
+  padding: 0.65rem 1rem;
+  border-radius: var(--r-chip);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--raised);
+  box-shadow: var(--float-pop);
+}
+
+@media (min-width: 1024px) {
+  .qa-saved {
+    left: calc(var(--side-w) + 3.5rem);
+    transform: none;
+    bottom: 1.5rem;
+  }
+}

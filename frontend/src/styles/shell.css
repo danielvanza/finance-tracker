@@ -11,8 +11,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin: calc(0.6rem + env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) 0
-    max(0.75rem, env(safe-area-inset-left));
+  margin: calc(0.6rem + env(safe-area-inset-top)) max(1.1rem, env(safe-area-inset-right)) 0
+    max(1.1rem, env(safe-area-inset-left));
   padding: 0.5rem 0.75rem 0.5rem 1.05rem;
   background: var(--card);
   border-radius: var(--r-row);
@@ -141,6 +141,19 @@
   }
 }
 
+/* With Find and Add beside it the top row is full: the way back keeps its chevron only. */
+@media (max-width: 359.98px) {
+  .back {
+    justify-content: center;
+    min-width: var(--tap);
+    padding: 0;
+  }
+
+  .back-label {
+    display: none;
+  }
+}
+
 /* Switching tabs: one pressed-in well glides from the old tab to the new one, between the chips
    and their labels (useTabWell in App.tsx places it). At rest it lies under the current tab, which
    sits on top (a pressed tab is still scaled while the well arrives) and draws the same pressed
@@ -206,20 +219,23 @@
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 2rem;
+    gap: 1.4rem;
     padding: 2.1rem 1.1rem 1.6rem;
     border-radius: var(--r-card);
     box-shadow: var(--raise-lg);
   }
 
-  .side > .brand,
-  .side > .back {
+  /* One left edge: the brand sits on the tab labels, the way back on the tab chips, and the
+     way back rests at the foot of the panel. */
+  .side > .brand {
     align-self: flex-start;
-    margin-left: 0.6rem;
+    margin-left: 1rem;
   }
 
   .side > .back {
     order: 3;
+    align-self: flex-start;
+    margin-top: auto;
   }
 
   .brand {

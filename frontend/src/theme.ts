@@ -72,3 +72,13 @@ export function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'day' ? '#efe6d6' : '#2a2622')
 }
+
+/** Flips the theme on screen until the next sunrise or sunset; flipping to what the sun says returns to auto.
+ *  ThemeProvider listens for 'storage' (another tab's flip), so the same event tells it about this one. */
+export function flipTheme(shown: Theme, now = Date.now()): Theme {
+  const { natural, to } = daylightAt(now)
+  const next: Theme = shown === 'day' ? 'night' : 'day'
+  setOverride(next === natural ? null : next, to)
+  window.dispatchEvent(new Event('storage'))
+  return next
+}

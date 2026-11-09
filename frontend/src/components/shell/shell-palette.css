@@ -1,0 +1,75 @@
+/* The palette reuses the category picker's panel, search and rows (transactions.css): a centred
+   card from 720px, a sheet hanging from the top of a phone so the keyboard never covers it. */
+.pal-scrim {
+  align-items: flex-start;
+  padding: 0;
+}
+
+.pal {
+  position: static;
+  width: 100%;
+  padding-top: env(safe-area-inset-top);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  box-shadow: var(--float-pop);
+  animation: none;
+}
+
+.pal .cs-search {
+  padding: 0.9rem 0.9rem 0;
+}
+
+.pal .cs-search svg {
+  left: 1.7rem;
+}
+
+.pal .cs-list {
+  max-height: min(26rem, 60svh);
+  padding: 0.3rem 0.5rem 0.7rem;
+}
+
+.pal .cs-opt {
+  gap: 0.7rem;
+  font-size: 0.9rem;
+}
+
+.pal .cs-opt .grow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.pal .cs-opt .sub {
+  font-size: 0.72rem;
+  color: var(--quiet);
+}
+
+.pal .cs-opt strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.pal .cs-opt .num {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.pal .empty {
+  padding: 1.1rem 0.9rem 1.3rem;
+  font-size: 0.9rem;
+  color: var(--quiet);
+}
+
+@media (min-width: 720px) {
+  .pal-scrim {
+    justify-content: center;
+    padding: 12svh 2rem 2rem;
+  }
+
+  .pal {
+    max-width: 36rem;
+    padding-top: 0;
+    border-radius: var(--r-card);
+  }
+}

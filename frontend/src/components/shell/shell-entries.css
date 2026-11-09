@@ -1,0 +1,93 @@
+/* Find: a 44px chip in the phone's top row, a pressed-in field in the desktop side panel. */
+.find-chip,
+.add-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--r-chip);
+  color: var(--ink);
+  background: var(--raised);
+  box-shadow: var(--raise-sm);
+}
+
+.find-chip {
+  margin-left: auto;
+}
+
+@media (hover: hover) {
+  .find-chip:hover,
+  .add-chip:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.find-well,
+.add-row {
+  display: none;
+}
+
+.kbd {
+  font: 400 0.68rem/1 var(--mono);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--quiet);
+}
+
+@media (min-width: 1024px) {
+  .find-chip,
+  .add-chip {
+    display: none;
+  }
+
+  .find-well {
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0 0.6rem 0 0.8rem;
+    border: 0;
+    border-radius: var(--r-chip);
+    font: 400 0.9rem/1 var(--sans);
+    color: var(--quiet);
+    background: var(--bg);
+    box-shadow: var(--press-sm);
+  }
+
+  .find-well svg,
+  .add-row svg {
+    flex: none;
+  }
+
+  .find-well span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .find-well .kbd {
+    letter-spacing: 0.04em;
+  }
+
+  /* Under the tabs, one more row in the same clay (the .btn is the raised row). */
+  .add-row {
+    order: 2;
+    display: flex;
+    justify-content: flex-start;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0 1rem;
+  }
+
+  .add-row .kbd {
+    margin-left: auto;
+  }
+}

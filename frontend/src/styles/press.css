@@ -5,6 +5,9 @@
 
 .btn,
 .back,
+.find-chip,
+.add-chip,
+.find-well,
 .seg button,
 .tabbar a,
 .tabbar a::before,
@@ -13,7 +16,7 @@
   transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out);
 }
 
-:is(.btn, .back, .seg button, .link-row):is(:active, .is-pressed):not(:disabled) {
+:is(.btn, .back, .find-chip, .add-chip, .find-well, .seg button, .link-row):is(:active, .is-pressed):not(:disabled) {
   background: var(--press-tint);
   box-shadow: var(--press-held);
   transform: scale(0.975);

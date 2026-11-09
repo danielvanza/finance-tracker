@@ -1,0 +1,97 @@
+/* Savings goals on Trends: one panel, a row per goal. Meters are the shared .meter; the sheet is the
+   shared .sheet. Only what is particular to goals lives here. */
+
+.goals-panel {
+  padding-block: 1rem 0.75rem;
+}
+
+.goals-list {
+  list-style: none;
+}
+
+.goal + .goal {
+  border-top: 1px solid var(--line);
+}
+
+.goal-btn {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.8rem 0;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--ink);
+  transition: transform var(--press-out), opacity var(--press-out);
+}
+
+.goal-btn:is(:active, .is-pressed) {
+  opacity: 0.7;
+  transform: scale(0.99);
+  transition: transform var(--press-in), opacity var(--press-in);
+}
+
+.goal-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.goal-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-amount small,
+.goal-facts,
+.goal-hint {
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+.goal-says {
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.goal-facts {
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-hint {
+  margin-top: 0.15rem;
+}
+
+.goals-foot {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.goal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.goal-empty .goal-hint {
+  margin-top: 0;
+}
+
+.goals-skeleton {
+  height: 12rem;
+  border-radius: var(--r-card);
+}
+
+.goal-remove {
+  margin-right: auto;
+}

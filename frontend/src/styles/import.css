@@ -1,4 +1,4 @@
-/* Import: choose the bank, choose the file, check the preview, confirm, see what happened. */
+/* Import: choose the bank, choose the file, check the preview, confirm, see what happened. After a gap a short path leads through it. */
 
 .import-back {
   margin-bottom: 1rem;
@@ -25,6 +25,7 @@
 .import-hint {
   margin-top: -0.4rem;
   font-size: 0.85rem;
+  line-height: 1.5;
   color: var(--text);
 }
 
@@ -32,10 +33,32 @@
   display: flex;
 }
 
+/* Each chip carries its bank's last row under the name. */
 .import-banks button {
   flex: 1;
-  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 3.2rem;
+  padding: 0.4rem;
   font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.import-banks small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font: 400 0.68rem/1.2 var(--mono);
+  letter-spacing: 0.04em;
+  font-weight: 400;
+  color: var(--quiet);
+}
+
+.import-banks small svg {
+  color: var(--moss);
 }
 
 /* The drop zone is the file input, stretched invisibly over a well. */
@@ -127,8 +150,47 @@
   color: var(--moss);
 }
 
-.import-date {
+.import-say {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.import-say strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.import-date,
+.import-amount {
   white-space: nowrap;
+}
+
+/* Rows already in fold away under the new ones. */
+.import-fold > summary,
+.import-more > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--quiet);
+}
+
+.import-fold > summary {
+  padding: 0 0.5rem;
+}
+
+.import-fold > summary:focus-visible,
+.import-more > summary:focus-visible,
+.import-done-label:focus-visible {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+  border-radius: var(--r-chip);
+}
+
+.import-fold[open] > summary {
+  margin-bottom: 0.2rem;
 }
 
 .import-table td.is-in {
@@ -136,6 +198,7 @@
 }
 
 .import-status {
+  white-space: nowrap;
   color: var(--moss);
 }
 
@@ -143,13 +206,37 @@
   color: var(--quiet);
 }
 
-/* What happened */
-.import-result {
+/* What happened: the sentence, the one line that needs a look, the button, the count folded away. */
+.import-done {
   max-width: 36rem;
 }
 
-.import-result > * + * {
+.import-done > * + * {
   margin-top: 0.9rem;
+}
+
+.import-done-title {
+  font: 400 1.45rem/1.2 var(--serif);
+}
+
+.import-done-line {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.import-done-line strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.import-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.import-done-actions .btn-primary {
+  flex: 1 1 14rem;
 }
 
 .import-tally div {
@@ -163,6 +250,90 @@
 
 .import-tally dd {
   color: var(--ink);
+}
+
+/* Picking up after a gap: the banks behind, the review, the month. */
+.import-path {
+  max-width: 72rem;
+  margin-bottom: 1.2rem;
+}
+
+.import-path > * + * {
+  margin-top: 0.8rem;
+}
+
+.import-path-title {
+  font: 400 1.45rem/1.2 var(--serif);
+}
+
+.import-path-line {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.import-path ol {
+  display: grid;
+  padding: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+
+.import-path li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.import-path li:first-child {
+  border-top: 0;
+}
+
+.import-path li .row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.import-path li[aria-current='step'] {
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+  font-weight: 700;
+  border-radius: var(--r-row);
+  border-top-color: transparent;
+}
+
+.import-path li[aria-current='step'] + li {
+  border-top-color: transparent;
+}
+
+.import-path li small {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--quiet);
+}
+
+.import-path li .mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  font: 400 0.68rem/1 var(--mono);
+  color: var(--quiet);
+}
+
+.import-path li.is-done {
+  color: var(--text);
+}
+
+.import-path li.is-done .mark {
+  color: var(--moss);
 }
 
 @media (min-width: 721px) {
@@ -190,10 +361,41 @@
   .import-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .import-path ol {
+    grid-template-columns: repeat(var(--steps), minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .import-path li {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.1rem;
+    min-height: 4rem;
+    padding: 0.6rem 1.1rem;
+    border-top: 0;
+    border-radius: var(--r-row);
+    background: var(--raised);
+    box-shadow: var(--raise-sm);
+  }
+
+  .import-path li[aria-current='step'] {
+    background: var(--bg);
+    box-shadow: var(--press-sm);
+  }
+
+  .import-path li small {
+    margin-left: 0;
+  }
 }
 
 /* 1rem is 15 px here, so the shared button needs lifting to a full touch target. */
 @media (max-width: 720px) {
+  .import-done-actions .btn {
+    flex: 1 1 100%;
+  }
+
   .import-table > tbody > tr {
     grid-template-columns: 1fr auto;
     grid-template-areas: "desc amount" "date status";

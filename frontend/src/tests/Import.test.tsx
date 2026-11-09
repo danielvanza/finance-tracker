@@ -64,7 +64,11 @@ describe('failed preview', () => {
 
 describe('after a successful import', () => {
   const importFile = async (result: Partial<import('../types').ImportConfirmResponse>) => {
-    vi.mocked(api.previewImport).mockResolvedValueOnce({ rows: [], total: 1, duplicates: 0 })
+    vi.mocked(api.previewImport).mockResolvedValueOnce({
+      rows: [{ date: '2026-11-09', amount_cents: -2340, description: 'Albert Heijn', source: 'ing', import_hash: 'h1', duplicate: false }],
+      total: 1,
+      duplicates: 0,
+    })
     vi.mocked(api.confirmImport).mockResolvedValueOnce({
       imported: 1, skipped_duplicates: 0, categorised_by_rule: 0, categorised_by_ai: 0, uncategorised: 0, ...result,
     })

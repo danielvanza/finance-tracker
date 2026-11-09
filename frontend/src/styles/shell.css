@@ -1,0 +1,284 @@
+/* Shell. Phone first: a slim clay top row, the page, and the nav as a clay slab along the bottom.
+   Desktop: the side panel is one raised clay card. Pressable things lift a pixel under the
+   pointer and sink when pressed; the current tab is pressed in. */
+
+.shell {
+  min-height: 100svh;
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: calc(0.6rem + env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) 0
+    max(0.75rem, env(safe-area-inset-left));
+  padding: 0.5rem 0.75rem 0.5rem 1.05rem;
+  background: var(--card);
+  border-radius: var(--r-row);
+  box-shadow: var(--raise-sm);
+}
+
+.brand {
+  font: italic 400 1.35rem/1 var(--serif);
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--r-chip);
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.side .brand:focus-visible,
+.side .back:focus-visible,
+.tabbar a:focus-visible::before {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+}
+
+.tabbar a:focus-visible {
+  outline: none;
+}
+
+.content {
+  overflow-wrap: anywhere;
+  padding: 0.6rem max(1.1rem, env(safe-area-inset-right)) calc(var(--bar-h) + 2.5rem + env(safe-area-inset-bottom))
+    max(1.1rem, env(safe-area-inset-left));
+}
+
+/* The way back to the dashboard: a raised clay chip. */
+.back {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: var(--tap);
+  padding: 0 0.8rem;
+  border-radius: var(--r-chip);
+  font: 400 0.7rem/1 var(--mono);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--raised);
+  box-shadow: var(--raise-sm);
+}
+
+.back:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-around;
+  gap: 0.2rem;
+  padding: 0 max(0.5rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.5rem, env(safe-area-inset-left));
+  background: var(--card);
+  border-radius: var(--r-row) var(--r-row) 0 0;
+  box-shadow: var(--raise);
+}
+
+/* Each tab is the full height of the bar (an easy target); its clay chip is drawn inside it. */
+.tabbar a {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--bar-h);
+  font: 400 0.6rem/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tabbar a::before {
+  content: '';
+  position: absolute;
+  inset: 0.5rem 0.3rem;
+  z-index: 0;
+  border-radius: var(--r-chip);
+  background: var(--raised);
+  box-shadow: var(--raise-sm);
+}
+
+.tabbar a:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .tabbar a:not([aria-current='page']):hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* The current tab: ink label (navigation text keeps 4.5:1), marked with a vermilion underline. */
+.tabbar a[aria-current='page'],
+.tabbar a[aria-current='page']:hover {
+  color: var(--ink);
+  text-decoration: underline 2px var(--shu);
+  text-underline-offset: 0.45em;
+}
+
+.tabbar a[aria-current='page']::before {
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+}
+
+@media (max-width: 380px) {
+  .tabbar a {
+    letter-spacing: 0.04em;
+  }
+}
+
+/* Switching tabs: one pressed-in well glides from the old tab to the new one, between the chips
+   and their labels (useTabWell in App.tsx places it). At rest it lies under the current tab, which
+   sits on top (a pressed tab is still scaled while the well arrives) and draws the same pressed
+   chip; that chip waits, hidden, while the well is on its way. */
+.tab-label {
+  position: relative;
+  z-index: 2;
+}
+
+.tabbar a[aria-current='page'] {
+  z-index: 2;
+}
+
+.tab-well {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tabbar[data-gliding] a[aria-current='page']::before {
+  opacity: 0;
+}
+
+/* A new tab's page fades in. */
+.content {
+  animation: page-in 0.18s ease-out backwards;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-well {
+    transition: none;
+  }
+
+  .content {
+    animation: none;
+  }
+}
+
+/* Desktop: the side panel is one raised clay card. */
+
+@media (min-width: 1024px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--side-w) 1fr;
+  }
+
+  .side {
+    position: sticky;
+    top: 1.2rem;
+    height: calc(100svh - 2.4rem);
+    margin: 1.2rem 0 1.2rem 1.2rem;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2rem;
+    padding: 2.1rem 1.1rem 1.6rem;
+    border-radius: var(--r-card);
+    box-shadow: var(--raise-lg);
+  }
+
+  .side > .brand,
+  .side > .back {
+    align-self: flex-start;
+    margin-left: 0.6rem;
+  }
+
+  .side > .back {
+    order: 3;
+  }
+
+  .brand {
+    font-size: 1.6rem;
+  }
+
+  /* The tabs are raised clay rows in the card; the current one is pressed in. */
+  .tabbar {
+    position: relative;
+    isolation: isolate;
+    order: 2;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .tabbar a {
+    height: auto;
+    justify-content: flex-start;
+    padding: 0.8rem 1rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+  }
+
+  .tabbar a::before {
+    inset: 0;
+    border-radius: var(--r-row);
+  }
+
+  .content {
+    padding: 2.4rem 3.5rem 4rem;
+    max-width: 92rem;
+  }
+}
+
+/* Wide screens: the pages use the width. */
+@media (min-width: 1600px) {
+  .content {
+    max-width: none;
+  }
+}
+
+
+/* The day/night switch: colours and shadows fade in place (about 0.7 s). The class is only on
+   while switching, so it never slows other transitions down. Nothing covers the page. */
+html.theme-fading,
+html.theme-fading *,
+html.theme-fading *::before,
+html.theme-fading *::after {
+  transition: background-color 0.7s ease-in-out, color 0.7s ease-in-out, border-color 0.7s ease-in-out,
+    box-shadow 0.7s ease-in-out, fill 0.7s ease-in-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-fading,
+  html.theme-fading * {
+    transition: none !important;
+  }
+}

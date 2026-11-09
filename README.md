@@ -8,8 +8,8 @@ Personal finance tracker for a Dutch household. Import bank transactions from CS
 
 ```
 frontend/          React 19 + TypeScript + Vite (port 5173)
-  src/pages/       Dashboard, Import, Transactions, Budget, Rules
-  src/components/  Nav, SummaryCards, ReviewCard
+  src/pages/       Month, Transactions, Trends, Setup, Import
+  src/components/  ReviewCard, CategorySelect, CategoryManager, StandingAdjustments
   src/api.ts       All backend fetch calls via /api proxy
 
 backend/           FastAPI + SQLAlchemy + SQLite (port 8000)
@@ -135,12 +135,14 @@ AI-categorised and uncategorised transactions appear in a review queue on the Tr
 - **Skip** to review later
 - **Create a rule** -- saves a pattern-based rule and retroactively applies it to all matching unconfirmed transactions
 
-### Dashboard
+### Month
 
-- Summary cards: income, spent, saved, left over
-- Bar chart: planned vs actual by category
-- Pie chart: 50/30/20 needs/wants/savings split
-- Line chart: 6-month spending trend
+- What's left to spend this financial month (needs + wants), and whether that is more or less than planned by now
+- Spending against plan as one line across the month, with today marked
+- Needs, wants and savings against plan, then every category: open one to edit its plan or see its transactions
+- After a gap in the bank files it says it can't tell yet, names the gap, and offers the import
+
+Trends holds the month-by-month history. Setup holds rules, categories, standing adjustments and the month start day.
 
 ## Project Structure
 
@@ -164,7 +166,7 @@ backend/
     transactions.py    GET/PATCH /transactions, /transactions/review
     budget.py          GET/PATCH /budget
     rules.py           CRUD /rules, POST /rules/test
-    dashboard.py       GET /dashboard/summary
+    dashboard.py       GET /dashboard/summary, /dashboard/pace, /dashboard/trends
     categories.py      GET /categories
   tests/               pytest suite (35 tests, in-memory SQLite)
 
@@ -174,7 +176,7 @@ frontend/
     api.ts             Backend API client
     types.ts           TypeScript interfaces
     index.css          Dark theme design system
-    pages/             Dashboard, Import, Transactions, Budget, Rules
-    components/        Nav, SummaryCards, ReviewCard
+    pages/             Month, Transactions, Trends, Setup, Import
+    components/        ReviewCard, CategorySelect, CategoryManager, StandingAdjustments
     tests/             vitest suite (6 tests, jsdom)
 ```

@@ -47,9 +47,9 @@ describe('CategoryManager', () => {
     renderWithClient(<CategoryManager />)
     await screen.findByText('Needs')
 
-    fireEvent.click(screen.getByText('+ Add category'))
+    fireEvent.click(screen.getByText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('e.g. Pet Care'), { target: { value: 'Pet Care' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.click(screen.getByText('Add category'))
 
     await waitFor(() => {
       expect(api.createCategory).toHaveBeenCalledWith({ name: 'Pet Care', type: 'needs' })
@@ -64,8 +64,8 @@ describe('CategoryManager', () => {
     renderWithClient(<CategoryManager />)
     await screen.findByText('Needs')
 
-    fireEvent.click(screen.getByText('+ Add category'))
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.click(screen.getByText('Add category'))
+    fireEvent.click(screen.getByText('Add category'))
 
     expect(await screen.findByText('Name is required')).toBeTruthy()
     expect(api.createCategory).not.toHaveBeenCalled()
@@ -100,9 +100,9 @@ describe('CategoryManager', () => {
     renderWithClient(<CategoryManager />)
     await screen.findByText('Needs')
 
-    fireEvent.click(screen.getByText('+ Add category'))
+    fireEvent.click(screen.getByText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('e.g. Pet Care'), { target: { value: 'Utilities' } })
-    fireEvent.click(screen.getByText('Add'))
+    fireEvent.click(screen.getByText('Add category'))
 
     expect(await screen.findByText(/'Utilities' already exists/)).toBeTruthy()
   })

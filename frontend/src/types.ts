@@ -85,6 +85,44 @@ export interface DashboardSummary {
   }>
 }
 
+export interface Pace {
+  month: string
+  current_month: string
+  status: 'ok' | 'gap' | 'empty'
+  start_date: string
+  end_date: string
+  today: string
+  days_total: number
+  day_number: number | null
+  days_left: number | null
+  plan_cents: { needs: number; wants: number; savings: number }
+  actual_cents: { needs: number; wants: number; savings: number }
+  spendable_plan_cents: number
+  spendable_actual_cents: number
+  pace_delta_cents: number | null
+  daily: Array<{ date: string; cumulative_cents: number }>
+  data_through: string | null
+  last_import_by_bank: Array<{ source: string; last_date: string | null }>
+  behind_months: string[]
+  to_review: number
+}
+
+export interface TrendMonth {
+  month: string
+  total_expenses_cents: number
+  needs_cents: number
+  wants_cents: number
+  savings_cents: number
+  total_income_cents: number
+}
+
+export interface DashboardTrends {
+  months_requested: number
+  start_month: string
+  end_month: string
+  series: TrendMonth[] // oldest first
+}
+
 export interface SettingsMap { [key: string]: string }
 
 export interface ImportPreviewRow {

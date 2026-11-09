@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus } from 'lucide-react'
 import { api } from '../api'
 import { formatCents } from '../money'
 import type { Transaction } from '../types'
@@ -12,14 +13,14 @@ import TransactionsTable from './transactions/TransactionsTable'
 
 export default function Transactions() {
   const qc = useQueryClient()
-  const [showReview, setShowReview] = useState(false)
+  const [showReview, setShowReview] = useState(true)
   const [skippedIds, setSkippedIds] = useState<number[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [splitTx, setSplitTx] = useState<Transaction | null>(null)
   const [sourceFilter, setSourceFilter] = useState('all')
   const [actionError, setActionError] = useState('')
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [], isLoading: listLoading, error: listError } = useQuery({
     queryKey: ['transactions', sourceFilter],
     queryFn: () => api.getTransactions(sourceFilter === 'all' ? {} : { source: sourceFilter }),
   })
@@ -27,7 +28,7 @@ export default function Transactions() {
     queryKey: ['categories'],
     queryFn: () => api.getCategories(),
   })
-  const { data: reviewTx } = useQuery({
+  const { data: reviewTx, isLoading: reviewLoading, error: reviewError } = useQuery({
     queryKey: ['review', skippedIds],
     queryFn: () => api.getNextReview(skippedIds),
     enabled: showReview,
@@ -81,139 +82,94 @@ export default function Transactions() {
     }
   }
 
+  const reviewSkeleton = showReview && reviewLoading && unconfirmedCount > 0
+  const onlySkippedLeft = showReview && !reviewTx && !reviewLoading && !reviewError && skippedIds.length > 0
+  const reviewVisible = (showReview && !!reviewTx) || reviewSkeleton || onlySkippedLeft
+
   return (
-    <div className="animate-fade-in">
-      {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
+    <div className="tx-page">
+      <div className="page-head">
         <div>
-          <h1 style={{ marginBottom: 4 }}>Transactions</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {transactions.length} transactions
-            {unconfirmedCount > 0 && (
-              <span style={{ marginLeft: 10, color: 'var(--orange)', fontWeight: 500 }}>
-                · {unconfirmedCount} pending review
-              </span>
-            )}
-          </p>
+          <h1>Transactions</h1>
+          {!listLoading && !listError && (
+            <p className="num">
+              {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
+              {unconfirmedCount > 0 && ` · ${unconfirmedCount} to review`}
+            </p>
+          )}
         </div>
-        <div className="page-actions" style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={() => setShowAdd(true)}
-            style={{
-              background: 'transparent',
-              color: 'var(--accent-light)',
-              border: '1px solid var(--accent-border)',
-              borderRadius: 'var(--radius)', padding: '9px 16px',
-              cursor: 'pointer', fontWeight: 600, fontSize: 13,
-              fontFamily: 'var(--sans)',
-              display: 'flex', alignItems: 'center', gap: 7,
-              letterSpacing: '-0.01em',
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Transaction
+        <div className="page-actions">
+          <button type="button" className="btn" onClick={() => setShowAdd(true)}>
+            <Plus size={15} aria-hidden="true" />
+            Add transaction
           </button>
           {unconfirmedCount > 0 && (
             <button
+              type="button"
+              className={showReview ? 'btn' : 'btn btn-primary'}
               onClick={() => setShowReview(!showReview)}
-              style={{
-                background: showReview
-                  ? 'var(--orange-bg)'
-                  : 'linear-gradient(135deg, #c2410c, #ea580c)',
-                color: showReview ? 'var(--orange)' : '#fff',
-                border: showReview ? '1px solid var(--orange-border)' : 'none',
-                borderRadius: 'var(--radius)', padding: '9px 16px',
-                cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                fontFamily: 'var(--sans)',
-                display: 'flex', alignItems: 'center', gap: 8,
-                transition: 'all 0.2s ease',
-                boxShadow: showReview ? 'none' : '0 4px 14px rgba(234,88,12,0.4)',
-                letterSpacing: '-0.01em',
-              }}
             >
-              <span style={{
-                background: showReview ? 'var(--orange)' : 'rgba(255,255,255,0.2)',
-                color: '#fff',
-                borderRadius: 'var(--radius-full)',
-                width: 20, height: 20,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 800,
-              }}>{unconfirmedCount}</span>
-              {showReview ? 'Close Review' : 'Review Pending'}
+              {showReview ? 'Close review' : <><span className="num">{unconfirmedCount}</span> Review pending</>}
             </button>
           )}
         </div>
       </div>
 
-      {/* Review panel */}
-      {actionError && <ErrorBanner message={actionError} />}
-      {showReview && reviewTx && (
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'var(--orange)',
-                boxShadow: '0 0 8px var(--orange)',
-                animation: 'pulseGlow 2s ease-in-out infinite',
-              }} />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-h)' }}>Review Queue</h3>
+      {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />}
+      {showReview && reviewError && <ErrorBanner message={describeApiError(reviewError)} />}
+
+      <div className={`tx-layout${reviewVisible ? ' has-review' : ''}`}>
+        {reviewVisible && (
+          <section className="tx-review" aria-label="Review queue">
+            {reviewSkeleton && <span className="skeleton tx-skel-review" aria-busy="true" aria-label="Loading the next transaction" />}
+
+            {showReview && reviewTx && (
+              <>
+                <div className="tx-review-head">
+                  <h2>To review</h2>
+                  <span className="lab num">
+                    {unconfirmedCount} remaining{skippedIds.length > 0 && ` · ${skippedIds.length} skipped`}
+                  </span>
+                </div>
+                <ReviewCard
+                  key={reviewTx.id}
+                  transaction={reviewTx}
+                  categories={categories}
+                  onConfirm={handleConfirm}
+                  onSkip={() => handleSkip(reviewTx.id)}
+                  onCreateRule={handleCreateRule}
+                />
+              </>
+            )}
+
+            {/* All non-skipped reviewed, but skipped items remain */}
+            {onlySkippedLeft && (
+              <div className="panel tx-skipped">
+                <p>{skippedIds.length} transaction{skippedIds.length > 1 ? 's' : ''} skipped. Review {skippedIds.length > 1 ? 'them' : 'it'} now?</p>
+                <button type="button" className="btn btn-primary" onClick={() => setSkippedIds([])}>Review skipped</button>
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="tx-list" aria-label="All transactions">
+          <TransactionsToolbar sourceFilter={sourceFilter} setSourceFilter={setSourceFilter} />
+          {listError ? (
+            <ErrorBanner title="Transactions didn't load" message={describeApiError(listError)} />
+          ) : listLoading ? (
+            <div className="panel tx-panel" aria-busy="true" aria-label="Loading transactions">
+              {[0, 1, 2, 3, 4].map(i => <span key={i} className="skeleton tx-skel-row" />)}
             </div>
-            <span style={{
-              fontSize: 11, color: 'var(--orange)', background: 'var(--orange-bg)',
-              border: '1px solid var(--orange-border)', borderRadius: 'var(--radius-full)',
-              padding: '2px 9px', fontWeight: 700, letterSpacing: '0.02em',
-            }}>{unconfirmedCount} remaining{skippedIds.length > 0 && ` · ${skippedIds.length} skipped`}</span>
-          </div>
-          <ReviewCard
-            key={reviewTx.id}
-            transaction={reviewTx}
-            categories={categories}
-            onConfirm={handleConfirm}
-            onSkip={() => handleSkip(reviewTx.id)}
-            onCreateRule={handleCreateRule}
-          />
-        </div>
-      )}
-
-      {/* All non-skipped reviewed, but skipped items remain */}
-      {showReview && !reviewTx && skippedIds.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
-          <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '24px',
-            textAlign: 'center',
-            maxWidth: 520,
-          }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 14 }}>
-              You skipped {skippedIds.length} transaction{skippedIds.length > 1 ? 's' : ''}. Ready to review them?
-            </p>
-            <button
-              onClick={() => setSkippedIds([])}
-              style={{
-                background: 'linear-gradient(135deg, #c2410c, #ea580c)',
-                color: '#fff', border: 'none',
-                borderRadius: 'var(--radius)', padding: '9px 20px',
-                cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                fontFamily: 'var(--sans)',
-                boxShadow: '0 4px 14px rgba(234,88,12,0.4)',
-              }}
-            >
-              Review Skipped
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Source filter */}
-      <TransactionsToolbar sourceFilter={sourceFilter} setSourceFilter={setSourceFilter} />
-
-      {/* Transactions table */}
-      <TransactionsTable transactions={transactions} setSplitTx={setSplitTx} handleDelete={handleDelete} />
+          ) : (
+            <TransactionsTable
+              transactions={transactions}
+              setSplitTx={setSplitTx}
+              handleDelete={handleDelete}
+              filtered={sourceFilter !== 'all'}
+            />
+          )}
+        </section>
+      </div>
 
       {showAdd && (
         <AddTransactionModal
@@ -230,8 +186,6 @@ export default function Transactions() {
           onSaved={invalidate}
         />
       )}
-
-      <style>{`@keyframes pulseGlow { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }`}</style>
     </div>
   )
 }

@@ -1,0 +1,327 @@
+/* The shared parts every page is built from. Raised means you can press it, or it holds things;
+   pressed in means a well. Colours, radii and shadows only ever come from tokens. */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.4rem;
+}
+
+.page-head p {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.lab {
+  font: 400 0.68rem/1.2 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--raise);
+  padding: 1.15rem 1.25rem;
+}
+
+.well {
+  background: var(--bg);
+  border-radius: var(--r-row);
+  box-shadow: var(--press-sm);
+  padding: 0.9rem 1rem;
+}
+
+.section {
+  margin-top: 2.2rem;
+}
+
+.section > h2 {
+  margin-bottom: 0.8rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+  padding: 0 1rem;
+  border-radius: var(--r-chip);
+  font: 500 0.875rem/1.1 var(--sans);
+  color: var(--ink);
+  white-space: nowrap;
+  background: var(--raised);
+  box-shadow: var(--raise-sm);
+}
+
+.btn:hover {
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .btn:hover:not(:disabled):not(:active) {
+    transform: translateY(-1px);
+  }
+}
+
+.btn-primary {
+  font-weight: 700;
+  color: var(--on-shu);
+  background: var(--shu);
+}
+
+/* Quiet at rest: long lists carry one of these per row. */
+.btn-danger {
+  color: var(--quiet);
+}
+
+@media (hover: hover) {
+  .btn-danger:hover:not(:disabled) {
+    color: var(--error);
+  }
+}
+
+.btn-danger:is(:active, .is-pressed):not(:disabled) {
+  color: var(--error);
+}
+
+.btn-sm {
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+}
+
+.btn-wide {
+  display: flex;
+  width: 100%;
+}
+
+.btn:disabled {
+  color: var(--muted);
+  background: transparent;
+  box-shadow: var(--flat-sm);
+}
+
+/* A row of choices, one pressed in. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.seg button {
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+  border-radius: var(--r-chip);
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--raised);
+  box-shadow: var(--raise-sm);
+}
+
+.seg button[aria-pressed='true'] {
+  color: var(--ink);
+  font-weight: 700;
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+}
+
+/* A mouse can hit smaller things; a finger can't. */
+@media (pointer: coarse), (max-width: 720px) {
+  .btn-sm,
+  .seg button {
+    min-height: var(--tap);
+  }
+}
+
+/* Fields: pressed-in wells. Use with input, select or textarea. */
+.field {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.55rem 0.8rem;
+  border: 0;
+  border-radius: var(--r-chip);
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+  caret-color: var(--shu);
+}
+
+.field::placeholder {
+  color: var(--quiet);
+}
+
+.field:disabled {
+  color: var(--muted);
+}
+
+.field-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+select.field {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 1.05rem) 55%, calc(100% - 0.75rem) 55%;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-row > label,
+label.lab {
+  display: block;
+}
+
+/* Meters: a pressed-in track, a fill, and a tick where today falls. */
+.meter {
+  position: relative;
+  height: 0.6rem;
+  border-radius: 0.3rem;
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+}
+
+.meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 0.3rem;
+  background: var(--fill);
+}
+
+.meter b {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--tick);
+}
+
+/* Messages */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  max-width: 40rem;
+  margin-bottom: 1.2rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--r-row);
+  background: var(--card);
+  box-shadow: var(--raise-sm);
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.notice-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice strong {
+  display: block;
+  font-weight: 700;
+}
+
+.notice-error strong {
+  color: var(--error);
+}
+
+.notice button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin: -0.65rem -0.75rem -0.65rem 0;
+  color: var(--muted);
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--quiet);
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--r-row);
+  background: var(--raised);
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Sheets: a modal is a bottom sheet on a phone and a centred card on a desktop. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--scrim);
+}
+
+.sheet {
+  width: 100%;
+  max-height: 88svh;
+  overflow-y: auto;
+  padding: 1.3rem 1.25rem calc(1.3rem + env(safe-area-inset-bottom));
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  background: var(--card);
+  box-shadow: var(--float-sheet);
+}
+
+.sheet h2 {
+  margin-bottom: 1rem;
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+@media (min-width: 720px) {
+  .scrim {
+    align-items: center;
+    padding: 2rem;
+  }
+
+  .sheet {
+    max-width: 34rem;
+    padding-bottom: 1.3rem;
+    border-radius: var(--r-card);
+    box-shadow: var(--float-pop);
+  }
+}

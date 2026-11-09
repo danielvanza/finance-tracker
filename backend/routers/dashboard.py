@@ -1,16 +1,25 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
 from decimal import Decimal
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from aggregate import effective_parts, is_spend_part, spend_contribution
 from db import get_db
 from financial_month import label_month_for_date
-from models import Budget, Category
+from models import Budget, Category, Transaction, TransactionSource
+from routers.budget import _auto_populate
 import money
 import spend_service
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 EXPENSE_TYPES = ("needs", "wants", "savings")
+SPENDABLE_TYPES = ("needs", "wants")
+BANK_SOURCES = (TransactionSource.ing, TransactionSource.revolut, TransactionSource.degiro)
+
+
+def _today() -> date:
+    return date.today()
 
 
 def _cat_type(category: Category) -> str:
@@ -103,6 +112,117 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
             "savings_cents": money.to_cents(total_savings),
         },
         "monthly_trend": trend,
+    }
+
+
+@router.get("/pace")
+def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
+    """Spending against plan across one financial month (default: the current one).
+
+    Spendable means needs + wants; savings are reported but are not "left to
+    spend". Only confirmed transactions count, as everywhere else. A month with
+    no bank transactions has no answer yet, whatever manual entries it holds.
+    """
+    start_day = spend_service.get_start_day(db)
+    today = _today()
+    current_label = label_month_for_date(today, start_day)
+    if month is None:
+        year, mo = current_label
+    else:
+        try:
+            parsed = datetime.strptime(month, "%Y-%m")
+            year, mo = parsed.year, parsed.month
+        except ValueError:
+            raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
+
+    month_date = date(year, mo, 1)
+    _auto_populate(month_date, db)
+    start, end = spend_service.financial_month_bounds(db, year, mo, materialise=True)
+    types = {c.id: _cat_type(c) for c in db.query(Category).all()}
+
+    plan = {kind: Decimal("0") for kind in EXPENSE_TYPES}
+    for row in db.query(Budget).filter(Budget.month == month_date).all():
+        kind = types.get(row.category_id)
+        if kind in plan:
+            plan[kind] += row.planned_amount
+
+    confirmed = db.query(Transaction).options(selectinload(Transaction.splits)).filter(
+        Transaction.date >= start,
+        Transaction.date <= end,
+        Transaction.confirmed == True,  # noqa: E712 - historic form
+    ).all()
+    actual = {kind: Decimal("0") for kind in EXPENSE_TYPES}
+    spent_on: dict[date, Decimal] = {}
+    for tx in confirmed:
+        for category_id, amount, is_refund in effective_parts(tx):
+            kind = types.get(category_id)
+            if kind not in EXPENSE_TYPES or not is_spend_part(amount, is_refund):
+                continue
+            contribution = spend_contribution(amount, is_refund)
+            actual[kind] += contribution
+            if kind in SPENDABLE_TYPES:
+                spent_on[tx.date] = spent_on.get(tx.date, Decimal("0")) + contribution
+
+    from_bank = db.query(Transaction).filter(Transaction.source.in_(BANK_SOURCES))
+    data_through = from_bank.filter(
+        Transaction.date >= start, Transaction.date <= end,
+    ).with_entities(func.max(Transaction.date)).scalar()
+    last_by_source = dict(
+        from_bank.with_entities(Transaction.source, func.max(Transaction.date))
+        .group_by(Transaction.source).all()
+    )
+    last_any = max(last_by_source.values(), default=None)
+
+    # Each day through the last day the bank files reach, however quiet.
+    daily = []
+    running = Decimal("0")
+    if data_through is not None:
+        day = start
+        while day <= data_through:
+            running += spent_on.get(day, Decimal("0"))
+            daily.append({"date": day.isoformat(), "cumulative_cents": money.to_cents(running)})
+            day += timedelta(days=1)
+
+    spendable_plan = money.to_cents(sum(plan[k] for k in SPENDABLE_TYPES))
+    days_total = (end - start).days + 1
+    pace_delta_cents = None
+    if data_through is not None:
+        days_covered = (data_through - start).days + 1
+        expected = spendable_plan * days_covered // days_total
+        pace_delta_cents = money.to_cents(running) - expected
+
+    behind_months = []
+    if last_any is not None:
+        y, m = label_month_for_date(last_any, start_day)
+        while (y, m) <= current_label:
+            behind_months.append(f"{y}-{m:02d}")
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+
+    is_current = (year, mo) == current_label
+    return {
+        "month": f"{year}-{mo:02d}",
+        "current_month": f"{current_label[0]}-{current_label[1]:02d}",
+        "status": "ok" if data_through else ("gap" if last_any else "empty"),
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "today": today.isoformat(),
+        "days_total": days_total,
+        "day_number": (today - start).days + 1 if is_current else None,
+        "days_left": (end - today).days if is_current else None,
+        "plan_cents": {k: money.to_cents(v) for k, v in plan.items()},
+        "actual_cents": {k: money.to_cents(v) for k, v in actual.items()},
+        "spendable_plan_cents": spendable_plan,
+        "spendable_actual_cents": money.to_cents(sum(actual[k] for k in SPENDABLE_TYPES)),
+        "pace_delta_cents": pace_delta_cents,
+        "daily": daily,
+        "data_through": data_through.isoformat() if data_through else None,
+        "last_import_by_bank": [
+            {"source": s.value, "last_date": last_by_source[s].isoformat() if s in last_by_source else None}
+            for s in BANK_SOURCES
+        ],
+        "behind_months": behind_months,
+        "to_review": db.query(func.count(Transaction.id)).filter(
+            Transaction.confirmed == False).scalar(),  # noqa: E712
     }
 
 

@@ -1,0 +1,294 @@
+/* Setup: rules, categories, standing adjustments, settings. */
+
+/* One column on a phone. Wider, the long categories list sits beside the shorter sections. */
+.setup-sections {
+  display: grid;
+  gap: 2.2rem;
+}
+
+.setup-sections > .section {
+  margin-top: 0;
+  min-width: 0;
+}
+
+.setup-panel > * + * {
+  margin-top: 0.9rem;
+}
+
+.setup-note {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.setup-skeleton {
+  height: 8rem;
+}
+
+.setup-mono {
+  font-family: var(--mono);
+}
+
+.setup-error {
+  font-size: 0.85rem;
+  color: var(--error);
+}
+
+.setup-saved {
+  font-size: 0.85rem;
+  color: var(--moss);
+}
+
+/* Rules */
+.setup-rule-form {
+  display: grid;
+  gap: 0.9rem;
+  margin-bottom: 1.2rem;
+}
+
+.setup-table-panel {
+  padding: 0.4rem 0.5rem;
+}
+
+.setup-code {
+  font: 400 0.85rem/1.3 var(--mono);
+  color: var(--ink);
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+/* Categories */
+.setup-group h3 {
+  margin-bottom: 0.3rem;
+}
+
+.setup-cat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.setup-grip {
+  flex: none;
+  color: var(--quiet);
+  cursor: grab;
+}
+
+/* A name reads as text until it's touched, then sinks in as a field. */
+.setup-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: var(--r-chip);
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: transparent;
+  caret-color: var(--shu);
+}
+
+.setup-name:hover,
+.setup-name:focus {
+  background: var(--bg);
+  box-shadow: var(--press-sm);
+}
+
+.setup-icon {
+  flex: none;
+  width: 2.25rem;
+  padding: 0;
+}
+
+.setup-add-form > * + * {
+  margin-top: 0.9rem;
+}
+
+.setup-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.9rem;
+}
+
+.setup-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+/* Standing adjustments */
+.setup-adj {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.setup-adj-text {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.setup-adj-text strong {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.setup-adj-text small {
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.setup-adj.is-paused .setup-adj-text strong {
+  color: var(--quiet);
+}
+
+.setup-amount {
+  position: relative;
+  flex: 1 1 7rem;
+  max-width: 9rem;
+}
+
+.setup-amount span {
+  position: absolute;
+  top: 50%;
+  left: 0.7rem;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  color: var(--quiet);
+  pointer-events: none;
+}
+
+.setup-amount .field {
+  padding-left: 1.6rem;
+}
+
+/* Financial month start day */
+.setup-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem 0.75rem;
+}
+
+.setup-start-day {
+  width: 6rem;
+}
+
+.setup-start .setup-saved,
+.setup-start .setup-error {
+  align-self: center;
+}
+
+.setup-example {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.setup-example strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@media (min-width: 560px) {
+  .setup-adj-text {
+    flex: 1 1 12rem;
+  }
+
+  .setup-amount {
+    flex: 0 0 8rem;
+  }
+}
+
+@media (min-width: 720px) {
+  .setup-rule-form {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
+@media (min-width: 1100px) {
+  .setup-sections {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: auto auto 1fr;
+    align-items: start;
+  }
+
+  .setup-sections > :nth-child(2) {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  .setup-sections > :nth-child(3) {
+    grid-column: 1;
+  }
+
+  .setup-sections > :nth-child(4) {
+    grid-column: 1;
+  }
+}
+
+@media (min-width: 1800px) {
+  .setup-sections {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .setup-sections > :nth-child(1) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .setup-sections > :nth-child(2) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .setup-sections > :nth-child(3) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .setup-sections > :nth-child(4) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .setup-name {
+    min-height: var(--tap);
+  }
+
+  .setup-icon {
+    width: var(--tap);
+  }
+}
+
+@media (max-width: 720px) {
+  .rules-table > tbody > tr:not(:has(> td:only-child)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "pattern pattern" "cat actions";
+  }
+  .rules-table > tbody > tr.is-editing {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "pattern" "cat" "actions";
+  }
+  .rules-table > tbody > tr > td:nth-child(1):not(:only-child) { grid-area: pattern; overflow-wrap: anywhere; }
+  .rules-table > tbody > tr > td:nth-child(2) { grid-area: cat; }
+  .rules-table code { display: inline-block; overflow-wrap: anywhere; }
+  .rules-table > tbody > tr > td:nth-child(3) { grid-area: actions; }
+}
+
+.setup-rule-form .cs-trigger {
+  min-height: var(--tap);
+}

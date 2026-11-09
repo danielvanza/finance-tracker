@@ -1,0 +1,247 @@
+/* Copied from life-dashboard/frontend/src/styles/base.css so the two apps read as one system.
+   Change a token there first, then here. Finance-only additions are at the end of this block. */
+/* Clay × Japandi: Washi Clay by day, Charcoal Clay by night (UI Style Library 17 and 18 in the
+   second brain). Tactile clay surfaces: things you can press are raised, wells are pressed in.
+   Layout and type are the same in both; only these tokens change. */
+
+:root,
+:root[data-theme='day'] {
+  --bg: #efe6d6; /* washi clay */
+  --card: #f4ecdd; /* raised panels */
+  --raised: #f8f1e5; /* rows, chips, pressable things */
+  --hi: #fffaf0; /* light shadow, top left */
+  --lo: #d3c7b3; /* dark shadow, bottom right */
+  --ink: #2a2520;
+  --text: #4a433b;
+  --muted: #8c8378;
+  --shu: #b54b35; /* vermilion: now, done, the one thing that matters */
+  --on-shu: #f8eee0;
+  --gold: #b08a4a; /* the name, the moon */
+  --moss: #6b7a5a;
+  --press-tint: #eae0d0; /* under a finger: the clay, a touch darker (82% --bg, 18% --lo) */
+  --plan: #e6ead9; /* the daily plan's blocks: pressed in, moss tint */
+  --plan-lo: #cdd1bf;
+  --plan-hi: #f9fbef;
+  --line: rgba(42, 37, 32, 0.06);
+  --error: #9b2f1f;
+  --scrim: rgba(42, 37, 32, 0.32); /* behind a picker sheet: the ink, thinned */
+  --glow: none;
+  color-scheme: light;
+}
+
+:root[data-theme='night'] {
+  --bg: #2a2622; /* charcoal clay, like a raku bowl */
+  --card: #2f2a26;
+  --raised: #332e29;
+  --hi: #3c3631;
+  --lo: #1b1815;
+  --ink: #efe5d3;
+  --text: #cfc4b2;
+  --muted: #8f8576;
+  --shu: #d8664a; /* terracotta */
+  --on-shu: #2a1a12;
+  --gold: #d2ad6a;
+  --moss: #9fb08a;
+  --press-tint: #272320;
+  --plan: #2f3229;
+  --plan-lo: #1d1f19;
+  --plan-hi: #3a3e33;
+  --line: rgba(239, 229, 211, 0.05);
+  --error: #e0735a;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --glow: radial-gradient(1200px 700px at 30% 10%, rgba(255, 220, 170, 0.05), transparent 60%); /* lamplight */
+  color-scheme: dark;
+}
+
+/* Clay recipes: route every raised or pressed surface through these. */
+:root {
+  /* Raised and pressed share the same four layers (two outer, two inset; the unused ones are
+     zero), so a chip that is pressed flattens and sinks smoothly instead of jumping. */
+  --raise: 6px 6px 14px var(--lo), -6px -6px 14px var(--hi), inset 0 0 0 var(--lo), inset 0 0 0 var(--hi);
+  --raise-sm: 3px 3px 6px var(--lo), -3px -3px 6px var(--hi), inset 0 0 0 var(--lo), inset 0 0 0 var(--hi);
+  --raise-lg: 14px 14px 30px var(--lo), -12px -12px 26px var(--hi);
+  --press: 0 0 0 var(--lo), 0 0 0 var(--hi), inset 5px 5px 10px var(--lo), inset -5px -5px 10px var(--hi);
+  --press-sm: 0 0 0 var(--lo), 0 0 0 var(--hi), inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi);
+  /* Held down under a finger (press.css): a little deeper than --press-sm. */
+  --press-held: 0 0 0 var(--lo), 0 0 0 var(--hi), inset 4px 4px 9px var(--lo), inset -4px -4px 9px var(--hi);
+  /* Soft clay: it presses in slowly and puffs back up more slowly still. */
+  --press-in: 160ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --press-out: 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  --flat-sm: inset 0 0 0 1px var(--dash); /* a disabled chip: flat, only a hairline */
+  --bead: inset 2px 2px 4px rgba(255, 255, 255, 0.3), inset -3px -3px 5px rgba(0, 0, 0, 0.2), 3px 4px 8px rgba(0, 0, 0, 0.25);
+  /* A bead pressed into the clay (the seal while held or while its card is open): same layers. */
+  --bead-sunk: inset 3px 3px 6px rgba(0, 0, 0, 0.3), inset -2px -2px 4px rgba(255, 255, 255, 0.12), 0 0 0 rgba(0, 0, 0, 0);
+  /* Floating over the page (the pickers): a bottom sheet casts upwards, a popover downwards. */
+  --float-sheet: 0 -10px 30px rgba(0, 0, 0, 0.18);
+  --float-pop: 0 18px 40px rgba(0, 0, 0, 0.16);
+  --r-card: 32px;
+  --r-row: 20px;
+  --r-chip: 14px;
+  --tap: 44px; /* minimum touch target */
+
+  /* Older names, still used across the pages. */
+  --paper-2: var(--card);
+  --soft: var(--raised);
+  --dash: color-mix(in srgb, var(--muted) 35%, transparent);
+  --rule: color-mix(in srgb, var(--ink) 18%, transparent);
+  --moon: var(--gold);
+}
+
+:root {
+  --serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Zen Kaku Gothic New', system-ui, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --mincho: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
+  --bar-h: 3.5rem;
+  --side-w: 15rem;
+  --gutter: 7rem;
+
+  /* Older names, still used by the task list and other pages. */
+  --text-h: var(--ink);
+  --border: var(--dash);
+  --surface: var(--paper-2);
+  --accent: var(--shu);
+  --accent-bg: color-mix(in srgb, var(--shu) 12%, transparent);
+
+  --quiet: color-mix(in srgb, var(--muted) 65%, var(--ink)); /* small sans text: 4.5:1 on every surface, both themes. --muted stays for mono labels */
+  --fill: var(--muted); /* a meter's filled part: 3:1 against the well in both themes */
+  --tick: var(--ink); /* where today falls on a meter */
+
+  font: 15px/1.5 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The scrollbar's room is always kept, so a short page doesn't shift everything sideways. */
+html {
+  scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100svh;
+  background: var(--glow), var(--bg);
+  background-attachment: fixed;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--shu) 28%, transparent);
+  color: var(--ink);
+}
+
+a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--shu);
+  text-underline-offset: 3px;
+}
+
+h1 {
+  font: italic 400 2.6rem/1 var(--serif);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+h2 {
+  font: 400 0.7rem/1.2 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+h3 {
+  font: 400 0.7rem/1.2 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+a,
+button {
+  touch-action: manipulation;
+}
+
+button {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+}
+
+* {
+  scrollbar-color: var(--lo) transparent;
+  scrollbar-width: thin;
+}
+
+.muted {
+  color: var(--quiet);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* iOS zooms into any input under 16px */
+  }
+}
+
+@media (min-width: 1024px) {
+  h1 {
+    font-size: 3.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -42,6 +42,14 @@ export const api = {
   getDashboard: (month: string): Promise<import('./types').DashboardSummary> =>
     apiFetch(`${BASE}/dashboard/summary?month=${month}`, { method: 'GET' }),
 
+  getPace: (month?: string): Promise<import('./types').Pace> => {
+    const q = month ? `month=${month}` : ''
+    return apiFetch(`${BASE}/dashboard/pace${q ? '?' + q : ''}`, { method: 'GET' })
+  },
+
+  getTrends: (months: number, endMonth: string): Promise<import('./types').DashboardTrends> =>
+    apiFetch(`${BASE}/dashboard/trends?months=${months}&end_month=${endMonth}`, { method: 'GET' }),
+
   previewImport: (source: string, file: File): Promise<import('./types').ImportPreviewResponse> => {
     const fd = new FormData()
     fd.append('source', source)

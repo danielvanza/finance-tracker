@@ -1,0 +1,42 @@
+/* Pressing things: soft clay, the same as life-dashboard. Everything you can tap presses in slowly
+   (--press-in), darkens a touch and slowly puffs back up (--press-out). press.ts marks the pressed
+   element with .is-pressed and holds it at least 120 ms, so a quick tap still shows the whole
+   press; :active covers the keyboard. */
+
+.btn,
+.back,
+.seg button,
+.tabbar a,
+.tabbar a::before,
+.cat-row,
+.link-row {
+  transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out);
+}
+
+:is(.btn, .back, .seg button, .link-row):is(:active, .is-pressed):not(:disabled) {
+  background: var(--press-tint);
+  box-shadow: var(--press-held);
+  transform: scale(0.975);
+  transition: transform var(--press-in), box-shadow var(--press-in), background-color var(--press-in);
+}
+
+.btn-primary:is(:active, .is-pressed):not(:disabled) {
+  background: color-mix(in srgb, var(--shu) 86%, var(--ink));
+}
+
+.tabbar a[href]:is(:active, .is-pressed) {
+  transform: scale(0.975);
+  transition: transform var(--press-in);
+}
+
+.tabbar a[href]:is(:active, .is-pressed)::before {
+  background: var(--press-tint);
+  box-shadow: var(--press-held);
+  transition: box-shadow var(--press-in), background-color var(--press-in);
+}
+
+.cat-row:is(:active, .is-pressed) {
+  opacity: 0.7;
+  transform: scale(0.99);
+  transition: transform var(--press-in), opacity var(--press-in);
+}

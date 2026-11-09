@@ -1,33 +1,18 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { Category } from '../types'
-import { describeApiError } from './ErrorBanner'
+import ErrorBanner, { describeApiError } from './ErrorBanner'
 import { TYPE_META, GROUP_ORDER } from './CategorySelect'
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', marginBottom: 6,
-  fontSize: 10.5, fontWeight: 700, color: 'var(--text-label)',
-  textTransform: 'uppercase', letterSpacing: '0.1em',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'var(--bg-input)', color: 'var(--text-h)',
-  border: '1px solid var(--border-strong)',
-  borderRadius: 'var(--radius)',
-  padding: '8px 12px',
-  fontSize: 13, fontFamily: 'var(--sans)',
-  outline: 'none',
-}
 
 export default function CategoryManager() {
   const qc = useQueryClient()
-  const { data: categories = [] } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ['categories'],
     queryFn: api.getCategories,
   })
+  const categories = categoriesQuery.data ?? []
 
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
@@ -112,147 +97,100 @@ export default function CategoryManager() {
   }
 
   return (
-    <div style={{
-      background: 'var(--bg-card)',
-      borderRadius: 'var(--radius-lg)',
-      padding: '24px 28px',
-      border: '1px solid var(--border)',
-      boxShadow: '0 4px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.035)',
-      maxWidth: 520,
-      marginTop: 24,
-    }}>
-      <h3 style={{
-        fontSize: 14, fontWeight: 700, color: 'var(--text-h)',
-        letterSpacing: '-0.02em', marginBottom: 4,
-      }}>Manage Categories</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 18 }}>
-        Rename, reorder (drag the handle), or delete categories. A category can only be deleted
-        once nothing references it.
-      </p>
+    <section className="section">
+      <h2>Categories</h2>
 
-      {groups.map(group => {
-        const gm = TYPE_META[group.type]
-        return (
-          <div key={group.type} style={{ marginBottom: 14 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '4px 0',
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: gm.color, flexShrink: 0,
-                boxShadow: `0 0 5px ${gm.glow}`,
-              }} />
-              <span style={{
-                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.1em', color: gm.color, opacity: 0.85,
-              }}>
-                {gm.label}
-              </span>
+      {categoriesQuery.isLoading && <span className="skeleton setup-skeleton" aria-busy="true" aria-label="Loading categories" />}
+      {categoriesQuery.isError && <ErrorBanner message={describeApiError(categoriesQuery.error)} />}
+
+      {categoriesQuery.isSuccess && (
+        <div className="panel setup-panel">
+          <p className="setup-note">Drag to reorder. A category can only be deleted once nothing uses it.</p>
+
+          {categories.length === 0 && <p className="empty">No categories yet.</p>}
+
+          {groups.map(group => (
+            <div className="setup-group" key={group.type}>
+              <h3>{TYPE_META[group.type].label}</h3>
+              {group.items.map(cat => (
+                <div
+                  key={cat.id}
+                  className="setup-cat"
+                  draggable
+                  onDragStart={() => setDraggedId(cat.id)}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => handleDrop(group, cat)}
+                >
+                  <GripVertical size={16} className="setup-grip" aria-label={`Reorder ${cat.name}`} />
+                  <input
+                    className="setup-name"
+                    value={editedNames[cat.id] ?? cat.name}
+                    onChange={e => setEditedNames(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                    onBlur={() => saveName(cat)}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    aria-label={`${cat.name} name`}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger setup-icon"
+                    onClick={() => remove(cat)}
+                    aria-label={`Delete ${cat.name}`}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
             </div>
+          ))}
 
-            {group.items.map(cat => (
-              <div
-                key={cat.id}
-                draggable
-                onDragStart={() => setDraggedId(cat.id)}
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(group, cat)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 0',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <GripVertical
-                  size={14}
-                  color="var(--text-muted)"
-                  style={{ flexShrink: 0, cursor: 'grab' }}
-                  aria-label={`Reorder ${cat.name}`}
-                />
-                <input
-                  value={editedNames[cat.id] ?? cat.name}
-                  onChange={e => setEditedNames(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                  onBlur={() => saveName(cat)}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  aria-label={`${cat.name} name`}
-                  style={{
-                    flex: 1, minWidth: 0,
-                    background: 'transparent', color: 'var(--text-h)',
-                    border: '1px solid transparent',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '4px 6px', fontSize: 13, fontFamily: 'var(--sans)',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={() => remove(cat)}
-                  aria-label={`Delete ${cat.name}`}
-                  style={{
-                    background: 'transparent', color: 'var(--red)',
-                    border: '1px solid rgba(248,113,113,0.3)',
-                    borderRadius: 'var(--radius-sm)', width: 24, height: 24,
-                    cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0,
-                  }}
-                >×</button>
+          {error && <p role="alert" className="setup-error">{error}</p>}
+
+          {showAdd ? (
+            <div className="setup-add-form">
+              <div className="setup-form">
+                <div className="form-row">
+                  <label className="lab" htmlFor="new-category-name">Name</label>
+                  <input
+                    id="new-category-name"
+                    className="field"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="e.g. Pet Care"
+                  />
+                </div>
+                <div className="form-row">
+                  <label className="lab" htmlFor="new-category-type">Type</label>
+                  <select
+                    id="new-category-type"
+                    className="field"
+                    value={newType}
+                    onChange={e => setNewType(e.target.value)}
+                  >
+                    {GROUP_ORDER.map(type => (
+                      <option key={type} value={type}>{TYPE_META[type].label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            ))}
-          </div>
-        )
-      })}
-
-      {error && <p style={{ fontSize: 12, color: 'var(--red)', margin: '10px 0' }}>{error}</p>}
-
-      {showAdd ? (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 2 }}>
-              <label style={labelStyle}>Name</label>
-              <input value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Pet Care" style={inputStyle} />
+              <div className="setup-form-actions">
+                <button type="button" className="btn" onClick={add}>Add category</button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => { setShowAdd(false); setError(''); setNewName(''); setNewType('needs') }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Type</label>
-              <select
-                value={newType}
-                onChange={e => setNewType(e.target.value)}
-                style={{ ...inputStyle, cursor: 'pointer' }}
-              >
-                {GROUP_ORDER.map(type => (
-                  <option key={type} value={type}>{TYPE_META[type].label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={add} style={{
-              background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
-              color: '#fff', border: 'none',
-              borderRadius: 'var(--radius)', padding: '8px 16px',
-              cursor: 'pointer', fontWeight: 600, fontSize: 12.5, fontFamily: 'var(--sans)',
-            }}>Add</button>
-            <button onClick={() => { setShowAdd(false); setError(''); setNewName(''); setNewType('needs') }} style={{
-              background: 'transparent', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', padding: '8px 16px',
-              cursor: 'pointer', fontSize: 12.5, fontFamily: 'var(--sans)',
-            }}>Cancel</button>
-          </div>
+          ) : (
+            <button type="button" className="btn" onClick={() => setShowAdd(true)}>
+              <Plus size={15} aria-hidden="true" />
+              Add category
+            </button>
+          )}
         </div>
-      ) : (
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{
-            marginTop: 14,
-            background: 'transparent', color: 'var(--text-secondary)',
-            border: '1px dashed var(--border-strong)',
-            borderRadius: 'var(--radius-sm)', padding: '6px 12px',
-            cursor: 'pointer', fontSize: 12, fontFamily: 'var(--sans)',
-          }}
-        >
-          + Add category
-        </button>
       )}
-    </div>
+    </section>
   )
 }

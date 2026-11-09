@@ -4,7 +4,9 @@ Guidance for AI agents working on this codebase.
 
 ## Project Overview
 
-Personal finance tracker: CSV bank import -> auto-categorisation (rules + Claude AI) -> budget tracking with 50/30/20 rule -> dashboard visualisation.
+Personal finance tracker: CSV bank import -> auto-categorisation (rules + Claude AI) -> budget tracking with 50/30/20 rule -> "are we on track this month?".
+
+A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRODUCT.md](PRODUCT.md) for what it is for and [DESIGN.md](DESIGN.md) before any visual change.
 
 **Stack:** FastAPI + SQLAlchemy + SQLite (backend), React 19 + TypeScript + Vite (frontend).
 
@@ -27,9 +29,10 @@ frontend/
   src/App.tsx           Router + QueryClient setup
   src/api.ts            All backend API calls (fetch-based, /api prefix)
   src/types.ts          TypeScript interfaces
-  src/index.css         Dark theme design system (CSS custom properties)
-  src/pages/            Dashboard, Import, Transactions, Budget, Rules
-  src/components/       Nav, SummaryCards, ReviewCard
+  src/styles/           Tokens (base.css), shell, shared controls, one stylesheet per page
+  src/theme.ts, daylight.tsx, press.ts   Day/night and clay press, as in life-dashboard
+  src/pages/            Month (+ month/), Transactions (+ transactions/), Trends, Setup, Rules, Settings, Import
+  src/components/       ReviewCard, CategorySelect, CategoryManager, StandingAdjustments, Split*, AddTransactionModal, ErrorBanner
   src/tests/            vitest test suite
 ```
 
@@ -51,10 +54,10 @@ frontend/
 
 - **Framework:** React 19 with TypeScript, built with Vite.
 - **Routing:** react-router-dom v7 with `BrowserRouter`. Routes defined in `App.tsx`.
-- **Data fetching:** TanStack Query (`@tanstack/react-query`). Query keys follow `[resource, ...params]` pattern (e.g., `['dashboard', month]`).
+- **Data fetching:** TanStack Query (`@tanstack/react-query`). Query keys follow `[resource, ...params]` pattern (e.g., `['dashboard', month]`). Use the pace endpoint's `current_month` for the current financial month; never derive it from the calendar.
 - **API calls:** Centralised in `src/api.ts`. All calls use the `/api` prefix which Vite proxies to the backend at port 8000.
-- **Styling:** No CSS framework. Dark theme via CSS custom properties in `index.css`. All component styling is done via inline `style` objects -- no CSS modules, no styled-components.
-- **Charts:** recharts library for BarChart, PieChart, LineChart on the Dashboard page.
+- **Styling:** No CSS framework, CSS modules or styled-components. Plain CSS classes in `src/styles/`, shared parts in `controls.css`, tokens only for colour, radius and shadow (see DESIGN.md). Inline `style` only for computed values such as a width.
+- **Charts:** The Month pace line is hand-drawn SVG. Trends uses recharts, passing `var(--token)` strings so both themes work without a reload.
 - **No component library:** All UI components are hand-built.
 
 ### Testing

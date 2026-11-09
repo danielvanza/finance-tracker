@@ -1,0 +1,205 @@
+/* Import: choose the bank, choose the file, check the preview, confirm, see what happened. */
+
+.import-back {
+  margin-bottom: 1rem;
+}
+
+.import-steps {
+  display: grid;
+  gap: 1.2rem;
+  max-width: 72rem;
+  margin-bottom: 1.2rem;
+}
+
+.import-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.import-num {
+  margin-right: 0.5em;
+  color: var(--quiet);
+}
+
+.import-hint {
+  margin-top: -0.4rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.import-banks {
+  display: flex;
+}
+
+.import-banks button {
+  flex: 1;
+  min-height: var(--tap);
+  font-size: 0.875rem;
+}
+
+/* The drop zone is the file input, stretched invisibly over a well. */
+.import-drop {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 9rem;
+  padding: 1.4rem 1rem;
+  text-align: center;
+  color: var(--quiet);
+  transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out);
+}
+
+.import-drop strong {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.import-drop span {
+  font-size: 0.85rem;
+}
+
+.import-drop:is(:active, .is-pressed),
+.import-drop.is-over {
+  background: var(--press-tint);
+  box-shadow: var(--press-held);
+  transform: scale(0.99);
+  transition: transform var(--press-in), box-shadow var(--press-in), background-color var(--press-in);
+}
+
+.import-drop:has(.import-file:focus-visible) {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+}
+
+.import-file {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.import-spin {
+  animation: import-spin 0.8s linear infinite;
+}
+
+@keyframes import-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.import-skeleton {
+  height: 12rem;
+}
+
+/* Preview: the confirm sits above the rows, which can run to hundreds. */
+.import-preview {
+  padding: 1.15rem 0.75rem;
+  margin-bottom: 1.2rem;
+}
+
+.import-preview-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0 0.5rem 0.9rem;
+}
+
+.import-preview-head .btn {
+  width: 100%;
+}
+
+.import-counts {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.import-new {
+  color: var(--moss);
+}
+
+.import-date {
+  white-space: nowrap;
+}
+
+.import-table td.is-in {
+  color: var(--moss);
+}
+
+.import-status {
+  color: var(--moss);
+}
+
+.import-table tr.is-duplicate td {
+  color: var(--quiet);
+}
+
+/* What happened */
+.import-result {
+  max-width: 36rem;
+}
+
+.import-result > * + * {
+  margin-top: 0.9rem;
+}
+
+.import-tally div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.import-tally dd {
+  color: var(--ink);
+}
+
+@media (min-width: 721px) {
+  /* The description takes whatever width the table has and cuts off at its edge. */
+  .import-desc {
+    width: 100%;
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .import-preview-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .import-preview-head .btn {
+    width: auto;
+  }
+}
+
+@media (min-width: 900px) {
+  .import-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 1rem is 15 px here, so the shared button needs lifting to a full touch target. */
+@media (max-width: 720px) {
+  .import-table > tbody > tr {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "desc amount" "date status";
+  }
+  .import-table > tbody > tr > td:nth-child(1) { grid-area: date; }
+  .import-table > tbody > tr > td:nth-child(2) { grid-area: desc; overflow-wrap: anywhere; }
+  .import-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }
+  .import-table > tbody > tr > td:nth-child(4) { grid-area: status; justify-self: end; }
+}

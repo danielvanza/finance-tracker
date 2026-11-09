@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import { describeApiError } from '../components/ErrorBanner'
-import StandingAdjustments from '../components/StandingAdjustments'
-import CategoryManager from '../components/CategoryManager'
+import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 
 export default function Settings() {
   const queryClient = useQueryClient()
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading, isError, error } = useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
   })
@@ -52,105 +50,54 @@ export default function Settings() {
   let exampleText = ''
   if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 28) {
     if (dayNum === 1) {
-      exampleText = `${now.toLocaleString('en', { month: 'short' })} 1 – ${now.toLocaleString('en', { month: 'short' })} ${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+      exampleText = `1 ${now.toLocaleString('en-GB', { month: 'short' })} – ${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()} ${now.toLocaleString('en-GB', { month: 'short' })}`
     } else {
       const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, dayNum)
       const endDay = dayNum - 1
-      exampleText = `${prevMonth.toLocaleString('en', { month: 'short' })} ${dayNum} – ${now.toLocaleString('en', { month: 'short' })} ${endDay}`
+      exampleText = `${dayNum} ${prevMonth.toLocaleString('en-GB', { month: 'short' })} – ${endDay} ${now.toLocaleString('en-GB', { month: 'short' })}`
     }
   }
 
-  if (isLoading) return (
-    <div style={{ color: 'var(--text-secondary)', padding: 40, textAlign: 'center' }}>
-      Loading settings...
-    </div>
-  )
-
   return (
-    <div className="animate-fade-in">
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ marginBottom: 4 }}>Settings</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Configure your financial preferences</p>
-      </div>
+    <section className="section">
+      <h2>Financial month start day</h2>
 
-      <div style={{
-        background: 'var(--bg-card)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '24px 28px',
-        border: '1px solid var(--border)',
-        boxShadow: '0 4px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.035)',
-        maxWidth: 520,
-      }}>
-        <h3 style={{
-          fontSize: 14, fontWeight: 700, color: 'var(--text-h)',
-          letterSpacing: '-0.02em', marginBottom: 4,
-        }}>Financial Month Start Day</h3>
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 18 }}>
-          The day of the month your salary arrives. This defines the start of each financial period.
-        </p>
+      {isLoading && <span className="skeleton setup-skeleton" aria-busy="true" aria-label="Loading settings" />}
+      {isError && <ErrorBanner message={describeApiError(error)} />}
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-          <input
-            type="number"
-            min={1}
-            max={28}
-            value={startDay}
-            onChange={e => setStartDay(e.target.value)}
-            style={{
-              background: 'var(--bg-input)', color: 'var(--text-h)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius)',
-              padding: '9px 14px',
-              fontSize: 14, fontFamily: 'var(--sans)',
-              width: 80, textAlign: 'center',
-            }}
-          />
-          <button
-            onClick={handleSave}
-            disabled={mutation.isPending}
-            style={{
-              background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
-              color: '#fff', border: 'none',
-              borderRadius: 'var(--radius)',
-              padding: '9px 20px',
-              cursor: 'pointer', fontWeight: 600, fontSize: 13,
-              fontFamily: 'var(--sans)',
-              opacity: mutation.isPending ? 0.6 : 1,
-            }}
-          >
-            {mutation.isPending ? 'Saving...' : 'Save'}
-          </button>
-          {saved && (
-            <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 500 }}>
-              Saved
-            </span>
-          )}
-          {saveError && (
-            <span role="alert" style={{ fontSize: 12, color: 'var(--red)', fontWeight: 500, maxWidth: 300 }}>
-              {saveError}
-            </span>
-          )}
-        </div>
+      {settings && (
+        <div className="panel setup-panel">
+          <p className="setup-note">The day the salary arrives. Each financial month starts here.</p>
 
-        {exampleText && (
-          <div style={{
-            fontSize: 12, color: 'var(--text-muted)',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px 12px',
-          }}>
-            Example period for {now.toLocaleString('en', { month: 'long', year: 'numeric' })}: <strong style={{ color: 'var(--text-secondary)' }}>{exampleText}</strong>
+          <div className="setup-start">
+            <div className="form-row setup-start-day">
+              <label className="lab" htmlFor="start-day">Day</label>
+              <input
+                id="start-day"
+                className="field field-num"
+                type="number"
+                min={1}
+                max={28}
+                value={startDay}
+                onChange={e => setStartDay(e.target.value)}
+              />
+            </div>
+            <button type="button" className="btn" onClick={handleSave} disabled={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="setup-saved">Saved</span>}
+            {saveError && <span role="alert" className="setup-error">{saveError}</span>}
           </div>
-        )}
 
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12 }}>
-          Value must be between 1 and 28. Changing this will retroactively redefine all financial periods.
-        </p>
-      </div>
+          {exampleText && (
+            <p className="well setup-example">
+              Example period for {now.toLocaleString('en', { month: 'long', year: 'numeric' })}: <strong className="num">{exampleText}</strong>
+            </p>
+          )}
 
-      <StandingAdjustments />
-      <CategoryManager />
-    </div>
+          <p className="setup-note">Between 1 and 28. Changing it redefines every past financial month too.</p>
+        </div>
+      )}
+    </section>
   )
 }

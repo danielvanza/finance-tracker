@@ -14,6 +14,12 @@ export function formatCents(cents: number): string {
   return `${cents < 0 ? '-' : ''}\u20AC${GROUP.format(euros)},${rem}`
 }
 
+/** Whole euros for headlines and rows: rounded, never cents. */
+export function formatEuros(cents: number): string {
+  const euros = Math.floor((Math.abs(cents) + 50) / 100)
+  return `${cents < 0 && euros > 0 ? '-' : ''}\u20AC${GROUP.format(euros)}`
+}
+
 export function parseToCents(raw: string): number | null {
   const s = raw.trim()
   if (!/^[+-]?\d+([.,]\d*)?$/.test(s)) return null

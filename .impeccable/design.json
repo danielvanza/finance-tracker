@@ -1,0 +1,718 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T00:23:15Z",
+  "title": "Design System: Finances",
+  "extensions": {
+    "colorMeta": {
+      "shu": {
+        "role": "primary",
+        "displayName": "Vermilion",
+        "canonical": "#b54b35",
+        "tonalRamp": [
+          "#160604",
+          "#400d03",
+          "#731c08",
+          "#a23821",
+          "#cb5d45",
+          "#eb8973",
+          "#ffbbab",
+          "#ffe8e1"
+        ]
+      },
+      "shu-night": {
+        "role": "primary",
+        "displayName": "Vermilion (night)",
+        "canonical": "#d8664a",
+        "tonalRamp": [
+          "#160604",
+          "#410c02",
+          "#741c03",
+          "#a3371d",
+          "#cc5d42",
+          "#eb8970",
+          "#ffbba9",
+          "#ffe8e1"
+        ]
+      },
+      "on-shu": {
+        "role": "primary",
+        "displayName": "On Vermilion",
+        "canonical": "#f8eee0",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211b",
+          "#453f35",
+          "#675f53",
+          "#8b8275",
+          "#aea69b",
+          "#d2cdc5",
+          "#f0eeeb"
+        ]
+      },
+      "on-shu-night": {
+        "role": "primary",
+        "displayName": "On Vermilion (night)",
+        "canonical": "#2a1a12",
+        "tonalRamp": [
+          "#0d0a09",
+          "#281f1b",
+          "#4b3c35",
+          "#6f5c52",
+          "#937e74",
+          "#b6a39b",
+          "#d7cbc5",
+          "#f2edeb"
+        ]
+      },
+      "gold": {
+        "role": "secondary",
+        "displayName": "Moon Gold",
+        "canonical": "#b08a4a",
+        "tonalRamp": [
+          "#100a03",
+          "#2f1e00",
+          "#563a00",
+          "#7c5915",
+          "#a17c3e",
+          "#c3a26e",
+          "#e1caa8",
+          "#f6ede0"
+        ]
+      },
+      "gold-night": {
+        "role": "secondary",
+        "displayName": "Moon Gold (night)",
+        "canonical": "#d2ad6a",
+        "tonalRamp": [
+          "#0f0a03",
+          "#2e1e00",
+          "#553a00",
+          "#7b5a12",
+          "#a07d3b",
+          "#c2a36c",
+          "#e0cba7",
+          "#f5ede0"
+        ]
+      },
+      "moss": {
+        "role": "secondary",
+        "displayName": "Moss",
+        "canonical": "#6b7a5a",
+        "tonalRamp": [
+          "#0a0c07",
+          "#1e2416",
+          "#39442c",
+          "#586648",
+          "#7a8969",
+          "#a0ad91",
+          "#c8d2be",
+          "#ecf0e8"
+        ]
+      },
+      "moss-night": {
+        "role": "secondary",
+        "displayName": "Moss (night)",
+        "canonical": "#9fb08a",
+        "tonalRamp": [
+          "#0a0c07",
+          "#1d2414",
+          "#394529",
+          "#586744",
+          "#7a8a66",
+          "#9fae8e",
+          "#c8d2bc",
+          "#ecf0e8"
+        ]
+      },
+      "error": {
+        "role": "secondary",
+        "displayName": "Oxide Red",
+        "canonical": "#9b2f1f",
+        "tonalRamp": [
+          "#160604",
+          "#400d06",
+          "#731c0f",
+          "#a23828",
+          "#cb5d4a",
+          "#ea8977",
+          "#febbad",
+          "#ffe8e2"
+        ]
+      },
+      "error-night": {
+        "role": "secondary",
+        "displayName": "Oxide Red (night)",
+        "canonical": "#e0735a",
+        "tonalRamp": [
+          "#160604",
+          "#3f0e04",
+          "#711f0c",
+          "#a03b24",
+          "#c86048",
+          "#e88b75",
+          "#fdbcac",
+          "#ffe8e2"
+        ]
+      },
+      "series-needs": {
+        "role": "tertiary",
+        "displayName": "Series Needs",
+        "canonical": "oklch(0.538 0.102 238.4)",
+        "tonalRamp": [
+          "#040c13",
+          "#002539",
+          "#004567",
+          "#176792",
+          "#428bb8",
+          "#73b0d8",
+          "#acd4ef",
+          "#e2f1fc"
+        ],
+        "derivedFrom": "oklch(from var(--moss) calc(l - 0.02) calc(c * 2) calc(h + 110))"
+      },
+      "series-needs-night": {
+        "role": "tertiary",
+        "displayName": "Series Needs (night)",
+        "canonical": "oklch(0.564 0.101 237.3)",
+        "tonalRamp": [
+          "#040c13",
+          "#002539",
+          "#004567",
+          "#166891",
+          "#418cb7",
+          "#73b0d7",
+          "#acd4ee",
+          "#e2f1fb"
+        ],
+        "derivedFrom": "oklch(from var(--moss) calc(l - 0.17) calc(c * 1.8) calc(h + 110))"
+      },
+      "series-wants": {
+        "role": "tertiary",
+        "displayName": "Series Wants",
+        "canonical": "oklch(0.616 0.123 75)",
+        "tonalRamp": [
+          "#110902",
+          "#341b00",
+          "#5e3500",
+          "#875400",
+          "#ad7719",
+          "#ce9e5a",
+          "#e8c89c",
+          "#f9ecdc"
+        ],
+        "derivedFrom": "oklch(from var(--gold) calc(l - 0.04) calc(c * 1.3) calc(h - 4))"
+      },
+      "series-wants-night": {
+        "role": "tertiary",
+        "displayName": "Series Wants (night)",
+        "canonical": "oklch(0.566 0.115 73.4)",
+        "tonalRamp": [
+          "#110902",
+          "#331b00",
+          "#5d3500",
+          "#865400",
+          "#ac7728",
+          "#cd9e60",
+          "#e8c8a0",
+          "#f9ecdd"
+        ],
+        "derivedFrom": "oklch(from var(--gold) calc(l - 0.2) calc(c * 1.2) calc(h - 8))"
+      },
+      "series-savings": {
+        "role": "tertiary",
+        "displayName": "Series Savings",
+        "canonical": "oklch(0.458 0.112 148.4)",
+        "tonalRamp": [
+          "#050e06",
+          "#06290f",
+          "#104d21",
+          "#2b713b",
+          "#50955d",
+          "#7eb887",
+          "#b3dab8",
+          "#e4f3e6"
+        ],
+        "derivedFrom": "oklch(from var(--moss) calc(l - 0.1) calc(c * 2.2) calc(h + 20))"
+      },
+      "series-savings-night": {
+        "role": "tertiary",
+        "displayName": "Series Savings (night)",
+        "canonical": "oklch(0.634 0.113 147.3)",
+        "tonalRamp": [
+          "#050e06",
+          "#07290e",
+          "#124d1f",
+          "#2d7139",
+          "#51955b",
+          "#7fb885",
+          "#b3dab7",
+          "#e5f3e6"
+        ],
+        "derivedFrom": "oklch(from var(--moss) calc(l - 0.1) calc(c * 2) calc(h + 20))"
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Washi Clay",
+        "canonical": "#efe6d6",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211b",
+          "#453f34",
+          "#675f52",
+          "#8a8274",
+          "#aea79a",
+          "#d2cdc4",
+          "#f0eeeb"
+        ]
+      },
+      "bg-night": {
+        "role": "neutral",
+        "displayName": "Washi Clay (night)",
+        "canonical": "#2a2622",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#23211f",
+          "#433f3b",
+          "#645f5b",
+          "#87827d",
+          "#aba7a3",
+          "#d0cdca",
+          "#efeeed"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Panel Clay",
+        "canonical": "#f4ecdd",
+        "tonalRamp": [
+          "#0c0b09",
+          "#24211b",
+          "#443f35",
+          "#666053",
+          "#898275",
+          "#ada79b",
+          "#d1cdc5",
+          "#f0eeeb"
+        ]
+      },
+      "card-night": {
+        "role": "neutral",
+        "displayName": "Panel Clay (night)",
+        "canonical": "#2f2a26",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#24211f",
+          "#433f3b",
+          "#655f5b",
+          "#88827d",
+          "#aca7a2",
+          "#d1cdca",
+          "#efeeed"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised Clay",
+        "canonical": "#f8f1e5",
+        "tonalRamp": [
+          "#0c0b09",
+          "#24211c",
+          "#443f37",
+          "#656056",
+          "#888278",
+          "#aca79e",
+          "#d1cdc7",
+          "#f0eeec"
+        ]
+      },
+      "raised-night": {
+        "role": "neutral",
+        "displayName": "Raised Clay (night)",
+        "canonical": "#332e29",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#24211e",
+          "#433f3a",
+          "#655f5a",
+          "#88827c",
+          "#aca7a1",
+          "#d1cdc9",
+          "#efeeed"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#2a2520",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#24211e",
+          "#433f3a",
+          "#655f5a",
+          "#88827c",
+          "#aca7a1",
+          "#d1cdc9",
+          "#f0eeed"
+        ]
+      },
+      "ink-night": {
+        "role": "neutral",
+        "displayName": "Ink (night)",
+        "canonical": "#efe5d3",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211a",
+          "#463f33",
+          "#685f50",
+          "#8b8272",
+          "#afa798",
+          "#d2cdc3",
+          "#f0eeea"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "#4a433b",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#24211d",
+          "#443f38",
+          "#665f57",
+          "#898279",
+          "#ada69f",
+          "#d2cdc7",
+          "#f0eeec"
+        ]
+      },
+      "text-night": {
+        "role": "neutral",
+        "displayName": "Text (night)",
+        "canonical": "#cfc4b2",
+        "tonalRamp": [
+          "#0c0b09",
+          "#252119",
+          "#463f32",
+          "#695f4f",
+          "#8c8271",
+          "#afa698",
+          "#d3cdc3",
+          "#f0eeea"
+        ]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet",
+        "canonical": "#6a6259",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#25211d",
+          "#453f38",
+          "#675f56",
+          "#8a8278",
+          "#aea69e",
+          "#d2cdc7",
+          "#f0eeec"
+        ],
+        "derivedFrom": "color-mix(in srgb, var(--muted) 65%, var(--ink))"
+      },
+      "quiet-night": {
+        "role": "neutral",
+        "displayName": "Quiet (night)",
+        "canonical": "#b1a797",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211a",
+          "#463f33",
+          "#685f51",
+          "#8b8273",
+          "#afa699",
+          "#d3cdc4",
+          "#f0eeeb"
+        ],
+        "derivedFrom": "color-mix(in srgb, var(--muted) 65%, var(--ink))"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#8c8378",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211c",
+          "#453f36",
+          "#675f55",
+          "#8a8277",
+          "#aea69d",
+          "#d2cdc6",
+          "#f0eeeb"
+        ]
+      },
+      "muted-night": {
+        "role": "neutral",
+        "displayName": "Muted (night)",
+        "canonical": "#8f8576",
+        "tonalRamp": [
+          "#0c0b09",
+          "#25211a",
+          "#463f33",
+          "#685f51",
+          "#8b8273",
+          "#afa699",
+          "#d3cdc4",
+          "#f0eeeb"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "style": "italic",
+        "purpose": "Month's verdict only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "style": "italic",
+        "purpose": "Page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The finding above a Trends chart."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Uppercase section headings."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase field and period labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "raise",
+        "value": "6px 6px 14px var(--lo), -6px -6px 14px var(--hi), inset 0 0 0 var(--lo), inset 0 0 0 var(--hi)",
+        "purpose": "Panels and other raised surfaces."
+      },
+      {
+        "name": "raise-sm",
+        "value": "3px 3px 6px var(--lo), -3px -3px 6px var(--hi), inset 0 0 0 var(--lo), inset 0 0 0 var(--hi)",
+        "purpose": "Chips, buttons and rows."
+      },
+      {
+        "name": "raise-lg",
+        "value": "14px 14px 30px var(--lo), -12px -12px 26px var(--hi)",
+        "purpose": "The desktop side panel."
+      },
+      {
+        "name": "press-sm",
+        "value": "0 0 0 var(--lo), 0 0 0 var(--hi), inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi)",
+        "purpose": "Wells and current choices."
+      },
+      {
+        "name": "press-held",
+        "value": "0 0 0 var(--lo), 0 0 0 var(--hi), inset 4px 4px 9px var(--lo), inset -4px -4px 9px var(--hi)",
+        "purpose": "Under a finger."
+      },
+      {
+        "name": "flat-sm",
+        "value": "inset 0 0 0 1px var(--dash)",
+        "purpose": "A disabled chip."
+      },
+      {
+        "name": "bead",
+        "value": "inset 2px 2px 4px rgba(255, 255, 255, 0.3), inset -3px -3px 5px rgba(0, 0, 0, 0.2), 3px 4px 8px rgba(0, 0, 0, 0.25)",
+        "purpose": "Today's sun only."
+      },
+      {
+        "name": "float-sheet",
+        "value": "0 -10px 30px rgba(0, 0, 0, 0.18)",
+        "purpose": "A bottom sheet on a phone."
+      },
+      {
+        "name": "float-pop",
+        "value": "0 18px 40px rgba(0, 0, 0, 0.16)",
+        "purpose": "A centred sheet or popover."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-in",
+        "value": "160ms cubic-bezier(0.25, 0.1, 0.25, 1)",
+        "purpose": "Clay sinking under a press."
+      },
+      {
+        "name": "press-out",
+        "value": "420ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Clay puffing back up."
+      },
+      {
+        "name": "tab-glide",
+        "value": "0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "The pressed-in well moving between tabs."
+      },
+      {
+        "name": "page-in",
+        "value": "0.18s ease-out",
+        "purpose": "A new tab's page fading in."
+      },
+      {
+        "name": "theme-fade",
+        "value": "0.7s ease-in-out",
+        "purpose": "The day and night switch."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-phone",
+        "value": "380px"
+      },
+      {
+        "name": "phone",
+        "value": "720px"
+      },
+      {
+        "name": "desktop",
+        "value": "1024px"
+      },
+      {
+        "name": "wide",
+        "value": "1600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "The default raised clay action.",
+      "html": "<button class=\"ds-btn\">Add transaction</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:var(--tap,44px);padding:0 1rem;border:0;border-radius:var(--r-chip);font:500 .875rem/1.1 var(--sans);color:var(--ink);background:var(--raised);box-shadow:var(--raise-sm);cursor:pointer;transition:transform var(--press-out),box-shadow var(--press-out),background-color var(--press-out)}.ds-btn:hover{transform:translateY(-1px)}.ds-btn:focus-visible{outline:2px solid var(--shu);outline-offset:3px}.ds-btn:active{background:var(--press-tint);box-shadow:var(--press-held);transform:scale(.975);transition:transform var(--press-in),box-shadow var(--press-in),background-color var(--press-in)}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one vermilion action in a view.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Bring in bank files</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:var(--tap,44px);padding:0 1rem;border:0;border-radius:var(--r-chip);font:500 .875rem/1.1 var(--sans);color:var(--ink);background:var(--raised);box-shadow:var(--raise-sm);cursor:pointer;transition:transform var(--press-out),box-shadow var(--press-out),background-color var(--press-out)}.ds-btn:hover{transform:translateY(-1px)}.ds-btn:focus-visible{outline:2px solid var(--shu);outline-offset:3px}.ds-btn:active{background:var(--press-tint);box-shadow:var(--press-held);transform:scale(.975);transition:transform var(--press-in),box-shadow var(--press-in),background-color var(--press-in)}.ds-btn-primary{font-weight:700;color:var(--on-shu);background:var(--shu)}.ds-btn-primary:active{background:color-mix(in srgb,var(--shu) 86%,var(--ink))}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A pressed-in well for text and figures.",
+      "html": "<input class=\"ds-field\" placeholder=\"Planned\" />",
+      "css": ".ds-field{display:block;width:100%;min-height:var(--tap,44px);padding:.55rem .8rem;border:0;border-radius:var(--r-chip);font:400 .9rem/1.3 var(--sans);color:var(--ink);background:var(--bg);box-shadow:var(--press-sm);caret-color:var(--shu)}.ds-field::placeholder{color:var(--quiet)}.ds-field:focus-visible{outline:2px solid var(--shu);outline-offset:3px}"
+    },
+    {
+      "name": "Segmented Choice",
+      "kind": "chip",
+      "description": "A row of raised choices, the chosen one pressed in.",
+      "html": "<div class=\"ds-seg\"><button>ING</button><button aria-pressed=\"true\">Revolut</button><button>DEGIRO</button></div>",
+      "css": ".ds-seg{display:inline-flex;gap:.45rem}.ds-seg button{min-height:2.25rem;padding:0 .85rem;border:0;border-radius:var(--r-chip);font:400 .8rem/1 var(--sans);color:var(--text);background:var(--raised);box-shadow:var(--raise-sm);cursor:pointer}.ds-seg button:focus-visible{outline:2px solid var(--shu);outline-offset:3px}.ds-seg button[aria-pressed='true']{color:var(--ink);font-weight:700;background:var(--bg);box-shadow:var(--press-sm)}"
+    },
+    {
+      "name": "Tab Slab",
+      "kind": "nav",
+      "description": "The phone navigation: raised chips, the current one pressed in with a vermilion underline.",
+      "html": "<nav class=\"ds-tabs\"><a href=\"#\" aria-current=\"page\">Month</a><a href=\"#\">Transactions</a><a href=\"#\">Trends</a><a href=\"#\">Setup</a></nav>",
+      "css": ".ds-tabs{display:flex;gap:.2rem;padding:0 .5rem;background:var(--card);border-radius:var(--r-row) var(--r-row) 0 0;box-shadow:var(--raise)}.ds-tabs a{flex:1;display:flex;align-items:center;justify-content:center;height:var(--bar-h);margin:.5rem .3rem;border-radius:var(--r-chip);font:400 .6rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--text);text-decoration:none;background:var(--raised);box-shadow:var(--raise-sm)}.ds-tabs a:hover{color:var(--ink)}.ds-tabs a:focus-visible{outline:2px solid var(--shu);outline-offset:3px}.ds-tabs a[aria-current='page']{color:var(--ink);background:var(--bg);box-shadow:var(--press-sm);text-decoration:underline 2px var(--shu);text-underline-offset:.45em}"
+    },
+    {
+      "name": "Panel with Meter",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A raised card holding a kind of spending and its meter with a today tick.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-kind\"><span>Needs</span><small>€840 of €1,200</small><span class=\"ds-meter\"><i style=\"width:70%\"></i><b style=\"left:58%\"></b></span></div></div>",
+      "css": ".ds-panel{padding:1.15rem 1.25rem;border-radius:var(--r-card);background:var(--card);box-shadow:var(--raise)}.ds-kind{display:grid;grid-template-columns:1fr auto;gap:.35rem .5rem;font:400 .875rem/1.4 var(--sans);color:var(--ink)}.ds-kind small{font-size:.8rem;color:var(--quiet);font-variant-numeric:tabular-nums}.ds-meter{grid-column:1/-1;position:relative;height:.6rem;border-radius:.3rem;background:var(--bg);box-shadow:var(--press-sm)}.ds-meter i{position:absolute;inset:0 auto 0 0;border-radius:.3rem;background:var(--fill)}.ds-meter b{position:absolute;top:-.2rem;bottom:-.2rem;width:2px;border-radius:1px;background:var(--tick)}"
+    },
+    {
+      "name": "Link Row",
+      "kind": "custom",
+      "refersTo": "link-row",
+      "description": "A raised row that leads to what is waiting.",
+      "html": "<a class=\"ds-link-row\" href=\"#\"><span>12 transactions to review</span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg></a>",
+      "css": ".ds-link-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;min-height:3rem;padding:0 1.1rem;border-radius:var(--r-row);font:400 .9rem/1.2 var(--sans);color:var(--ink);text-decoration:none;background:var(--raised);box-shadow:var(--raise-sm);transition:transform var(--press-out),box-shadow var(--press-out),background-color var(--press-out)}.ds-link-row:focus-visible{outline:2px solid var(--shu);outline-offset:3px}.ds-link-row:active{background:var(--press-tint);box-shadow:var(--press-held);transform:scale(.975);transition:transform var(--press-in),box-shadow var(--press-in),background-color var(--press-in)}"
+    },
+    {
+      "name": "Pace Line",
+      "kind": "custom",
+      "description": "The signature: the plan dashed, spending solid, today as the sun.",
+      "html": "<div class=\"ds-pace\"><svg viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><line class=\"ds-pace-plan\" x1=\"0\" y1=\"100\" x2=\"100\" y2=\"4\"/><polyline class=\"ds-pace-spent\" points=\"0,98 12,84 24,76 36,58 48,52\"/></svg><span class=\"ds-pace-now\" style=\"left:48%;top:52%\"></span></div>",
+      "css": ".ds-pace{position:relative;height:8.5rem}.ds-pace svg{display:block;width:100%;height:100%;overflow:visible}.ds-pace-plan{fill:none;stroke:var(--muted);stroke-width:1.4;stroke-dasharray:3 5;vector-effect:non-scaling-stroke}.ds-pace-spent{fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.ds-pace-now{position:absolute;width:1.25rem;height:1.25rem;margin:-.625rem 0 0 -.625rem;border-radius:50%;background:var(--shu);box-shadow:var(--bead)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "One Line in Clay",
+    "overview": "Finances inherits life-dashboard's Clay x Japandi world instead of inventing its own, so the two apps read as one system. It answers \"are we on track?\" with one line, spending against plan across the financial month, and keeps everything else quiet. Phone first (390 px), both themes always; only the tokens change between them.",
+    "keyCharacteristics": [
+      "Washi by day, charcoal by night. Raised means you can press it or it holds things; pressed in means a well or the current choice.",
+      "Serif italic headlines, gothic body, mono uppercase labels.",
+      "The pace line is the signature: dashed plan, solid spending, today as the sun."
+    ],
+    "rules": [
+      {
+        "name": "The Upstream Rule",
+        "body": "Tokens in `base.css` are copied from `life-dashboard/frontend/src/styles/base.css` on purpose and life-dashboard's DESIGN.md is their authority: change a token in life-dashboard first, then here. Finance's own additions are only `--quiet`, `--fill`, `--tick`, `--tap` and the `--series-*` colours. Copied tokens finance doesn't use yet stay as copied.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Vermilion Rule",
+        "body": "One vermilion mark per view: the sun or the primary action. When a later step's action appears, the earlier button goes plain. The current-tab underline, focus ring, caret and link hover are wayfinding and don't count.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Rule",
+        "body": "`--muted` is only for mono labels, graphic marks and disabled controls. Small sans text uses `--quiet` (4.5:1 on every surface, both themes).",
+        "section": "colors"
+      },
+      {
+        "name": "The Series Rule",
+        "body": "The `--series-*` colours are derived in `trends.css` and validated for colour-blind separation on the card in both themes. They are not free choices: re-run the validator before changing one. They belong to Trends; Month's meters stay `--fill`.",
+        "section": "colors"
+      },
+      {
+        "name": "The Typewriter Rule",
+        "body": "Never change the mono labels' font or greys; life-dashboard holds that decision.",
+        "section": "typography"
+      },
+      {
+        "name": "The Position Rule",
+        "body": "Phone tables are position-based: each cell is placed by its column number (`transactions.css`, `setup.css`, `import.css`). Adding, removing or moving a column means changing the phone grid in the same edit, or the cells land in the wrong places.",
+        "section": "layout"
+      },
+      {
+        "name": "The Soft Clay Rule",
+        "body": "Everything you can press sinks at `--press-in` and puffs back at `--press-out`, darkening to `--press-tint`; `press.ts` holds a press at least 120 ms so a quick tap still shows it. Reduced motion turns it off.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Sun and Moon Rule",
+        "body": "Today's dot is a raised vermilion sun by day and a hollow gold moon by night, and hollow in both themes whenever spending doesn't reach today.",
+        "section": "components"
+      },
+      {
+        "name": "The No Guessing Rule",
+        "body": "Month never guesses after a gap. With status `gap` or `empty` it says so (\"Can't tell yet\", \"No bank files yet\"), shows no meters or today tick, folds the plan away, and offers the import as the one vermilion button.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do take the current financial month from the pace endpoint's `current_month`, never the calendar.",
+      "Do use plain CSS classes in `src/styles/`, with inline `style` only for computed values such as a width or position.",
+      "Do write plain words in British spelling, neutral about which of the two people is reading.",
+      "Do say spent with \"more than planned\", always: \"Spent €133 more than planned by now.\"",
+      "Do check both themes at 390 px and on a desktop."
+    ],
+    "donts": [
+      "Don't add a literal colour, radius or shadow where a token exists.",
+      "Don't make a flat bordered box; only a disabled chip is flat, with a hairline.",
+      "Don't add indigo, glass, or decorative gradients and glows; the night lamplight behind the page is inherited and the only one."
+    ]
+  }
+}

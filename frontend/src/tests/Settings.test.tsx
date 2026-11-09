@@ -27,7 +27,7 @@ describe('Settings page', () => {
 
   it('renders the settings page with start day input', async () => {
     renderWithClient(<Settings />)
-    expect(await screen.findByText('Financial Month Start Day')).toBeTruthy()
+    expect(await screen.findByText('Financial month start day')).toBeTruthy()
     const input = await screen.findByRole('spinbutton')
     expect(input).toBeTruthy()
     expect((input as HTMLInputElement).value).toBe('24')

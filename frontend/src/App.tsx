@@ -1,35 +1,120 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import Nav from './components/Nav'
-import Dashboard from './pages/Dashboard'
+import { ChevronLeft } from 'lucide-react'
+import { ThemeProvider } from './daylight'
+import Month from './pages/Month'
 import Import from './pages/Import'
 import Transactions from './pages/Transactions'
-import Budget from './pages/Budget'
-import Rules from './pages/Rules'
-import Settings from './pages/Settings'
-import Analytics from './pages/Analytics'
+import Trends from './pages/Trends'
+import Setup from './pages/Setup'
 
 const queryClient = new QueryClient()
+
+const TABS = [
+  { to: '/', label: 'Month' },
+  { to: '/transactions', label: 'Transactions' },
+  { to: '/trends', label: 'Trends' },
+  { to: '/setup', label: 'Setup' },
+]
+
+/** The pressed-in well that glides from the old tab to the new one, as on the dashboard. */
+function useTabWell(current: string | undefined) {
+  const nav = useRef<HTMLElement>(null)
+  const well = useRef<HTMLSpanElement>(null)
+
+  const place = (glide: boolean) => {
+    const navEl = nav.current
+    const wellEl = well.current
+    if (!navEl || !wellEl) return
+    const tab = navEl.querySelector<HTMLElement>('a[aria-current="page"]')
+    wellEl.hidden = !tab
+    if (!tab) return
+    const chip = getComputedStyle(tab, '::before')
+    const [top, right, bottom, left] = [chip.top, chip.right, chip.bottom, chip.left].map(parseFloat)
+    wellEl.style.width = `${tab.offsetWidth - left - right}px`
+    wellEl.style.height = `${tab.offsetHeight - top - bottom}px`
+    wellEl.style.borderRadius = chip.borderRadius
+    const to = `translate(${tab.offsetLeft + left}px, ${tab.offsetTop + top}px)`
+    const motion = glide && to !== wellEl.style.transform && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (motion) navEl.dataset.gliding = ''
+    else delete navEl.dataset.gliding
+    wellEl.style.transition = motion ? '' : 'none'
+    wellEl.style.transform = to
+  }
+
+  const placed = useRef(false)
+  useLayoutEffect(() => {
+    place(placed.current)
+    placed.current = true
+  }, [current])
+
+  useEffect(() => {
+    const navEl = nav.current
+    const wellEl = well.current
+    if (!navEl || !wellEl) return
+    let first = true
+    const resized = new ResizeObserver(() => (first ? (first = false) : place(false)))
+    resized.observe(navEl)
+    const done = () => delete navEl.dataset.gliding
+    wellEl.addEventListener('transitionend', done)
+    wellEl.addEventListener('transitioncancel', done)
+    return () => {
+      resized.disconnect()
+      wellEl.removeEventListener('transitionend', done)
+      wellEl.removeEventListener('transitioncancel', done)
+    }
+  }, [])
+
+  return { nav, well }
+}
+
+function Shell() {
+  const { pathname } = useLocation()
+  const current = TABS.find(t => t.to === pathname)?.to
+  const { nav, well } = useTabWell(current)
+
+  return (
+    <div className="shell">
+      <aside className="side">
+        <Link to="/" className="brand">Finances</Link>
+        <a href="/" className="back"><ChevronLeft size={13} aria-hidden="true" />Dashboard</a>
+        <nav className="tabbar" aria-label="Main" ref={nav}>
+          <span className="tab-well" ref={well} aria-hidden="true" />
+          {TABS.map(t => (
+            <Link key={t.to} to={t.to} aria-current={t.to === current ? 'page' : undefined}>
+              <span className="tab-label">{t.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </aside>
+      <main className="content" key={pathname}>
+        <Routes>
+          <Route path="/" element={<Month />} />
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/trends" element={<Trends />} />
+          <Route path="/setup" element={<Setup />} />
+          <Route path="/import" element={<Import />} />
+          {/* The old pages, so bookmarks still land somewhere sensible. */}
+          <Route path="/budget" element={<Navigate to="/" replace />} />
+          <Route path="/analytics" element={<Navigate to="/trends" replace />} />
+          <Route path="/rules" element={<Navigate to="/setup" replace />} />
+          <Route path="/settings" element={<Navigate to="/setup" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-        <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--sans)', position: 'relative', zIndex: 1 }}>
-          <Nav />
-          <main className="app-main">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/import" element={<Import />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/budget" element={<Budget />} />
-              <Route path="/rules" element={<Rules />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
+      <ThemeProvider>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
+          <Shell />
+        </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }

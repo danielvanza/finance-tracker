@@ -60,7 +60,6 @@ Finances inherits life-dashboard's Clay x Japandi world instead of inventing its
 
 **Key Characteristics:**
 - Washi by day, charcoal by night. Raised means you can press it or it holds things; pressed in means a well or the current choice.
-- Serif italic headlines, gothic body, mono uppercase labels.
 - The pace line is the signature: dashed plan, solid spending, today as the sun.
 
 ## Colors
@@ -95,18 +94,22 @@ Warm clay neutrals, one vermilion, a little gold and moss, and a validated set o
 ## Layout
 A slim clay top row, the page, and a fixed tab slab on a phone; from 1024 px a sticky raised side panel beside the page. Content padding is 1.1rem on a phone and 2.4rem 3.5rem on a desktop, capped at 92rem until 1600 px. `1rem` is 15px here, so check touch sizes in pixels. Breakpoints: 380 px tightens, 720 px is phone against wider (tables, sheets), 1024 px is the desktop shell, 1600 px uses the full width.
 
-- **The Position Rule.** Phone tables are position-based: each cell is placed by its column number (`transactions.css`, `setup.css`, `import.css`). Adding, removing or moving a column means changing the phone grid in the same edit, or the cells land in the wrong places.
+- **The Position Rule.** Phone tables and the Setup grid are position-based: each cell or section is placed by its number (`transactions.css`, `setup.css`, `import.css`). Adding, removing or moving one means changing the grid in the same edit; details in the area docs.
 ### Areas
 | id | Covers (routes) | Owns (files under frontend/src) |
 | --- | --- | --- |
-| shell | every route: top row, side panel, tabs, theme, press | App.tsx, daylight.tsx, theme.ts, press.ts, styles/shell.css, styles/press.css |
+| shell | every route: top row, side panel, tabs, find, add | App.tsx, daylight.tsx, theme.ts, press.ts, components/shell/*, styles/shell.css, styles/press.css |
 | month | `/` | pages/Month.tsx, pages/month/*, styles/month.css |
+| recurring | sheet opened from Month | components/recurring/*, styles/recurring.css |
+| reports | `/report`, CSV chip, backup | components/reports/*, styles/reports.css |
 | transactions | `/transactions` and review | pages/Transactions.tsx, pages/transactions/*, components/ReviewCard.tsx, AddTransactionModal.tsx, SplitModal.tsx, SplitEditor.tsx, CategorySelect.tsx, categorySelect/*, styles/transactions.css |
-| trends | `/trends` | pages/Trends.tsx, styles/trends.css |
-| setup | `/setup` | pages/Setup.tsx, Rules.tsx, Settings.tsx, components/CategoryManager.tsx, StandingAdjustments.tsx, styles/setup.css |
-| import | `/import` | pages/Import.tsx, styles/import.css |
+| merchants | sheet and view in Transactions | components/merchants/*, styles/merchants.css |
+| trends | `/trends` | pages/Trends.tsx, pages/trends/*, styles/trends.css |
+| goals | section on Trends | components/goals/*, styles/goals.css |
+| setup | `/setup` | pages/Setup.tsx, Rules.tsx, Settings.tsx, components/CategoryManager.tsx, StandingAdjustments.tsx, RuleSuggestions.tsx, BudgetPlanner.tsx, budget/*, styles/setup.css |
+| import | `/import` | pages/Import.tsx, pages/import/*, styles/import.css |
 
-Shared (a change ripples, check every page): `styles/base.css`, `styles/controls.css`, `styles/tables.css`, `index.css`, `components/ErrorBanner.tsx`. Month uses CategorySelect too. Not covered: `chat/` and `styles/chat.css`, built separately.
+Detail and special rules per area: `docs/design/<id>.md`. Shared (a change ripples, check every page): `styles/base.css`, `styles/controls.css`, `styles/tables.css`, `index.css`, `components/ErrorBanner.tsx`. Month uses CategorySelect too. Not covered: `chat/` and `styles/chat.css`, built separately.
 
 ## Elevation & Depth
 Clay is the only depth. Raised surfaces use `--raise`, `--raise-sm` and `--raise-lg`; wells and current choices use `--press-sm`, held fingers `--press-held`. Sheets and popovers float with `--float-sheet`, `--float-pop` and the scrim. `--bead` is only for the sun.
@@ -127,17 +130,16 @@ Three radii: `r-card` for panels and sheets, `r-row` for rows and wells, `r-chip
 ### Inputs / Fields
 - Pressed-in wells with chip radius at tap height; figures right-aligned and tabular. Focus is the vermilion ring and caret. Inputs are 16px on a coarse pointer so iOS doesn't zoom.
 ### Navigation
-- Phone: four raised chips in the slab, mono labels. Desktop: raised rows in the side panel. The current tab is pressed in with an ink label and vermilion underline; one well glides between tabs (0.28 s). A raised chip goes back to the dashboard.
+- Phone: four raised chips in the slab, mono labels. Desktop: raised rows in the side panel. Find and Add live in the shell on every page. The current tab is pressed in with an ink label and vermilion underline; one well glides between tabs (0.28 s). A raised chip goes back to the dashboard.
 ### Meters and the Pace Line
 - Meter: a pressed-in track with a `--fill` bar and an ink tick where today falls; no tick when the month isn't known.
 - Pace line: dashed `muted` plan, solid `ink` spending, full width, 6.5rem tall on a phone rising to 11rem. Hover or drag shows the day, spent and plan by then.
 - **The Sun and Moon Rule.** Today's dot is a raised vermilion sun by day and a hollow gold moon by night, and hollow in both themes whenever spending doesn't reach today.
-- **The No Guessing Rule.** Month never guesses after a gap. With status `gap` or `empty` it says so ("Can't tell yet", "No bank files yet"), shows no meters or today tick, folds the plan away, and offers the import as the one vermilion button.
+- **The No Guessing Rule.** Nothing compares, projects or flags a month that isn't finished and imported, and Month never guesses after a gap. With status `gap` or `empty` it says so ("Can't tell yet", "No bank files yet"), shows no meters or today tick, folds the plan away, and offers the import as the one vermilion button.
 
 ## Do's and Don'ts
 ### Do:
-- **Do** take the current financial month from the pace endpoint's `current_month`, never the calendar.
-- **Do** use plain CSS classes in `src/styles/`, with inline `style` only for computed values such as a width or position.
+- **Do** keep anything fixed or floating at the bottom clear of the chat button, on a phone and on desktop.
 - **Do** write plain words in British spelling, neutral about which of the two people is reading.
 - **Do** say spent with "more than planned", always: "Spent €133 more than planned by now."
 - **Do** check both themes at 390 px and on a desktop.

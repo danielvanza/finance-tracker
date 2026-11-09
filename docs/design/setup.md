@@ -1,0 +1,5 @@
+# Setup
+- **Position Rule.** `.setup-sections` places children by number: Budget, Rules, Categories (`:nth-child(3)`, spans all rows in column 2), Adjustments, Settings, Your data. At 1800 px Budget and Categories span the three auto rows plus the flexible one so narrow sections stack in column 3. Adding or reordering a section means updating the grid in the same edit.
+- **Rules rows on a phone** use grid areas "pattern actions" / "cat actions" (editing: "pattern pattern" / "cat actions"). The shared `.table td` hairline is zeroed per table (`.rules-table`, `.tx-table`); a new card table must do the same.
+- **The Budget plan only fills fields** and writes on Save plan (vermilion only when something changed). History means finished months outside `behind_months` that have spending; a category with a standing adjustment is never averaged.
+- **Rule suggestions** need the same description put in one category by hand at least 3 times with no rule covering it; dismissals live in `localStorage`.

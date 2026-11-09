@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Trash2 } from 'lucide-react'
 import { api, ApiError, BASE } from '../api'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import CategorySelect from '../components/CategorySelect'
+import RuleSuggestions from './RuleSuggestions'
 
 export default function Rules() {
   const qc = useQueryClient()
@@ -63,6 +65,8 @@ export default function Rules() {
       <h2>Rules</h2>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
+
+      {rulesQuery.isSuccess && <RuleSuggestions rules={rules} categories={categories} />}
 
       <div className="panel setup-rule-form">
         <div className="form-row">
@@ -154,7 +158,14 @@ export default function Rules() {
                             >
                               Edit
                             </button>
-                            <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(rule.id)}>Delete</button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger setup-icon"
+                              onClick={() => handleDelete(rule.id)}
+                              aria-label={`Delete ${rule.pattern}`}
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                            </button>
                           </>
                         )}
                       </div>

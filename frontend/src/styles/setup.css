@@ -199,13 +199,39 @@
   font-weight: 500;
 }
 
+/* Wide enough for one line: the name shares it with the controls and the detail runs full width beneath. */
 @media (min-width: 560px) {
+  .setup-adj {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 8rem auto auto;
+    grid-template-areas: "name amount pause del" "meta meta meta meta";
+    gap: 0.15rem 0.6rem;
+  }
+
   .setup-adj-text {
-    flex: 1 1 12rem;
+    display: contents;
+  }
+
+  .setup-adj-text strong {
+    grid-area: name;
+  }
+
+  .setup-adj-text small {
+    grid-area: meta;
+    line-height: 1.4;
   }
 
   .setup-amount {
-    flex: 0 0 8rem;
+    grid-area: amount;
+    max-width: none;
+  }
+
+  .setup-adj > .btn:not(.setup-icon) {
+    grid-area: pause;
+  }
+
+  .setup-adj > .setup-icon {
+    grid-area: del;
   }
 }
 
@@ -216,51 +242,50 @@
   }
 }
 
+/* Budget, Rules, Categories, Adjustments, Settings (then Your data). The long categories list sits beside the rest. */
 @media (min-width: 1100px) {
   .setup-sections {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: repeat(5, auto) 1fr;
     align-items: start;
   }
 
-  .setup-sections > :nth-child(2) {
-    grid-column: 2;
-    grid-row: 1 / span 3;
+  .setup-sections > * {
+    grid-column: 1;
   }
 
   .setup-sections > :nth-child(3) {
-    grid-column: 1;
-  }
-
-  .setup-sections > :nth-child(4) {
-    grid-column: 1;
+    grid-column: 2;
+    grid-row: 1 / span 6;
   }
 }
 
 @media (min-width: 1800px) {
+  /* The three narrow ones (adjustments, settings, your data) stack at the top of the third column: the
+     budget and the categories span the three auto rows and the flexible one, so they never stretch them. */
   .setup-sections {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto auto 1fr auto;
   }
 
   .setup-sections > :nth-child(1) {
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 4;
   }
 
   .setup-sections > :nth-child(2) {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-column: 1;
+    grid-row: 5;
   }
 
   .setup-sections > :nth-child(3) {
-    grid-column: 3;
-    grid-row: 1;
+    grid-column: 2;
+    grid-row: 1 / span 4;
   }
 
-  .setup-sections > :nth-child(4) {
+  .setup-sections > :nth-child(n + 4) {
     grid-column: 3;
-    grid-row: 2;
+    grid-row: auto;
   }
 }
 
@@ -274,21 +299,161 @@
   }
 }
 
+/* Rules on a phone: one hairline between rules (the shared td hairline is dropped), the category quiet
+   beneath the pattern, and Edit with the trash icon in one column. */
 @media (max-width: 720px) {
+  .rules-table > tbody > tr > td:not(:only-child) { border-top: 0; }
   .rules-table > tbody > tr:not(:has(> td:only-child)) {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "pattern actions" "cat actions";
+    border-top: 1px solid var(--line);
+  }
+  .rules-table > tbody > tr:first-child:not(:has(> td:only-child)) { border-top: 0; }
+  .rules-table > tbody > tr.is-editing:not(:has(> td:only-child)) {
     grid-template-areas: "pattern pattern" "cat actions";
   }
-  .rules-table > tbody > tr.is-editing {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "pattern" "cat" "actions";
-  }
   .rules-table > tbody > tr > td:nth-child(1):not(:only-child) { grid-area: pattern; overflow-wrap: anywhere; }
-  .rules-table > tbody > tr > td:nth-child(2) { grid-area: cat; }
+  .rules-table > tbody > tr > td:nth-child(2) { grid-area: cat; font-size: 0.85rem; color: var(--quiet); }
   .rules-table code { display: inline-block; overflow-wrap: anywhere; }
-  .rules-table > tbody > tr > td:nth-child(3) { grid-area: actions; }
+  .rules-table > tbody > tr > td:nth-child(3) { grid-area: actions; align-self: center; }
 }
 
 .setup-rule-form .cs-trigger {
   min-height: var(--tap);
+}
+
+/* Budget */
+.bud-balance {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.bud-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.bud-head strong {
+  font: 400 1.45rem/1.2 var(--serif);
+  color: var(--ink);
+}
+
+.bud-shares {
+  display: grid;
+  gap: 0.8rem;
+  list-style: none;
+}
+
+.bud-shares li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.4rem 0.6rem;
+}
+
+.bud-shares .meter {
+  grid-column: 1 / -1;
+}
+
+.bud-shares .num {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.bud-shares small,
+.bud-key {
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.bud-fill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.bud-fill .seg button:disabled {
+  color: var(--muted);
+  background: none;
+  box-shadow: var(--flat-sm);
+}
+
+.bud-group h3 {
+  margin-bottom: 0.2rem;
+}
+
+.bud-group ul {
+  list-style: none;
+}
+
+.bud-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.bud-name {
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.bud-name small {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.bud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Rule suggestions */
+.rs-panel {
+  margin-bottom: 1.2rem;
+}
+
+.rs-list {
+  list-style: none;
+}
+
+.rs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.7rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.rs-row:first-child {
+  border-top: 0;
+}
+
+.rs-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.rs-text small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--quiet);
+}
+
+.rs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }

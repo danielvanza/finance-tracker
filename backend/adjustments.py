@@ -1,4 +1,5 @@
 from datetime import date
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 from models import StandingAdjustment, Transaction, TransactionSource, CategorisedBy
 from importers.base import make_hash
@@ -35,7 +36,8 @@ def materialise_standing_adjustments(year: int, month: int, start_day: int, db: 
             (sa.amount, sa.income_category_id, "income"),
             (-sa.amount, sa.expense_category_id, "expense"),
         ):
-            db.add(Transaction(
+            # Two requests can reach a new month at once: the second one simply adds nothing.
+            db.execute(insert(Transaction).values(
                 date=label_date,
                 amount=leg_amount,
                 description=sa.name,
@@ -45,7 +47,7 @@ def materialise_standing_adjustments(year: int, month: int, start_day: int, db: 
                 categorised_by=CategorisedBy.manual,
                 import_hash=make_hash("manual", label_date, leg_amount, sa.name, f"sa:{sa.id}", leg),
                 standing_adjustment_id=sa.id,
-            ))
+            ).on_conflict_do_nothing(index_elements=["import_hash"]))
         created = True
     if created:
         db.commit()

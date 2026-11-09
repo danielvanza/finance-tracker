@@ -1,0 +1,18 @@
+# systemd user unit for the private finance bot; separate from Hermes and Arnold. Needs an env file with
+# TELEGRAM_BOT_TOKEN (from BotFather) and TELEGRAM_ALLOWED_USER_ID (mode 600).
+# Install: systemctl --user link <this file>, enable --now.
+[Unit]
+Description=Household Finance Telegram bot (talks to 127.0.0.1:18600)
+After=household-finance.service
+
+[Service]
+WorkingDirectory=%h/apps/household-finance/current/backend
+EnvironmentFile=%h/.config/household-finance/telegram.env
+Environment=FINANCE_API_URL=http://127.0.0.1:18600/api
+ExecStart=%h/apps/household-finance/current/backend/.venv/bin/python telegram_bot.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

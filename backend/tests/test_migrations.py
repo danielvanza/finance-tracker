@@ -53,7 +53,7 @@ def _table_names(db_path: Path) -> set[str]:
     con = sqlite3.connect(db_path)
     try:
         rows = con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         ).fetchall()
         return {row[0] for row in rows}
     finally:
@@ -101,7 +101,7 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     cfg = _alembic_config(scratch_db)
     command.upgrade(cfg, "head")
 
-    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version"}
+    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version", "chat_messages", "chat_proposals"}
     assert _version_row(scratch_db) == _head_revision(cfg)
 
     # R7 columns, exactly as models.py declares them.

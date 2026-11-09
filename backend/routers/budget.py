@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 from datetime import date, datetime
 from decimal import Decimal
@@ -20,19 +21,12 @@ def _auto_populate(month_date: date, db: Session):
         cat_type = cat.type.value if hasattr(cat.type, "value") else str(cat.type)
         if cat_type in ("income", "exclude"):
             continue
-        exists = (
-            db.query(Budget)
-            .filter_by(category_id=d.category_id, month=month_date)
-            .first()
+        # Two requests can fill the same new month at once: the second one simply adds nothing.
+        db.execute(
+            insert(Budget)
+            .values(category_id=d.category_id, month=month_date, planned_amount=d.planned_amount)
+            .on_conflict_do_nothing(index_elements=["category_id", "month"])
         )
-        if not exists:
-            db.add(
-                Budget(
-                    category_id=d.category_id,
-                    month=month_date,
-                    planned_amount=d.planned_amount,
-                )
-            )
     db.commit()
 
 

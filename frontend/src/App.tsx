@@ -9,6 +9,7 @@ import Transactions from './pages/Transactions'
 import Trends from './pages/Trends'
 import Setup from './pages/Setup'
 import ReportPage from './components/reports/ReportPage'
+import Chat from './chat/Chat'
 import { AddChip, AddRow, FindButtons } from './components/shell/Entries'
 import { scrollToTop, useOpenAtTop } from './components/shell/scroll'
 import { useShellTools } from './components/shell/useShellTools'
@@ -125,6 +126,7 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <Chat />
       {overlays}
     </div>
   )

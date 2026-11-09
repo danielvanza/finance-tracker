@@ -169,4 +169,30 @@ export const api = {
       method: 'PATCH',
       body: { value },
     }),
+
+  getChat: (): Promise<import('./types').ChatConversation> =>
+    apiFetch(`${BASE}/chat/messages?channel=bubble`, { method: 'GET' }),
+
+  sendChatMessage: (body: { text?: string; choose_transaction_id?: number; seen_message_id?: number }): Promise<import('./types').ChatMessage> =>
+    apiFetch(`${BASE}/chat/messages`, { method: 'POST', body: { channel: 'bubble', ...body } }),
+
+  sendChatFile: (file: File): Promise<import('./types').ChatMessage> => {
+    const fd = new FormData()
+    fd.append('channel', 'bubble')
+    fd.append('file', file)
+    return apiFetch(`${BASE}/chat/files`, { method: 'POST', body: fd })
+  },
+
+  applyChatProposal: (id: number, version: string): Promise<import('./types').ChatCard> =>
+    apiFetch(`${BASE}/chat/proposals/${id}/apply`, { method: 'POST', body: { version } }),
+
+  rejectChatProposal: (id: number): Promise<import('./types').ChatCard> =>
+    apiFetch(`${BASE}/chat/proposals/${id}/reject`, { method: 'POST' }),
+
+  // Ids restart after Clear; the time keeps a browser from reusing a cleared chat's picture.
+  chatChartUrl: (messageId: number, createdAt: string, theme: 'day' | 'night') =>
+    `${BASE}/chat/messages/${messageId}/chart?theme=${theme}&v=${encodeURIComponent(createdAt)}`,
+
+  clearChat: () =>
+    apiFetch(`${BASE}/chat/messages?channel=bubble`, { method: 'DELETE' }),
 }

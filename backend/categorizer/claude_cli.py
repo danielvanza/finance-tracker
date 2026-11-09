@@ -1,8 +1,9 @@
 """Claude without an API key: `claude -p` on this machine's existing login, in a sandbox.
 
 On when CLAUDE_CLI_HOME is set (a private folder for the sandbox's home). The model gets the prompt
-and nothing else: no tools, settings or MCP, an allowlisted environment, and a bubblewrap container
+and nothing else: no built-in tools, settings or outside MCP, an allowlisted environment, and a bubblewrap container
 where /home is empty, so the machine's files and normal Claude configuration are not there to read.
+A caller can hand over its own tools; they reach the model as one private MCP server (see assistant/tools.py).
 """
 import json
 import os
@@ -17,6 +18,7 @@ _SANDBOX_WORK = "/sandbox/work"
 _SANDBOX_CRED_DIR = "/sandbox/cred"
 _SANDBOX_BIN = "/sandbox/bin"
 _CREDENTIAL_NAME = ".credentials.json"
+_TOOLS_FILE = "tools.json"
 # The CLI adds the account's email to what it sends the model, read from the profile cached here.
 _PERSONAL_ACCOUNT_FIELDS = ("emailAddress", "displayName", "fullName", "organizationName")
 
@@ -30,6 +32,10 @@ class ClaudeCliError(Exception):
 
 def enabled() -> bool:
     return bool(os.getenv("CLAUDE_CLI_HOME"))
+
+
+def busy() -> bool:
+    return _lock.locked()
 
 
 def _credential_file() -> Path:
@@ -83,7 +89,7 @@ def _scrub_account(home: Path) -> None:
 
 
 def build_command(
-    system: str, model: str, binary: str, home: Path, work: Path, credential: Path
+    system: str, model: str, binary: str, home: Path, work: Path, credential: Path, allowed_tools: list[str] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """The exact process to start and its complete environment."""
     command = [
@@ -117,6 +123,8 @@ def build_command(
         "--tools", "", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "",
         "--no-session-persistence", "--system-prompt", system,
     ]
+    if allowed_tools:
+        command += ["--mcp-config", f"{_SANDBOX_WORK}/{_TOOLS_FILE}", "--allowedTools", ",".join(allowed_tools)]
     env = {
         "LANG": "C.UTF-8",
         "TERM": "dumb",
@@ -129,8 +137,15 @@ def build_command(
     return command, env
 
 
-def complete(system: str, prompt: str, model: str, timeout: float) -> str:
-    """Run one prompt and return the model's text. Raises ClaudeCliError if it can't."""
+def complete(
+    system: str, prompt: str, model: str, timeout: float, on_wait=None,
+    tools: dict | None = None, allowed_tools: list[str] | None = None,
+) -> str:
+    """Run one prompt and return the model's text. Raises ClaudeCliError if it can't.
+
+    Only one run happens at a time. If another is going, on_wait(True) is called before queueing
+    behind it and on_wait(False) when this run starts.
+    """
     found = shutil.which(os.getenv("CLAUDE_BIN", "claude"))
     if not found:
         raise ClaudeCliError("the claude CLI was not found")
@@ -145,11 +160,21 @@ def complete(system: str, prompt: str, model: str, timeout: float) -> str:
     for folder in (base, home, work):
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-    command, env = build_command(system, model, binary, home, work, credential)
+    command, env = build_command(system, model, binary, home, work, credential, allowed_tools)
     command[0] = shutil.which("bwrap") or "bwrap"
-    with _lock:
+    if not _lock.acquire(blocking=False):
+        if on_wait:
+            on_wait(True)
+        _lock.acquire()
+        if on_wait:
+            on_wait(False)
+    try:
         _link_credential(home, credential)
         _scrub_account(home)
+        tools_file = work / _TOOLS_FILE
+        if tools:
+            tools_file.touch(mode=0o600)
+            tools_file.write_text(json.dumps(tools))
         try:
             run = subprocess.run(
                 command, input=prompt, env=env, cwd=work, timeout=timeout,
@@ -160,8 +185,11 @@ def complete(system: str, prompt: str, model: str, timeout: float) -> str:
         except OSError as e:
             raise ClaudeCliError(f"could not start: {e}") from e
         finally:
+            tools_file.unlink(missing_ok=True)
             _link_credential(home, credential)
             _scrub_account(home)
+    finally:
+        _lock.release()
 
     try:
         result = json.loads(run.stdout)

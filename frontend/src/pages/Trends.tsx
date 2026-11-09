@@ -6,6 +6,11 @@ import { api } from '../api'
 import { formatCents, formatEuros } from '../money'
 import type { DashboardSummary, Pace, TrendMonth } from '../types'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
+import GoalsSection from '../components/goals/GoalsSection'
+import Movers from './trends/Movers'
+import { trendFacts } from './trends/facts'
+import { monthName } from './trends/months'
+import { useRem } from './trends/useRem'
 
 const MONTHS_SHOWN = 6
 const OTHER_BELOW = 0.02 // categories under 2% of spending fold into "Other"
@@ -24,9 +29,6 @@ const seriesColour = (kind: Kind) => `var(--series-${kind})`
 
 const dayLabel = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-
-const monthName = (label: string, month: 'short' | 'long') =>
-  new Date(`${label}-15T12:00:00`).toLocaleDateString('en-GB', { month })
 
 function shiftMonth(label: string, by: number) {
   const [y, m] = label.split('-').map(Number)
@@ -130,13 +132,16 @@ interface LabelArgs {
   index?: number
 }
 
-function SpendingChart({ rows }: { rows: Row[] }) {
+// Under this plot width the axis and series names no longer fit beside the columns.
+const COMPACT_BELOW_REM = 14
+
+function SpendingChart({ rows, compact, onResize }: { rows: Row[]; compact: boolean; onResize: (width: number) => void }) {
   const lastIndex = rows.reduce((found, r, i) => (r.hasData ? i : found), -1)
   const topKey = (r: Row): SeriesKey | undefined => [...SERIES].reverse().find(s => r[s.key] > 0)?.key
 
   // Names sit beside the latest column; a segment too thin to hold one relies on the legend.
   const nameLabel = (label: string) => ({ x, y, width, height, index }: LabelArgs) => {
-    if (index !== lastIndex || Number(height) < 12) return null
+    if (compact || index !== lastIndex || Number(height) < 12) return null
     return (
       <text className="trend-name" x={Number(x) + Number(width) + 6} y={Number(y) + Number(height) / 2} dominantBaseline="central">
         {label}
@@ -154,11 +159,13 @@ function SpendingChart({ rows }: { rows: Row[] }) {
 
   return (
     <div className="trend-plot">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 22, right: 56, bottom: 0, left: 0 }} barCategoryGap="30%">
+      <ResponsiveContainer width="100%" height="100%" onResize={width => onResize(width)}>
+        <BarChart data={rows} margin={{ top: 22, right: compact ? 20 : 56, bottom: 0, left: 0 }} barCategoryGap="30%">
           <CartesianGrid vertical={false} stroke="var(--line)" />
           <XAxis dataKey="label" interval={0} axisLine={false} tickLine={false} />
-          <YAxis width={48} tickCount={4} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatEuros(v)} />
+          {compact
+            ? <YAxis hide />
+            : <YAxis width={48} tickCount={4} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatEuros(v)} />}
           <Tooltip content={tip => <TrendTip active={tip.active} payload={tip.payload as TipProps['payload']} />} cursor={{ fill: 'var(--press-tint)' }} isAnimationActive={false} />
           {SERIES.map(s => (
             <Bar
@@ -184,6 +191,35 @@ function SpendingChart({ rows }: { rows: Row[] }) {
         </BarChart>
       </ResponsiveContainer>
     </div>
+  )
+}
+
+function LastMonths({ rows }: { rows: Row[] }) {
+  const rem = useRem()
+  const [plotWidth, setPlotWidth] = useState<number>()
+  const compact = plotWidth !== undefined && plotWidth / rem < COMPACT_BELOW_REM
+  // Compact: months before the first one with spending are dropped, and the names shortened to three letters.
+  const firstWithData = rows.findIndex(r => r.hasData)
+  const shown = compact ? rows.slice(firstWithData).map(r => ({ ...r, label: r.label.slice(0, 3) })) : rows
+  const facts = trendFacts(rows)
+  return (
+    <section className="section">
+      <h2>{compact && shown.length !== rows.length ? (shown.length > 1 ? `Last ${shown.length} months` : 'Latest month') : `Last ${MONTHS_SHOWN} months`}</h2>
+      <div className="panel">
+        <p className="trend-finding">{trendFinding(rows)}</p>
+        {facts.length > 0 && (
+          <ul className="trend-facts">
+            {facts.map(f => (
+              <li key={f.label}><span className="lab">{f.label}</span><span>{f.text}</span></li>
+            ))}
+          </ul>
+        )}
+        <Legend kinds={SERIES.map(s => s.kind)} />
+        <SpendingChart rows={shown} compact={compact} onResize={setPlotWidth} />
+        {rows.some(r => r.hasData && !r.finished) && <p className="trend-note">Paler months are not finished yet.</p>}
+        <Figures rows={rows} />
+      </div>
+    </section>
   )
 }
 
@@ -311,23 +347,20 @@ export default function Trends() {
         <p className="empty">No months of spending yet. Bring in a file from a bank to see the trend.</p>
       ) : (
         <div className={`trends-grid${refreshing ? ' is-refreshing' : ''}`}>
-          <section className="section">
-            <h2>Last {MONTHS_SHOWN} months</h2>
-            <div className="panel">
-              <p className="trend-finding">{trendFinding(rows)}</p>
-              <Legend kinds={SERIES.map(s => s.kind)} />
-              <SpendingChart rows={rows} />
-              {rows.some(r => r.hasData && !r.finished) && <p className="trend-note">Paler months are not finished yet.</p>}
-              <Figures rows={rows} />
-            </div>
-          </section>
+          <div className="trends-col">
+            <LastMonths rows={rows} />
+            <Movers month={month} summary={summary} rows={rows} />
+          </div>
 
-          <section className="section">
-            <h2>By category</h2>
-            <div className="panel">
-              <Categories summary={summary} />
-            </div>
-          </section>
+          <div className="trends-col">
+            <section className="section">
+              <h2>By category</h2>
+              <div className="panel">
+                <Categories summary={summary} />
+              </div>
+            </section>
+            <GoalsSection />
+          </div>
         </div>
       )}
     </>

@@ -1,0 +1,322 @@
+/* Reports: the month statement (ReportPage), the entry points (ReportLink, CsvChip) and Setup's Your data.
+   On screen the statement uses the app's own clay; on paper it flattens to the system's paper colours. */
+
+.report {
+  max-width: 46rem;
+}
+
+.rep-printhead {
+  display: none;
+}
+
+.rep-actions {
+  margin-top: 1.1rem;
+}
+
+.rep-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.rep-cats {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.rep-ghead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.2rem;
+}
+
+.rep-gtotal {
+  font: 400 0.85rem/1.2 var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--quiet);
+}
+
+.rep-cols {
+  display: none;
+}
+
+.rep-group ul,
+.rep-moved-grid ul {
+  list-style: none;
+}
+
+.rep-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name spent' 'delta plan';
+  gap: 0.1rem 0.75rem;
+  padding: 0.7rem 0;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.rep-row + .rep-row {
+  border-top: 1px solid var(--line);
+}
+
+.rep-name {
+  grid-area: name;
+}
+
+.rep-spent {
+  grid-area: spent;
+  text-align: right;
+}
+
+.rep-plan {
+  grid-area: plan;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+.rep-delta {
+  grid-area: delta;
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+.rep-mrow {
+  grid-template-areas: 'name spent' 'name plan';
+}
+
+.rep-moved-grid {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.rep-foot {
+  margin-top: 2.2rem;
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+@media (min-width: 600px) {
+  .rep-cols,
+  .rep-row {
+    grid-template-columns: minmax(0, 1fr) 5.2rem 6.5rem 7rem;
+    column-gap: 0.75rem;
+  }
+
+  .rep-cols {
+    display: grid;
+    padding: 0.5rem 0 0.3rem;
+    text-align: right;
+  }
+
+  .rep-cols span:first-child {
+    text-align: left;
+  }
+
+  .rep-row {
+    grid-template-areas: 'name spent plan delta';
+    align-items: baseline;
+  }
+
+  .rep-plan,
+  .rep-delta {
+    font-size: 0.85rem;
+  }
+
+  .rep-delta {
+    text-align: right;
+  }
+
+  .rep-moved-grid {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.4rem;
+  }
+
+  .rep-mrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name spent' 'name plan';
+  }
+}
+
+/* Entry points: Month's link-row, Setup's Your data. */
+.rep-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.rep-data-row small {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.rep-data-rows {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.rep-data-row {
+  width: 100%;
+  min-height: 3.4rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  text-align: left;
+}
+
+.rep-data-row span {
+  display: block;
+  text-align: left;
+}
+
+.rep-data-row:disabled {
+  color: var(--muted);
+  background: transparent;
+  box-shadow: var(--flat-sm);
+}
+
+@media (min-width: 1024px) {
+  .side-stack > .rep-links {
+    flex: none;
+    width: 17rem;
+  }
+
+  .rep-links .link-row {
+    width: auto;
+  }
+}
+
+/* With the chat docked the stack is a column and the rows fill it, as the review row does. */
+@media (min-width: 1024px) and (max-width: 1679px) {
+  :root[data-chat-docked] .side-stack > .rep-links {
+    width: auto;
+  }
+}
+
+/* On paper: a named page, so other pages keep the browser's own print setup. System colours keep the paper white
+   and the ink black in both themes; the app's chrome, buttons and shadows stay off. */
+@media print {
+  .report {
+    page: report;
+  }
+
+  html:root[data-theme]:has(.report) {
+    color-scheme: light;
+    font-size: 12px;
+    --bg: Canvas;
+    --card: Canvas;
+    --raised: Canvas;
+    --ink: CanvasText;
+    --text: color-mix(in srgb, CanvasText 88%, Canvas);
+    --quiet: color-mix(in srgb, CanvasText 72%, Canvas);
+    --muted: color-mix(in srgb, CanvasText 58%, Canvas);
+    --line: color-mix(in srgb, CanvasText 18%, Canvas);
+    --rule: color-mix(in srgb, CanvasText 18%, Canvas);
+    --fill: color-mix(in srgb, CanvasText 72%, Canvas);
+    --tick: CanvasText;
+    --raise: none;
+    --raise-sm: none;
+    --press-sm: none;
+    --glow: none;
+  }
+
+  html:has(.report) body {
+    background: Canvas;
+    background-attachment: scroll;
+  }
+
+  .shell:has(.report) :is(.side, .chat-fab, .chat-dialog),
+  .report :is(.rep-actions, .month-nav) {
+    display: none !important;
+  }
+
+  .shell:has(.report) {
+    display: block;
+    min-height: 0;
+  }
+
+  .shell:has(.report) .content {
+    max-width: none;
+    padding: 0;
+    animation: none;
+  }
+
+  .report {
+    max-width: none;
+  }
+
+  .report .rep-printhead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .rep-brand {
+    font: italic 400 1.35rem/1 var(--serif);
+    color: var(--ink);
+  }
+
+  .report .month-bar {
+    margin-bottom: 0.6rem;
+  }
+
+  .report .verdict h1 {
+    font-size: 3rem;
+  }
+
+  .report .section {
+    margin-top: 1.1rem;
+  }
+
+  .report .panel {
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .rep-cats {
+    gap: 0.7rem;
+  }
+
+  .report .rep-row {
+    padding: 0.28rem 0;
+  }
+
+  .report .kinds {
+    gap: 0.5rem;
+  }
+
+  .report .meter {
+    background: var(--line);
+    box-shadow: none;
+  }
+
+  .report .meter i {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .rep-group,
+  .rep-moved,
+  .report .whole,
+  .report .rep-row {
+    break-inside: avoid;
+  }
+
+  .report .rep-foot {
+    margin-top: 1.1rem;
+  }
+}
+
+@page report {
+  size: A4;
+  margin: 14mm;
+}

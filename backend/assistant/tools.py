@@ -279,8 +279,7 @@ class Toolbox:
         return "Sent. Stop here.", False
 
     def _propose_change(self, call: Propose) -> tuple[str, bool]:
-        if self.dug:
-            return "A question about the past changes nothing. Use submit_insight.", True
+        # A change the person asked for may need a lookup to find its rows first; it still waits for their Apply.
         self.decision = call
         return "Sent to the person to accept or decline. Stop here.", False
 

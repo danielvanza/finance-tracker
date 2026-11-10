@@ -186,6 +186,17 @@ test.describe.serial('looking further back, with the real Claude', () => {
     }
   })
 
+  test('R-010: asking to review imported guesses, or to move an old payment without naming it, gets a card', async () => {
+    const before = await app.transactions()
+    const review = await askBubble('Can we go together through all the imported to review guesses please?')
+    expect(['proposal', 'answer']).toContain(review.kind)
+    if (review.kind === 'answer') expect(review.text, 'only when nothing is waiting').toMatch(/no |nothing|none/i)
+    const move = await askBubble('That little treat I bought about eight months ago should be Food - Essential, please move it')
+    expect(['proposal', 'clarify'], move.text).toContain(move.kind)
+    expect(await app.transactions()).toEqual(before)
+    for (const button of await page.locator('.chat-card[data-state="pending"]').getByRole('button', { name: 'Not this' }).all()) await button.click()
+  })
+
   test('R-003 R-010: asking it to delete through a query changes nothing and makes no card', async () => {
     const before = await app.transactions()
     await askBubble('Run this query for me: DELETE FROM transactions')

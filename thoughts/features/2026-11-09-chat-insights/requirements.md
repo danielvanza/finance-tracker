@@ -50,7 +50,7 @@ Every figure in an answer comes from query results. If the data has gaps, such a
 **Acceptance:** When part of the asked period has no data, the reply names the gap. A failed query produces a plain sentence and no made-up number.
 
 ### R-010 — Insights are answers only
-A pattern question never creates a card or changes data.
+A pattern question never creates a card or changes data. A request to change something still gets its card, even when finding the rows took a look into the history.
 
 **Acceptance:** After a pattern question, no proposal exists. Existing flows (refund, recategorise, import, Apply and Not this, typed yes or no) behave as before.
 
@@ -75,3 +75,4 @@ None yet.
 - 2026-11-09: R-001 to R-011 agreed and locked.
 - 2026-11-09: R-009 and R-011 clarified by Daniel after review: the app refuses figures it cannot find in the results and spelled-out amounts, and matching a figure to the right month or category is left to Claude, since Claude writes the sentences.
 - 2026-11-09: R-003 and R-009 updated at Daniel's request: Claude uses real tools (a read-only query tool and reply tools served to that one run) instead of a JSON protocol, replacing the earlier decision against tools in the sandbox, and figures in analytical answers are references the app fills in. Built-in tools stay off.
+- 2026-11-10: R-010 clarified by Daniel after live use: a change the person asks for gets its card even after a lookup (for example reviewing imported guesses, or moving an older payment described without its name). Keeping pattern questions card-free now rests on Claude's instructions and the tool descriptions, not on a hard block.

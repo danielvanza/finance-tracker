@@ -553,18 +553,19 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     expect(unfinished.text).not.toContain('stopped early')
   })
 
-  test('R-010: after looking at history the proposal tool refuses, so no card can appear', async () => {
+  test('R-010: a change the person asks for still gets its card after a lookup, and changes nothing until Apply', async () => {
     const clothing = await app.category('Clothing')
-    const row = (await ledger())[0]
-    const propose = { kind: 'propose', summary: 'Move it.', op: 'transaction.update', args: { id: row.id, category_id: clothing.id } }
-    app.script([{ reply: query('SELECT 1 AS n') }, { reply: propose }, { reply: plain('Nothing to change there.') }])
+    const row = (await ledger()).find(t => t.description === 'Albert Heijn 1234' && t.date === d.backDay(8, 1))
     const before = await ledger()
-    const reply = await replyTo('Any patterns?')
-    expect(app.toolCalls()[1].isError).toBe(true)
-    expect(await proposals('bubble')).toHaveLength(0)
-    expect(reply.card).toBeNull()
+    app.script([
+      { reply: query("SELECT transaction_id, description, date FROM spending WHERE description = 'Albert Heijn 1234' ORDER BY date LIMIT 1") },
+      { reply: { kind: 'propose', summary: 'Move the oldest grocery payment to Clothing.', op: 'transaction.update', args: { id: row.id, category_id: clothing.id } } },
+    ])
+    const reply = await replyTo('That shop from eight months ago should be Clothing')
+    expect(app.toolCalls().map(c => [c.tool, c.isError])).toEqual([['run_query', false], ['propose_change', false]])
+    expect(reply.card?.status).toBe('pending')
     expect(await ledger()).toEqual(before)
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await page.locator('.chat-card[data-state="pending"]').last().getByRole('button', { name: 'Not this' }).click()
   })
 
   const CHART_SQL = () => `SELECT month, category, spent_cents FROM category_months WHERE category IN ('Food - Essential','Miscellaneous') AND month BETWEEN '${d.back(5)}' AND '${d.back(1)}' ORDER BY month, category`

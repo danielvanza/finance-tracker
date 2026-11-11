@@ -451,3 +451,54 @@
     }
   }
 }
+
+/* The live log under a message being worked on, and folded away once it is answered. */
+.chat-log ol,
+.chat-log-done ol {
+  margin-top: 0.35rem;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.chat-log li + li,
+.chat-log-done li + li {
+  margin-top: 0.15rem;
+}
+
+.chat-log-done {
+  justify-self: start;
+  font-size: 0.8rem;
+}
+
+.chat-log-done summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* A batch card: one row per line, so eighty-five of them stay readable. */
+.chat-batch {
+  display: grid;
+  list-style: none;
+  margin-top: 0.35rem;
+}
+
+.chat-batch > li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+}
+
+.chat-batch-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.8rem;
+  color: var(--ink);
+}
+
+.chat-batch s {
+  color: var(--muted);
+}

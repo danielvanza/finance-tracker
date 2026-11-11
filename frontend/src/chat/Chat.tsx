@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, t
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUp, MessageCircle, Paperclip } from 'lucide-react'
 import { api } from '../api'
-import type { ChatCard, ChatChart, ChatConversation, ChatMessage, ChatTransactionRef, ChatImportCounts } from '../types'
+import type { ChatCard, ChatChart, ChatConversation, ChatMessage, ChatTransactionRef, ChatImportCounts, ChatWork } from '../types'
 import { ClarifyCard, ImportCard, ProposalCard, type CardAction, type CardError } from './cards'
 
 const CHAT_KEY = ['chat', 'bubble']
@@ -14,7 +14,7 @@ const SEND_UNKNOWN = "The app can't be reached right now, so that may not have b
 const NOT_SENT = "That didn't reach the app, so nothing changed."
 const FILE_UNKNOWN = "The app can't be reached right now, so that file may not have been imported. Sending it again adds nothing twice."
 const FILE_NOT_SENT = "That file didn't reach the app, so nothing was imported."
-const EXPLAIN = 'Ask about the budget, or say what happened and the change is shown first. Nothing changes until it is confirmed.'
+const EXPLAIN = 'Ask anything about the household\'s money, or say what needs sorting out. Every change is shown on a card first, and nothing changes until it is applied.'
 
 function isInFlight(m: ChatMessage) {
   return m.role === 'user' && m.status !== 'done'
@@ -26,8 +26,39 @@ function pendingLine(m: ChatMessage, others: ChatMessage[], claudeBusy: boolean)
   if (m.status === 'waiting' || (m.status === 'queued' && (behind || claudeBusy))) {
     return 'Waiting for Claude. Your message is saved and will be answered next.'
   }
-  if (m.status === 'digging') return 'Looking through the history. This can take a few minutes.'
+  if (m.status === 'stopping') return 'Stopping…'
   return m.kind === 'file' ? 'Reading your file and sorting it. This can take a few minutes.' : 'Thinking…'
+}
+
+const workOf = (m: ChatMessage) => (m.role === 'user' ? (m.payload as ChatWork | null) : null) ?? {}
+
+/** What the reply is doing, step by step, while it works; afterwards folded away under the message. */
+function WorkLog({ message, line, onStop, stopping }: { message: ChatMessage; line: string | null; onStop: () => void; stopping: boolean }) {
+  const { steps = [], ended } = workOf(message)
+  if (line !== null) {
+    const working = message.kind === 'text' && message.status !== 'stopping'
+    return (
+      <li className="chat-reply chat-quiet chat-log" role="status" data-testid="chat-pending">
+        <p>{line}</p>
+        {steps.length > 0 && <ol data-testid="chat-steps">{steps.map((step, i) => <li key={i}>{step}</li>)}</ol>}
+        {working && (
+          <div className="chat-actions">
+            <button type="button" className="btn" disabled={stopping} onClick={onStop}>Stop</button>
+          </div>
+        )}
+      </li>
+    )
+  }
+  if (!steps.length) return null
+  const label = ended === 'stopped' ? 'Stopped' : ended === 'time' ? 'Stopped at the time limit' : 'Worked through'
+  return (
+    <li className="chat-quiet chat-log-done">
+      <details>
+        <summary>{label} · {steps.length} {steps.length === 1 ? 'step' : 'steps'}</summary>
+        <ol>{steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
+      </details>
+    </li>
+  )
 }
 
 /** The app draws one picture per theme; the stylesheet shows the one that fits. */
@@ -51,9 +82,11 @@ function ChartPicture({ messageId, createdAt, chart }: { messageId: number; crea
   )
 }
 
-function Message({ message, inFlightLine, chooseDisabled, onChoose, cardBusy, cardError, onApply, onReject }: {
+function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onChoose, cardBusy, cardError, onApply, onReject }: {
   message: ChatMessage
   inFlightLine: string | null
+  onStop: () => void
+  stopping: boolean
   chooseDisabled: boolean
   onChoose: (id: number) => void
   cardBusy: boolean
@@ -68,7 +101,7 @@ function Message({ message, inFlightLine, chooseDisabled, onChoose, cardBusy, ca
           {message.kind === 'file' && <Paperclip size={16} aria-hidden="true" />}
           {message.text}
         </li>
-        {inFlightLine && <li className="chat-reply chat-quiet" role="status" data-testid="chat-pending">{inFlightLine}</li>}
+        <WorkLog message={message} line={inFlightLine} onStop={onStop} stopping={stopping} />
       </>
     )
   }
@@ -105,7 +138,7 @@ export default function Chat() {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
-  const [confirmingClear, setConfirmingClear] = useState(false)
+  const [confirmingNew, setConfirmingNew] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [cardErrors, setCardErrors] = useState<Record<number, { at: number; action: CardAction; version: string }>>({}) // by card id: the tap that failed
   const [unsure, setUnsure] = useState<{ text?: string; afterId: number; notice: string } | null>(null)
@@ -212,14 +245,19 @@ export default function Chat() {
     }
   }
 
-  const clear = useMutation({
-    mutationFn: api.clearChat,
+  const newChat = useMutation({
+    mutationFn: api.newChat,
     onSuccess: () => {
-      setConfirmingClear(false)
+      setConfirmingNew(false)
       setCardErrors({})
       refresh()
     },
-    onError: () => setSendError("The app can't be reached right now, so the conversation was not cleared."),
+    onError: () => setSendError("The app can't be reached right now, so a new chat was not started."),
+  })
+  const stop = useMutation({
+    mutationFn: api.stopChat,
+    onSuccess: refresh,
+    onError: () => setSendError("The app can't be reached right now, so that may not have stopped."),
   })
 
   const submit = (event?: FormEvent) => {
@@ -292,19 +330,19 @@ export default function Chat() {
             <span className="chat-grab" aria-hidden="true" />
             <h2>Ask</h2>
             <div className="chat-head-actions">
-              {messages.length > 0 && !confirmingClear && (
-                <button type="button" className="chat-quiet-btn" onClick={() => setConfirmingClear(true)}>Clear</button>
+              {messages.length > 0 && !confirmingNew && (
+                <button type="button" className="chat-quiet-btn" onClick={() => setConfirmingNew(true)}>New chat</button>
               )}
               <button type="button" className="chat-quiet-btn" onClick={closeChat}>Close</button>
             </div>
           </header>
 
-          {confirmingClear && (
+          {confirmingNew && (
             <div className="chat-confirm">
-              <p>Clear this conversation for everyone using the app?</p>
+              <p>Start a new chat for everyone using the app? The assistant won't draw on this conversation any more.</p>
               <div className="chat-actions">
-                <button type="button" className="btn" disabled={clear.isPending} onClick={() => clear.mutate()}>Clear it</button>
-                <button type="button" className="btn" onClick={() => setConfirmingClear(false)}>Keep it</button>
+                <button type="button" className="btn" disabled={newChat.isPending} onClick={() => newChat.mutate()}>Start new chat</button>
+                <button type="button" className="btn" onClick={() => setConfirmingNew(false)}>Keep this one</button>
               </div>
             </div>
           )}
@@ -326,6 +364,8 @@ export default function Chat() {
                   key={message.id}
                   message={message}
                   inFlightLine={isInFlight(message) ? pendingLine(message, messages, busy) : null}
+                  onStop={() => stop.mutate()}
+                  stopping={stop.isPending}
                   chooseDisabled={send.isPending || pendingCount > 0}
                   onChoose={id => send.mutate({ choose_transaction_id: id })}
                   cardBusy={message.card ? busyCards.has(message.card.id) : false}

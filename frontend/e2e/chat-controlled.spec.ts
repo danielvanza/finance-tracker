@@ -21,10 +21,7 @@ const addProposal = (description: string, cents = -1000) => async () => ({
 const answer = (text: string) => ({ kind: 'answer', text })
 const rowCount = async () => (await app.transactions()).length
 
-async function clearChats() {
-  await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
-  await app.json('/chat/messages?channel=telegram', { method: 'DELETE' })
-}
+const clearChats = () => app.newChats()
 
 test.describe.serial('chat in controlled conditions', () => {
   test.beforeAll(async ({ browser }) => {
@@ -154,8 +151,8 @@ test.describe.serial('chat in controlled conditions', () => {
     await expect.poll(() => { // Claude has really been asked, so its answer is on the way
       try { return app.lastCall().prompt.includes(oldText) } catch { return false }
     }, { timeout: 20_000, intervals: [100] }).toBe(true)
-    await page.getByRole('button', { name: 'Clear', exact: true }).click()
-    await page.getByRole('button', { name: 'Clear it' }).click()
+    await page.getByRole('button', { name: 'New chat', exact: true }).click()
+    await page.getByRole('button', { name: 'Start new chat' }).click()
     await expect(page.locator('.chat-thread')).not.toContainText(oldText)
   }
 
@@ -256,24 +253,25 @@ test.describe.serial('chat in controlled conditions', () => {
     await clearChats()
     const imported = (await app.transactions()).find(t => t.source === 'ing')
     const before = await rowCount()
-    app.fakeReply({ kind: 'propose', summary: 'Delete it.', op: 'transaction.delete', args: { id: imported.id } })
+    // The app's reason goes back to the agent (finance-agent R-007), which tells the person in its own words.
+    app.fakeReply({ kind: 'propose', summary: 'Delete it.', op: 'transaction.delete', args: { id: imported.id }, text: "I can't delete that one: only manual entries can be deleted. Nothing changed." })
     await say(page, 'delete that bank row')
-    await expect(page.locator('.chat-error').last()).toContainText('Only manual transactions can be deleted')
-    await expect(page.locator('.chat-error').last()).toContainText('Nothing changed')
-    expect(await rowCount()).toBe(before)
-
-    app.fake({ mode: 'garbage' })
-    await say(page, 'do something')
-    await expect(page.locator('.chat-error').last()).toContainText('could not be understood')
+    await expect(page.locator('.chat-reply').last()).toContainText('only manual entries can be deleted')
+    const [refused] = app.toolCalls()
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toContain('Only manual transactions can be deleted')
+    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Delete it.' })).toHaveCount(0)
     expect(await rowCount()).toBe(before)
   })
 
   test('R-018: the model cannot merge, cannot act by claiming, and has no files, tools or key', async () => {
     await clearChats()
     const before = await app.transactions()
-    app.fakeReply({ kind: 'propose', summary: 'Merge.', op: 'merge', args: { manual_id: 1, bank_id: 2 } })
+    app.fakeReply({ kind: 'propose', summary: 'Merge.', op: 'merge', args: { manual_id: 1, bank_id: 2 }, text: 'I could not do that.' })
     await say(page, 'merge them')
-    await expect(page.locator('.chat-error').last()).toContainText('not something the app can do')
+    await expect(page.locator('.chat-reply').last()).toContainText('I could not do that.')
+    expect(app.toolCalls()[0].text).toContain("there is no change called 'merge'")
+    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Merge.' })).toHaveCount(0)
     app.fakeReply(answer('Done! I have deleted every rule and applied everything.'))
     await say(page, 'do it')
     await expect(page.locator('.chat-reply').last()).toContainText('Done!')
@@ -588,11 +586,11 @@ test.describe.serial('chat in controlled conditions', () => {
     await clearChats()
     app.fakeReply(answer('   '))
     await say(page, 'blank please')
-    await expect(page.locator('.chat-error', { hasText: "Claude's answer could not be understood" })).toBeVisible()
+    await expect(page.locator('.chat-error', { hasText: "Claude's answer came back empty" })).toBeVisible()
 
     const count = stub.sent.length
     stub.text(DANIEL, 'blank please')
-    await stub.reply_after(count, m => m.text.includes("Claude's answer could not be understood"))
+    await stub.reply_after(count, m => m.text.includes("Claude's answer came back empty"))
     expect(stub.sent.slice(count).some(m => m.text.trim() === '')).toBe(false)
 
     app.fakeReply(answer('Back to normal.'))
@@ -609,10 +607,15 @@ test.describe.serial('chat in controlled conditions', () => {
     ]))
     const before = await rowCount()
     const purchase = (await app.transactions()).find(t => t.description === 'Sample Hand Twin')
-    app.fakeReply({
-      kind: 'propose', summary: 'Add the hand refund.', op: 'refund.add',
-      args: { purchase_id: purchase.id, amount_cents: 800, date: d.today, description: 'Sample Hand Refund' },
-    })
+    const twins = (await app.transactions()).filter(t => t.description === 'Sample Hand Twin')
+    const handRefund = { kind: 'propose', summary: 'Add the hand refund.', op: 'refund.add', args: { purchase_id: purchase.id, amount_cents: 800, date: d.today, description: 'Sample Hand Refund' } }
+    app.script([
+      { reply: handRefund },
+      { reply: { kind: 'choices', transaction_ids: twins.map(t => t.id) } },
+      { reply: answer('Which purchase was it?') },
+      { reply: handRefund },
+      { reply: answer('Here is the card.') },
+    ])
     await say(page, 'that hand twin shop gave me 8 euro back')
     const options = page.locator('.chat-options').last()
     await expect(options.getByRole('button')).toHaveCount(2)
@@ -631,7 +634,7 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     if (channel === 'bubble') await say(page, `move ${description}`)
     else stub.text(DANIEL, `move ${description}`)
-    const telegramCard = channel === 'telegram' ? await stub.reply_after(count, m => m.text.includes(`Move ${description}.`)) : null
+    const telegramCard = channel === 'telegram' ? await stub.card_after(count, `Move ${description}.`) : null
     if (channel === 'bubble') await expect(page.locator('.chat-card[data-state="pending"]', { hasText: `Move ${description}.` })).toBeVisible()
     await app.settled(channel)
     const moved = async () => (await app.transactions()).find(t => t.id === row.id).category_name
@@ -716,7 +719,7 @@ test.describe.serial('chat in controlled conditions', () => {
     app.fakeReply(proposal(88800))
     const count = stub.sent.length
     stub.text(DANIEL, 'lower clothing to 50')
-    const telegramCard = await stub.reply_after(count, m => m.text.includes('Lower the Clothing'))
+    const telegramCard = await stub.card_after(count, 'Lower the Clothing')
     stub.tap(DANIEL, telegramCard, stub.button(telegramCard, 'Apply'))
     await expect.poll(() => telegramCard.text, { timeout: 15_000 }).toContain('Applied.')
     expect(telegramCard.text).toContain('→ €888,00')
@@ -767,7 +770,7 @@ test.describe.serial('chat in controlled conditions', () => {
     app.fakeReply(await addProposal('Sample Garbled Press')())
     const count = stub.sent.length
     stub.text(DANIEL, 'add the garbled one')
-    const card = await stub.reply_after(count, m => m.text.includes('Sample Garbled Press'))
+    const card = await stub.card_after(count, 'Sample Garbled Press')
     stub.garbledAcknowledge = true
     try {
       stub.tap(DANIEL, card, stub.button(card, 'Apply'))
@@ -788,7 +791,12 @@ test.describe.serial('chat in controlled conditions', () => {
     const twins = (await app.transactions()).filter(t => t.description === 'Sample Twin Shop')
     const refund = twins.find(t => t.amount_cents === 500)
     const purchase = twins.find(t => t.amount_cents === -500)
-    app.fakeReply({ kind: 'propose', summary: 'Book the twin.', op: 'refund.book', args: { refund_id: refund.id, purchase_id: purchase.id } })
+    const book = { kind: 'propose', summary: 'Book the twin.', op: 'refund.book', args: { refund_id: refund.id, purchase_id: purchase.id } }
+    const ask = (sign: number) => [
+      { reply: { kind: 'choices', transaction_ids: twins.filter(t => Math.sign(t.amount_cents) === sign).map(t => t.id) } },
+      { reply: answer('Which one?') },
+    ]
+    app.script([{ reply: book }, ...ask(1), { reply: book }, ...ask(-1), { reply: book }, { reply: answer('Here it is.') }])
     await say(page, 'the twin shop gave it back')
     for (let round = 0; round < 2; round++) {
       const options = page.locator('.chat-options').last()
@@ -898,7 +906,7 @@ test.describe.serial('chat in controlled conditions', () => {
     expect(await rowCount()).toBe(before)
 
     // In the bubble too: a yes from a screen that has not got the card yet does nothing.
-    await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+    await app.post('/chat/new', { channel: 'bubble' })
     app.fakeReply(await addProposal('Sample Unseen Bubble')())
     await app.post('/chat/messages', { channel: 'bubble', text: 'add it' })
     await app.settled('bubble')
@@ -906,7 +914,7 @@ test.describe.serial('chat in controlled conditions', () => {
     await app.settled('bubble')
     expect(await rowCount()).toBe(before)
     stopBot = startBot(stub, `${app.base}/api`)
-    await app.json('/chat/messages?channel=telegram', { method: 'DELETE' })
+    await app.post('/chat/new', { channel: 'telegram' })
   })
 
   test('R-015 R-029: replies reach Telegram after the app restarts mid-message', async () => {
@@ -945,8 +953,9 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     app.fakeReply({ ...await addProposal(`Sample Long ${'x'.repeat(4200)}`)(), summary: 'Add the long one.' })
     stub.text(DANIEL, 'add the long one')
-    const last = await stub.reply_after(count, m => Boolean(m.reply_markup?.inline_keyboard?.length))
-    const parts = () => stub.sent.slice(count).filter(m => !m.deleted && m.message_id <= last.message_id && m.chat_id === DANIEL)
+    const last = await stub.reply_after(count, m => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply'))
+    const isLog = (text: string) => /^(Working on it|Worked through|Stopped)/.test(text)
+    const parts = () => stub.sent.slice(count).filter(m => !m.deleted && m.message_id <= last.message_id && m.chat_id === DANIEL && !isLog(m.text))
     expect(parts().length).toBeGreaterThan(1)
     await app.cardShown()
     stub.tap(DANIEL, last, stub.button(last, 'Apply'))

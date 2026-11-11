@@ -21,7 +21,7 @@ backend/
   seed.py              Default categories + budget templates (idempotent)
   importers/           CSV parsers (base.py, ing.py, revolut.py, degiro.py)
   categorizer/         rules.py (pattern matching), ai.py (Claude Haiku), claude_cli.py (sandboxed login)
-  assistant/           The chat: actions.py (what it can change, preview + apply), brain.py (what Claude is given, running it), prompts.py (system prompt), tools.py (the tools Claude can call), figures.py (fills cited figures in), service.py (queue, Yes/No), queries.py (read-only views), charts.py (draws charts from query results)
+  assistant/           The chat agent: actions.py (what it can change, preview + apply), brain.py (the conversation it is given, running a reply, Stop and the time limit), prompts.py (system prompt), tools.py (the tools Claude can call), figures.py (wording helpers), service.py (queue, live log, Stop, New chat, Yes/No), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results)
   telegram_bot.py      The private Telegram bot, its own process; a thin front on /chat
   routers/             API route handlers (imports, transactions, budget, rules, dashboard, categories)
   tests/               pytest test suite
@@ -75,6 +75,7 @@ frontend/
 | `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
 | `CLAUDE_CLI_HOME` | For chat | (none) | Private folder for the sandboxed Claude login. The chat only uses this login, never an API key. |
 | `CHAT_MODEL` | No | `sonnet` | Claude model behind both chats. |
+| `CHAT_TIME_LIMIT_SECONDS` | No | `540` | How long Claude may work on one reply before it is stopped and writes up what it found (about a minute more). |
 | `TELEGRAM_BOT_TOKEN` | For the bot | (none) | From BotFather. A bot of its own, separate from Hermes. |
 | `TELEGRAM_ALLOWED_USER_ID` | For the bot | (none) | The one numeric Telegram account the bot answers. |
 | `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
@@ -101,13 +102,15 @@ Place these in a `.env` file (gitignored).
 
 ### Adding Something the Chat Can Change
 
-Add an `Op` to `OPS` in `backend/assistant/actions.py` that calls the existing router function, with the argument signature the model is shown in the `propose_change` tool. Preview, before/after fields, budget effect and apply-once come for free: an action runs inside a transaction and is compared against the tables.
+Add an `Op` to `OPS` in `backend/assistant/actions.py` that calls the existing router function, with the argument signature the model is shown in the `propose_change` tool. Preview, before/after fields, budget effect, apply-once and batching (the `batch` op) come for free: an action runs inside a transaction and is compared against the tables. When the app refuses a change, the reason goes back to Claude to correct, so make `ActionError` messages say exactly what is wrong (which row, which field).
 
-### Questions About the Past
+### The Chat Agent
 
-Claude works through real tools in `assistant/tools.py`, served by the app to one run over loopback MCP; built-in tools stay off. It reads history with `run_query`, which only ever sees a private in-memory copy built per question by the Month page's own code (`assistant/queries.py`), so other tables do not exist there. In an analytical answer it cites cells such as `{q1.r3.spent_cents}` and the app fills them in, formatted by the column's name.
+Each chat (panel, Telegram) is one ongoing conversation; `brain.build_prompt` gives Claude all of it since the last New chat (a `new_chat` marker row), plus this month's Month page overview. One `claude -p` run per reply works through the tools in `assistant/tools.py`, served by the app over loopback MCP; built-in tools stay off. Its final text is the reply. Every tool call adds a plain-words step to the live log (saved on the person's message, shown in both chats). Stop or the time limit ends the run; Claude then writes up what it found, without tools.
 
-Say what a tool does in its description and keep behaviour and judgement in `assistant/prompts.py`. Enforce rules through a tool's arguments or a check that tells Claude what to fix, rather than by pattern-matching its prose. To let Claude read something new, add a table to `_DDL`, `_TABLES`, `SCHEMA` and `_fill`. Keep the default snapshot in `build_prompt` bounded: history is fetched on demand.
+Lookups never change data: `month_overview` rolls back what opening a month writes, and `run_query` only sees a private in-memory copy built per reply by the Month page's own code (`assistant/queries.py`). Cards are made during the run and stay open until applied, rejected or replaced by a card that names them in `replaces`.
+
+Say what a tool does in its description and keep behaviour and judgement in `assistant/prompts.py`. To let Claude read something new, add a table to `_DDL`, `_TABLES`, `SCHEMA` and `_fill`/`_fill_setup`. Keep the default context in `build_prompt` bounded: history is fetched on demand.
 
 ### Adding a New Category
 

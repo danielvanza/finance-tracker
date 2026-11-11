@@ -5,6 +5,7 @@ compares the tables before and after, and rolls back, so the card shows what wou
 Applying runs it again and commits only if the outcome still matches what the person saw.
 """
 import enum
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -22,6 +23,7 @@ from financial_month import label_month_for_date
 from models import Budget, Category, Rule, Setting, StandingAdjustment, Transaction, TransactionSplit
 from routers import budget as budget_router
 from routers import categories as categories_router
+from routers import goals as goals_router
 from routers import rules as rules_router
 from routers import settings as settings_router
 from routers import standing_adjustments as standing_router
@@ -40,6 +42,7 @@ _LONG_MONTHS = [
     "October", "November", "December",
 ]
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
+MAX_BATCH = 500
 _TABLES = (Transaction, TransactionSplit, Category, Rule, Budget, StandingAdjustment, Setting)
 
 
@@ -198,10 +201,12 @@ def _confirm_guesses(db: Session, a: dict):
     ids = a.get("ids") or []
     if not ids:
         raise ActionError("There are no guesses to confirm")
+    if len(set(ids)) != len(ids):
+        raise ActionError("The same row is listed twice")
     for tx_id in ids:
-        tx = _get(db, Transaction, tx_id, "transaction")
+        tx = _get(db, Transaction, tx_id, f"transaction (id {tx_id})")
         if tx.confirmed or not (tx.category_id or tx.splits):
-            raise ActionError(f"'{tx.description}' is not a guess waiting for review")
+            raise ActionError(f"Row {tx.id} ('{tx.description}') is not a guess waiting for review")
         tx.confirmed = True
     db.commit()
 
@@ -245,6 +250,61 @@ def _prepare_budget(db: Session, a: dict):
         budget_router._auto_populate(date(year, mo, 1), db)
 
 
+def _goal_in(g: dict) -> dict:
+    """A stored goal in the shape the goals endpoint takes, its start date kept."""
+    return {"name": g["n"], "category_id": g["c"], "target_cents": g["t"], "start_cents": g.get("s", 0),
+            "by": g.get("b"), "started": g.get("d")}
+
+
+def _set_goal(db: Session, a: dict):
+    """Add a savings goal for a category, or change the one it has."""
+    goals = [_goal_in(g) for g in goals_router._stored(db)]
+    current = next((g for g in goals if g["category_id"] == a.get("category_id")), None)
+    if current is None:
+        if "name" not in a or "target_cents" not in a:
+            raise ActionError("A new savings goal needs a name and a target")
+        current = {"category_id": a.get("category_id"), "start_cents": 0, "by": None, "started": None}
+        goals.append(current)
+    current.update({k: a[k] for k in ("name", "target_cents", "start_cents", "by") if k in a})
+    goals_router.put_goals(goals_router.GoalsIn(goals=goals), db)
+
+
+def _delete_goal(db: Session, a: dict):
+    goals = [_goal_in(g) for g in goals_router._stored(db)]
+    kept = [g for g in goals if g["category_id"] != a.get("category_id")]
+    if len(kept) == len(goals):
+        raise ActionError("That category has no savings goal")
+    goals_router.put_goals(goals_router.GoalsIn(goals=kept), db)
+
+
+def _batch_items(a: dict) -> list[tuple[str, dict]]:
+    items = a.get("changes")
+    if not isinstance(items, list) or not items:
+        raise ActionError("A batch needs a list of changes")
+    if len(items) > MAX_BATCH:
+        raise ActionError(f"A batch can hold at most {MAX_BATCH} changes")
+    out = []
+    for i, item in enumerate(items, 1):
+        if not isinstance(item, dict) or not isinstance(item.get("args"), dict) or item.get("op") not in OPS or item.get("op") == "batch":
+            raise ActionError(f"Change {i} in the batch is not a change the app can make")
+        out.append((item["op"], item["args"]))
+    return out
+
+
+def _batch(db: Session, a: dict):
+    for i, (name, args) in enumerate(_batch_items(a), 1):
+        try:
+            _run_op(name, args, db)
+        except ActionError as e:
+            raise ActionError(f"Change {i} in the batch ({name}): {e}") from e
+
+
+def _prepare_batch(db: Session, a: dict):
+    for name, args in _batch_items(a):
+        if OPS[name].prepare:
+            OPS[name].prepare(db, args)
+
+
 def _standing_fields(a: dict) -> dict:
     fields = {k: a[k] for k in ("name", "income_category_id", "expense_category_id", "active") if k in a}
     if "amount_cents" in a:
@@ -253,6 +313,12 @@ def _standing_fields(a: dict) -> dict:
         year, mo = _month(a["start_month"])
         fields["start_month"] = date(year, mo, 1)
     return fields
+
+
+def _set_setting(db: Session, a: dict):
+    if a.get("key") != "financial_month_start_day":
+        raise ActionError("Only the financial month start day can be set here; savings goals have goal.set")
+    settings_router.patch_setting(a.get("key"), SettingPatch(value=str(a.get("value"))), db)
 
 
 @dataclass(frozen=True)
@@ -308,8 +374,13 @@ OPS: dict[str, Op] = {
         lambda db, a: standing_router.patch_standing_adjustment(a.get("id"), StandingAdjustmentPatch(**_standing_fields(a)), db),
         '{"id":int, then only what changes: "name","amount_cents","income_category_id","expense_category_id","active","start_month"}'),
     "standing.delete": Op(lambda db, a: standing_router.delete_standing_adjustment(a.get("id"), db), '{"id":int}'),
-    "setting.set": Op(lambda db, a: settings_router.patch_setting(a.get("key"), SettingPatch(value=str(a.get("value"))), db),
-        '{"key":"financial_month_start_day","value":"1-28"}'),
+    "setting.set": Op(_set_setting, '{"key":"financial_month_start_day","value":"1-28"}'),
+    "goal.set": Op(_set_goal,
+        '{"category_id":int (a savings category; one goal each),"name":str,"target_cents":int,"start_cents":int optional (already in the pot when it started),"by":"YYYY-MM" or null optional} adds a goal, or changes the one that category has (then only what changes)'),
+    "goal.delete": Op(_delete_goal, '{"category_id":int}'),
+    "batch": Op(_batch,
+        '{"changes":[{"op":str,"args":{...}}, ...]} several of the changes above on one card, applied together or not at all, such as reviewing a group of guesses with review.confirm and transaction.update',
+        prepare=_prepare_batch),
 }
 
 # Reached only from an import's Merge card, never from the model.
@@ -504,11 +575,30 @@ def _changes(before: dict, after: dict) -> list[dict]:
         },
         "New: ", "Removed: ",
     )
+    plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(
         lambda s: {"financial_month_start_day": "Financial month start day"}.get(s["key"], s["key"]),
-        before["settings"], after["settings"], lambda s: {"Value": s["value"]}, "New setting: ", "Removed setting: ",
+        plain(before), plain(after), lambda s: {"Value": s["value"]}, "New setting: ", "Removed setting: ",
+    )
+    out += _row_changes(
+        lambda g: f"Savings goal “{g['n']}”", _goals_in(before), _goals_in(after),
+        lambda g: {
+            "Name": g["n"], "Saved into": names.category(g["c"]), "Target": eur(int(g["t"])),
+            "In the pot at the start": eur(int(g.get("s", 0))),
+            "By": _month_label(date(int(g["b"][:4]), int(g["b"][5:]), 1)) if g.get("b") else "No date",
+        },
+        "New: ", "Removed: ",
     )
     return out
+
+
+def _goals_in(snap: dict) -> dict:
+    row = snap["settings"].get(goals_router.KEY)
+    try:
+        goals = json.loads(row["value"]) if row else []
+    except ValueError:
+        goals = []
+    return {g["c"]: g for g in goals if isinstance(g, dict) and "c" in g} if isinstance(goals, list) else {}
 
 
 def _tx_category_ids(tx: dict, snap: dict) -> set[int]:

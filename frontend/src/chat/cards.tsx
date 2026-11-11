@@ -1,8 +1,38 @@
+import { useState } from 'react'
 import { formatCents } from '../money'
-import type { ChatCard, ChatEffect, ChatImportCounts, ChatTransactionRef } from '../types'
+import type { ChatCard, ChatChange, ChatEffect, ChatImportCounts, ChatTransactionRef } from '../types'
 
 export type CardAction = 'apply' | 'reject'
 export type CardError = { unknown: boolean; action: CardAction }
+
+const COMPACT_AFTER = 5 // more rows than this: one line each
+const FIRST_ROWS = 8 // shown before "Show all"
+
+/** A long batch, one line per row, the rest behind Show all. */
+function BatchRows({ changes }: { changes: ChatChange[] }) {
+  const [all, setAll] = useState(false)
+  const shown = all ? changes : changes.slice(0, FIRST_ROWS)
+  return (
+    <div className="chat-change">
+      <p className="lab">{changes.length} rows</p>
+      <ul className="chat-batch">
+        {shown.map((change, i) => (
+          <li key={i}>
+            <span>{change.title}</span>
+            <span className="chat-batch-fields">
+              {change.fields.map(field => <span key={field.label}>{field.label}: <s>{field.before}</s> → {field.after}</span>)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {changes.length > FIRST_ROWS && (
+        <button type="button" className="chat-quiet-btn" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show all ${changes.length}`}
+        </button>
+      )}
+    </div>
+  )
+}
 
 const plan = (cents: number | null) => (cents === null ? '' : ` of ${formatCents(cents)}`)
 
@@ -71,7 +101,7 @@ export function ProposalCard({ card, localError, busy, onApply, onReject }: {
       <p className="lab">{card.heading}</p>
       <p className="chat-summary">{card.summary}</p>
       {card.note && <p className="chat-note">{card.note}</p>}
-      {card.changes.map(change => (
+      {card.changes.length > COMPACT_AFTER ? <BatchRows changes={card.changes} /> : card.changes.map(change => (
         <div key={change.title} className="chat-change">
           <p className="lab">{change.title}</p>
           <dl>

@@ -62,12 +62,12 @@ def test_categoriser_uses_the_login_when_set_up(cli_env, db):
     db.commit()
     answer = json.dumps({"is_error": False, "result": '[{"index": 0, "category": "Groceries", "confidence": 0.9}]'})
     tx = SimpleNamespace(amount=Decimal("-12.50"), description="ALBERT HEIJN")
-    with patch("categorizer.claude_cli.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout=answer, stderr="")) as run, \
+    with patch("categorizer.claude_cli._run", return_value=SimpleNamespace(returncode=0, stdout=answer, stderr="")) as run, \
             patch("categorizer.ai.anthropic.Anthropic") as api:
         results = ai.batch_categorise_with_ai([tx], db)
     assert results[0][0].name == "Groceries"
     api.assert_not_called()
-    assert "ALBERT HEIJN" in run.call_args.kwargs["input"]
+    assert "ALBERT HEIJN" in run.call_args.args[1]
     assert "ALBERT HEIJN" not in " ".join(run.call_args.args[0])
 
 
@@ -76,5 +76,5 @@ def test_a_failed_run_leaves_transactions_for_review(cli_env, db):
     db.commit()
     tx = SimpleNamespace(amount=Decimal("-1"), description="X")
     failed = SimpleNamespace(returncode=1, stdout="", stderr="logged out")
-    with patch("categorizer.claude_cli.subprocess.run", return_value=failed):
+    with patch("categorizer.claude_cli._run", return_value=failed):
         assert ai.batch_categorise_with_ai([tx], db) == {}

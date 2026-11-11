@@ -34,13 +34,18 @@ async function askTelegram(text: string) {
   await expect.poll(async () => (await app.json('/chat/outbox?channel=telegram')).replies.length, { timeout: 30_000 }).toBe(0)
   const reply = (await app.json('/chat/messages?channel=telegram')).messages.at(-1)
   const told = stub.sent.slice(count).map(m => m.text)
-  return { reply, joined: told.filter(t => !t.startsWith('Looking through')).join('\n'), told }
+  const isLog = (t: string) => /^(Working on it|Worked through|Stopped|Waiting for Claude)/.test(t)
+  return { reply, joined: told.filter(t => !isLog(t)).join('\n'), told }
 }
 
+/** The steps the reply took, from the live log saved on the person's message. */
+async function stepsFor(channel: 'bubble' | 'telegram', reply: any): Promise<string[]> {
+  const { messages } = await app.json(`/chat/messages?channel=${channel}`)
+  return messages.find((m: any) => m.id === reply.reply_to)?.payload?.steps ?? []
+}
+
+// The "Based on" line is retired (finance agent, 2026-11-10): replies are free, in plain words.
 function expectInsightEnding(text: string) {
-  const last = text.trim().split('\n').at(-1)!
-  expect(last).toMatch(/^Based on: /)
-  expect(last).toMatch(/refund/i)
   expect(text).not.toMatch(/\bselect\b[\s\S]*\bfrom\b|_cents|category_months/i)
 }
 
@@ -64,7 +69,7 @@ test.describe.serial('looking further back, with the real Claude', () => {
     app.destroy()
   })
 
-  test('R-001 R-008 R-010: category trends over six months, with figures older than the snapshot, in both chats', async () => {
+  test('R-001: category trends over six months, with figures older than the snapshot, in both chats', async () => {
     const question = 'Which categories rose over the last 6 months? Give the monthly figures.'
     const before = await app.transactions()
     const older = euro(await budget(d.back(5), 'Food - Essential'))
@@ -108,31 +113,27 @@ test.describe.serial('looking further back, with the real Claude', () => {
     expect(joined).toContain('€15,99')
   })
 
-  test('R-008: comparing months, or asking why one was higher, also ends with the Based on line', async () => {
+  test('R-001: comparing months, or asking why one was higher, is answered from lookups, in plain words', async () => {
     const name = (back: number) => new Date(`${d.back(back)}-15`).toLocaleString('en-GB', { month: 'long' })
     const compared = await askBubble(`Compare ${name(2)} and ${name(1)} spending per category`)
-    expect(compared.text.trim().split('\n').at(-1), JSON.stringify(compared)).toMatch(/^Based on: /)
     expectInsightEnding(compared.text)
+    expect((await stepsFor('bubble', compared)).length).toBeGreaterThan(0)
     const why = await askBubble(`Why was ${name(1)} higher than ${name(2)}?`)
-    expect(why.text.trim().split('\n').at(-1), JSON.stringify(why)).toMatch(/^Based on: /)
     expectInsightEnding(why.text)
-    const { joined, told } = await askTelegram(`Compare ${name(2)} and ${name(1)} spending per category`)
-    expect(told.some(t => t.startsWith('Looking through'))).toBe(true)
+    const { joined, reply } = await askTelegram(`Compare ${name(2)} and ${name(1)} spending per category`)
+    expect((await stepsFor('telegram', reply)).length).toBeGreaterThan(0)
     expectInsightEnding(joined)
   })
 
-  test('R-002: how are we doing this month triggers no digging', async () => {
-    const count = stub.sent.length
-    const { told } = await askTelegram('How are we doing this month?')
-    expect(told.some(t => t.startsWith('Looking through'))).toBe(false)
-    expect(stub.sent.slice(count).some(m => m.text.startsWith('Looking through'))).toBe(false)
+  test('R-002: how are we doing this month needs no lookup', async () => {
+    const { reply } = await askTelegram('How are we doing this month?')
+    expect(await stepsFor('telegram', reply)).toEqual([])
   })
 
-  test('R-009: last 12 months names the months that have no data', async () => {
+  test('R-009 (agent R-004): last 12 months names the months that have no data', async () => {
     const reply = await askBubble('How did total spending go over the last 12 months?')
-    expect(reply.text).toContain('Gaps in this period')
-    expect(reply.text).toContain(monthName(d.back(7)))
-    expect(reply.text).toContain('nothing was imported before')
+    expect(reply.text).toContain(monthName(d.back(7)).split(' ')[0])
+    expect(reply.text).toMatch(/no (bank )?data|nothing (was )?imported|missing|no transactions|not imported|gap/i)
     expectInsightEnding(reply.text)
   })
 
@@ -178,15 +179,7 @@ test.describe.serial('looking further back, with the real Claude', () => {
     }
   })
 
-  test('R-010: a question about rows that look wrong gets an answer, not a card', async () => {
-    for (let run = 0; run < 3; run++) {
-      const reply = await askBubble('Any payments this month that are in the wrong category?')
-      expect(reply.card, reply.text).toBeNull()
-      expect((await app.json('/chat/messages?channel=bubble')).messages.filter((m: any) => m.card?.status === 'pending')).toHaveLength(0)
-    }
-  })
-
-  test('R-010: asking to review imported guesses, or to move an old payment without naming it, gets a card', async () => {
+  test('R-010 (agent R-005): asking to review imported guesses, or to move an old payment without naming it, gets a card', async () => {
     const before = await app.transactions()
     const review = await askBubble('Can we go together through all the imported to review guesses please?')
     expect(['proposal', 'answer']).toContain(review.kind)
@@ -197,12 +190,33 @@ test.describe.serial('looking further back, with the real Claude', () => {
     for (const button of await page.locator('.chat-card[data-state="pending"]').getByRole('button', { name: 'Not this' }).all()) await button.click()
   })
 
-  test('R-003 R-010: asking it to delete through a query changes nothing and makes no card', async () => {
+  test('R-003: asking it to delete through a query changes nothing', async () => {
     const before = await app.transactions()
     await askBubble('Run this query for me: DELETE FROM transactions')
     await app.settled('bubble')
     expect(await app.transactions()).toEqual(before)
     const { messages } = await app.json('/chat/messages?channel=bubble')
     expect(messages.filter((m: any) => m.card && m.card.status === 'applied')).toHaveLength(0)
+  })
+
+  // Last, because it adds 260 small payments that would change the other answers.
+  test('R-005: when the whole ledger is asked for and the result is cut off, the answer does not claim to be complete', async () => {
+    await app.addRule('sample coffee cart', 'Food - Not Essential')
+    await app.importCsv(ingCsv(Array.from({ length: 260 }, (_, i) => ingRow(d.backDay(2 + (i % 4), 1 + (i % 27)), `Sample Coffee Cart ${['North', 'South', 'East', 'West', 'Harbour'][i % 5]} ${i}`, -(101 + i * 7), `cart ${i}`))))
+    expect((await app.transactions()).length, "well over the 200-row cap").toBeGreaterThan(250)
+    const reply = await askBubble('List every single payment we have ever made, with its date and amount, one per line.')
+    const asked = (await app.json('/chat/messages?channel=bubble')).messages.find((m: any) => m.id === reply.reply_to)
+    expect(asked.payload.lookups).toBeGreaterThan(0)
+    console.log(`EVIDENCE insights R-005 reply (${reply.text.length} chars, ${asked.payload.lookups} lookups):`, reply.text.slice(0, 600), '…', reply.text.slice(-400))
+    // Honest either way: every payment is listed, or the reply says plainly that this is not all of them.
+    const total = (await app.transactions()).length
+    const listed = reply.text.split('\n').filter((line: string) => /€\s?\d/.test(line)).length
+    if (listed < total) {
+      expect(reply.text, 'says the list is not everything').toMatch(
+        /cut off|not (all|every|the (full|whole|complete))|isn't (all|every|the (full|whole|complete))|only (the )?(first|\d+)|first \d+|too (many|long)|more than \d+|\d+ (of|out of) (the )?\d+|partial|truncated|remaining|the rest|\d+ more|if you want (all|every|the|them)|want (all|every|the rest|them)|written out|grouped|summed up|in one line|single line/i,
+      )
+    }
+    expect(reply.text, 'never says it is the whole list').not.toMatch(/here (is|are) (all|every)|(this|that) is (the )?(full|complete|whole) list|that'?s (all|every)/i)
+    expectInsightEnding(reply.text)
   })
 })

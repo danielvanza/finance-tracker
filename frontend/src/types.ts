@@ -193,10 +193,12 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   kind: 'text' | 'file' | 'answer' | 'clarify' | 'proposal' | 'import' | 'error'
   text: string
-  status: 'queued' | 'running' | 'waiting' | 'digging' | 'done'
+  status: 'queued' | 'running' | 'waiting' | 'stopping' | 'done'
   reply_to: number | null
   created_at: string
-  payload: (ChatImportCounts & { options?: undefined }) | { options: ChatTransactionRef[] } | { chart: ChatChart } | null
+  payload: (ChatImportCounts & { options?: undefined }) | { options: ChatTransactionRef[] } | { chart: ChatChart } | ChatWork | null
   card: ChatCard | null
 }
+/** On a person's message: the live log of the reply's steps, and how the reply ended if it was cut short. */
+export interface ChatWork { steps?: string[]; ended?: 'stopped' | 'time' }
 export interface ChatConversation { messages: ChatMessage[]; guesses_waiting: number; claude_busy: boolean }

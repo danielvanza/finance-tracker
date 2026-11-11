@@ -30,6 +30,14 @@ class ClaudeCliError(Exception):
     pass
 
 
+class TimedOut(ClaudeCliError):
+    """The run hit its time limit and was ended."""
+
+
+class Stopped(ClaudeCliError):
+    """The run was ended on request, before it finished."""
+
+
 def enabled() -> bool:
     return bool(os.getenv("CLAUDE_CLI_HOME"))
 
@@ -137,14 +145,41 @@ def build_command(
     return command, env
 
 
+def _run(command: list[str], prompt: str, env: dict, cwd: Path, timeout: float, should_stop) -> subprocess.CompletedProcess:
+    """The process to its end, unless the time runs out or should_stop() says to end it first."""
+    try:
+        process = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, cwd=cwd, text=True,
+        )
+    except OSError as e:
+        raise ClaudeCliError(f"could not start: {e}") from e
+    output: dict = {}
+    reader = threading.Thread(target=lambda: output.update(zip(("stdout", "stderr"), process.communicate(prompt))), daemon=True)
+    reader.start()
+    deadline = time.monotonic() + timeout
+    while reader.is_alive():
+        reader.join(0.25)
+        if not reader.is_alive():
+            break
+        stop = should_stop is not None and should_stop()
+        if stop or time.monotonic() > deadline:
+            process.kill()  # bwrap's --die-with-parent takes the CLI down with it
+            reader.join(10)
+            if stop:
+                raise Stopped("stopped on request")
+            raise TimedOut(f"stopped after {timeout:.0f} seconds")
+    return subprocess.CompletedProcess(command, process.returncode, output.get("stdout", ""), output.get("stderr", ""))
+
+
 def complete(
     system: str, prompt: str, model: str, timeout: float, on_wait=None,
-    tools: dict | None = None, allowed_tools: list[str] | None = None,
+    tools: dict | None = None, allowed_tools: list[str] | None = None, should_stop=None,
 ) -> str:
     """Run one prompt and return the model's text. Raises ClaudeCliError if it can't.
 
     Only one run happens at a time. If another is going, on_wait(True) is called before queueing
-    behind it and on_wait(False) when this run starts.
+    behind it and on_wait(False) when this run starts. should_stop() is asked a few times a second;
+    when it says yes, the run is ended and Stopped raised, also while still queued.
     """
     found = shutil.which(os.getenv("CLAUDE_BIN", "claude"))
     if not found:
@@ -165,7 +200,9 @@ def complete(
     if not _lock.acquire(blocking=False):
         if on_wait:
             on_wait(True)
-        _lock.acquire()
+        while not _lock.acquire(timeout=0.25):
+            if should_stop is not None and should_stop():
+                raise Stopped("stopped while waiting")
         if on_wait:
             on_wait(False)
     try:
@@ -176,14 +213,7 @@ def complete(
             tools_file.touch(mode=0o600)
             tools_file.write_text(json.dumps(tools))
         try:
-            run = subprocess.run(
-                command, input=prompt, env=env, cwd=work, timeout=timeout,
-                capture_output=True, text=True,
-            )
-        except subprocess.TimeoutExpired as e:
-            raise ClaudeCliError(f"stopped after {timeout:.0f} seconds") from e
-        except OSError as e:
-            raise ClaudeCliError(f"could not start: {e}") from e
+            run = _run(command, prompt, env, work, timeout, should_stop)
         finally:
             tools_file.unlink(missing_ok=True)
             _link_credential(home, credential)

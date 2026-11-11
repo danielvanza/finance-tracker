@@ -25,7 +25,13 @@ APP_REFUSED = "The finance app didn't accept that, so nothing changed."
 APP_LOST = "The finance app stopped while working on that. It will carry on when it is back, and the answer will come here."
 WAITING = "Waiting for Claude. Your message is saved and will be answered as soon as it is free."
 READING = "Reading your file and sorting it. This can take a few minutes."
-DIGGING = "Looking through the history. This can take a few minutes."
+NEW_CHAT = "Started a new chat. I won't draw on what we said before."
+# Telegram sends /start whenever the bot is opened afresh, so it must never cost the conversation.
+HELLO = "Hello. Ask me anything about your money, or send an ING CSV. We carry on where we left off; send /new to start a new chat."
+NOTHING_TO_STOP = "Nothing is being worked on right now."
+STOP_WORDS = {"stop", "/stop"}
+LOG_STEPS = 40
+COMPACT_AFTER = 5  # a card with more rows than this shows one line per row
 CHART_LOST = "The chart could not be sent this time."
 NOT_A_FILE = "Send an ING CSV as a file, or say what happened in words."
 # A bad answer from Telegram itself: refused, unreachable, or not JSON at all.
@@ -116,6 +122,12 @@ class Finance:
     def reject(self, proposal_id: int):
         return self._request("POST", f"/chat/proposals/{proposal_id}/reject")
 
+    def stop(self) -> int:
+        return self._request("POST", "/chat/stop", json={"channel": "telegram"})["stopped"]
+
+    def new_chat(self):
+        return self._request("POST", "/chat/new", json={"channel": "telegram"})
+
 
 def eur(cents: int) -> str:
     sign = "-" if cents < 0 else ""
@@ -152,9 +164,15 @@ def render_card(card: dict) -> tuple[str, list | None]:
     lines = [card["heading"], "", card["summary"]]
     if card["note"]:
         lines += ["", card["note"]]
-    for change in card["changes"]:
-        lines += ["", change["title"], ""]
-        lines += [f"{f['label']}: {f['before']} → {f['after']}" for f in change["fields"]]
+    if len(card["changes"]) > COMPACT_AFTER:
+        lines += ["", f"{len(card['changes'])} rows:"]
+        for change in card["changes"]:
+            fields = "; ".join(f"{f['label']}: {f['before']} → {f['after']}" for f in change["fields"])
+            lines.append(f"• {change['title']}: {fields}")
+    else:
+        for change in card["changes"]:
+            lines += ["", change["title"], ""]
+            lines += [f"{f['label']}: {f['before']} → {f['after']}" for f in change["fields"]]
     if card["purchase"]:
         purchase = card["purchase"]
         lines += ["", f"Refund for: {purchase['description']}, {purchase['date_label']} ({purchase['amount_label']})"]
@@ -181,7 +199,35 @@ def render_import(counts: dict) -> str:
 
 
 def _chunks(text: str) -> list[str]:
-    return [text[i:i + TEXT_LIMIT] for i in range(0, len(text), TEXT_LIMIT)] or [" "]
+    """Pieces that fit one Telegram message, broken between lines where possible."""
+    chunks, current = [], ""
+    for line in text.split("\n"):
+        while len(line) > TEXT_LIMIT:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:TEXT_LIMIT])
+            line = line[TEXT_LIMIT:]
+        if current and len(current) + 1 + len(line) > TEXT_LIMIT:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current.strip():
+        chunks.append(current)
+    return chunks or [" "]
+
+
+def render_log(steps: list[str], status: str, finished: bool) -> tuple[str, list | None]:
+    """The live log of one reply: one message, edited as the steps come in, with Stop until it ends."""
+    if finished:
+        heading = "Stopped." if status == "stopping" else "Worked through:"
+    else:
+        heading = "Stopping…" if status == "stopping" else "Working on it…"
+    shown = steps[-LOG_STEPS:]
+    lines = [heading, *(["…"] if len(steps) > len(shown) else []), *[f"• {step}" for step in shown]]
+    buttons = None if finished or status == "stopping" else [[{"text": "Stop", "callback_data": "s:0"}]]
+    return "\n".join(lines), buttons
 
 
 def _option_label(option: dict) -> str:
@@ -194,7 +240,7 @@ class Bot:
         self.finance = finance
         self.allowed = allowed_user_id
         self._told_waiting: set[int] = set()
-        self._told_digging: set[int] = set()
+        self._logs: dict[int, dict] = {}  # message id -> its log in Telegram: message_id, text, status
         self._in_flight: list[dict] = []
         self._told_lost = False
         self._last_typing = 0.0
@@ -284,12 +330,35 @@ class Bot:
             if (item["status"] == "waiting" or late) and item["id"] not in self._told_waiting:
                 self._told_waiting.add(item["id"])
                 self.say(WAITING)
-            if item["status"] == "digging" and item["id"] not in self._told_digging:
-                self._told_digging.add(item["id"])
-                self.say(DIGGING)
+        self._update_logs()
         if self._in_flight and time.monotonic() - self._last_typing > 4:
             self._last_typing = time.monotonic()
             self.telegram.call("sendChatAction", chat_id=self.allowed, action="typing")
+
+    def _update_logs(self) -> None:
+        """One message per reply being worked on, kept up to date; finished ones get their last word."""
+        working = {item["id"]: item for item in self._in_flight if item.get("kind", "text") == "text"}
+        for item_id, item in working.items():
+            if item["status"] not in ("running", "stopping") and item_id not in self._logs:
+                continue
+            log = self._logs.get(item_id)
+            text, buttons = render_log(item.get("steps", []), item["status"], finished=False)
+            if log is None:
+                self._logs[item_id] = {"message_id": self._send(text, buttons), "text": text,
+                                       "status": item["status"], "steps": item.get("steps", [])}
+            elif log["text"] != text:
+                self.edit(log["message_id"], text, buttons)
+                log.update(text=text, status=item["status"], steps=item.get("steps", []))
+        for item_id in [i for i in self._logs if i not in working]:
+            log = self._logs.pop(item_id)
+            if log["steps"] or log["status"] == "stopping":
+                text, _ = render_log(log["steps"], log["status"], finished=True)
+                self.edit(log["message_id"], text, None)
+            else:
+                try:
+                    self.telegram.call("deleteMessage", chat_id=self.allowed, message_id=log["message_id"])
+                except TELEGRAM_FAILED:
+                    logger.info("could not remove an empty log")
 
     def pump_forever(self) -> None:
         while True:
@@ -318,6 +387,13 @@ class Bot:
                     return
                 self._safely(lambda _: self.say(READING), None)  # the file matters more than the notice
                 self.finance.send_file(document.get("file_name") or "bank file", content)
+            elif message.get("text", "").strip().lower() in STOP_WORDS:
+                self._stop()
+            elif message.get("text", "").strip().lower() == "/new":
+                self.finance.new_chat()
+                self.say(NEW_CHAT)
+            elif message.get("text", "").strip().lower() == "/start":
+                self.say(HELLO)
             elif message.get("text"):
                 posted = self.finance.send(message["text"])
                 if posted.get("card") and posted["status"] == "done":
@@ -326,6 +402,13 @@ class Bot:
                 self.say(NOT_A_FILE)
         except AppDown as e:
             self.say(e.message)
+
+    def _stop(self) -> None:
+        if not self.finance.stop():
+            self.say(NOTHING_TO_STOP)
+            return
+        for log in self._logs.values():  # so a reply that ends before the next look still reads as stopped
+            log["status"] = "stopping"
 
     def _acknowledge(self, query: dict) -> None:
         """Stop the button's spinner. A press that arrives late is still a press, so failing here is fine."""
@@ -340,6 +423,12 @@ class Bot:
             return
         message_id = query["message"]["message_id"]
         action, _, rest = (query.get("data") or "").partition(":")
+        if action == "s":
+            try:
+                self._stop()
+            except AppDown as e:
+                self.say(e.message)
+            return
         raw_id, _, version = rest.partition(":")
         if not raw_id.isdigit():
             return

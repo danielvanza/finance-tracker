@@ -29,7 +29,9 @@ def read(name, default=""):
         with open("/sandbox/work/" + name) as f: return f.read().strip()
     except OSError:
         return default
-script = read("script")
+def done(text):
+    print(json.dumps({"result": text, "is_error": False}))
+    sys.exit(0)
 mode = read("mode", "reply")
 delay = float(read("delay", "0"))
 if delay: time.sleep(delay)
@@ -37,48 +39,52 @@ if mode == "logged_out":
     print(json.dumps({"is_error": True, "result": "Not logged in · Please run /login"})); sys.exit(1)
 if mode == "limit":
     print(json.dumps({"is_error": True, "result": "Claude usage limit reached|1793000000"})); sys.exit(1)
-if mode == "garbage":
-    print(json.dumps({"result": "I cannot do JSON today", "is_error": False})); sys.exit(0)
 if "--mcp-config" not in sys.argv:
-    print(json.dumps({"result": read("reply", '{"kind":"answer","text":"Scripted answer."}'), "is_error": False}))
-    sys.exit(0)
+    if "<work_so_far>" in prompt:  # writing up what was found after a stop
+        done(read("wrapup", "I stopped early. So far I had found the scripted figures."))
+    done(read("plain") or read("reply", "[]"))  # the categoriser during an import
 import urllib.request
 server = json.load(open("/sandbox/work/tools.json"))["mcpServers"]["finance"]
 def rpc(method, params):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
     req = urllib.request.Request(server["url"], body, {**server["headers"], "Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req))["result"]
-TOOLS = {"answer": "answer", "clarify": "ask_which", "propose": "propose_change", "query": "run_query", "insight": "submit_insight", "cannot": "cannot_answer"}
-def call(reply):
-    if reply["kind"] == "silent":  # a turn that ends in plain text, without a reply tool
-        print(json.dumps({"result": reply["text"], "is_error": False}))
-        sys.exit(0)
-    fields = dict(reply)
-    tool = TOOLS[fields.pop("kind")]
+TOOLS = {"overview": "month_overview", "query": "run_query", "propose": "propose_change", "choices": "show_choices", "chart": "show_chart"}
+def call(step):
+    fields = {k: v for k, v in step.items() if k not in ("kind", "text")}
+    tool = TOOLS[step["kind"]]
     outcome = rpc("tools/call", {"name": tool, "arguments": fields})
     text = outcome["content"][0]["text"]
     with open("/sandbox/work/tool-calls.jsonl", "a") as f:
         f.write(json.dumps({"tool": tool, "args": fields, "isError": outcome["isError"], "text": text}) + chr(10))
-    return tool, outcome["isError"], text
+    return outcome["isError"]
+# A script is a list of steps, kept across runs: tool calls, each run ending at a reply (kind "answer").
+# A single reply file is one run: its tool call, if any, then its text.
+script = read("script")
 if not script:
-    call(json.loads(read("reply", '{"kind":"answer","text":"Scripted answer."}')))
-    print(json.dumps({"result": "done", "is_error": False}))
-    sys.exit(0)
+    reply = json.loads(read("reply", '{"kind":"answer","text":"Scripted answer."}'))
+    if reply["kind"] != "answer":
+        call(reply)
+    done(reply.get("text", ""))
 steps = json.loads(script)
-at, refused = int(read("script-at", "0")), 0
-for _ in range(40):
-    step = steps[min(at, len(steps) - 1)]
+at = int(read("script-at", "0"))
+for _ in range(2000):
+    if at >= len(steps):
+        done("")
+    step = steps[at]
     at += 1
-    with open("/sandbox/work/script-at", "w") as f: f.write(str(at))
+    if not step.get("repeat"):
+        with open("/sandbox/work/script-at", "w") as f: f.write(str(at))
+    else:
+        at -= 1  # a step that repeats until the run is ended from outside
     if step.get("delay"): time.sleep(step["delay"])
-    tool, failed, text = call(step["reply"])
-    if not failed and tool != "run_query": break
-    refused = refused + 1 if failed else 0
-    if refused >= 3 or (at >= len(steps) and failed and tool != "run_query"): break
-print(json.dumps({"result": "done", "is_error": False}))
+    if step["reply"]["kind"] == "answer":
+        done(step["reply"]["text"])
+    call(step["reply"])
+done("")
 `
 
-export type AppOptions = { port: number; fakeClaude?: boolean }
+export type AppOptions = { port: number; fakeClaude?: boolean; env?: Record<string, string> }
 
 export class App {
   readonly base: string
@@ -107,6 +113,7 @@ export class App {
       CLAUDE_CLI_HOME: this.home,
       CLAUDE_BIN: `${process.env.HOME}/.local/bin/claude`,
       AI_TIME_BUDGET_SECONDS: '240',
+      ...this.options.env,
     }
     if (this.options.fakeClaude) {
       const fake = path.join(this.dir, 'fake-claude')
@@ -141,6 +148,17 @@ export class App {
     execFileSync(python, ['-c', 'import sqlite3, sys; db = sqlite3.connect(sys.argv[1]); db.execute(sys.argv[2]); db.commit()', path.join(this.dir, 'finance.db'), statement])
   }
 
+  /** Every row of every table that holds the household's data, to prove nothing changed. */
+  dump(): Record<string, unknown[]> {
+    const script = [
+      'import json, sqlite3, sys',
+      'db = sqlite3.connect(sys.argv[1])',
+      'tables = ["transactions", "transaction_splits", "categories", "rules", "budgets", "standing_adjustments", "settings"]',
+      'print(json.dumps({t: db.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall() for t in tables}, default=str))',
+    ].join('\n')
+    return JSON.parse(execFileSync(python, ['-c', script, path.join(this.dir, 'finance.db')]).toString())
+  }
+
   /** Steer the fake Claude. */
   fake(files: Record<string, string>) {
     const work = path.join(this.home, 'work')
@@ -153,12 +171,13 @@ export class App {
     return JSON.parse(readFileSync(path.join(this.home, 'work', 'last-call.json'), 'utf8'))
   }
 
+  /** One run: a tool call such as a card, then the reply text; or only text, for kind answer. */
   fakeReply(reply: unknown) {
-    this.fake({ mode: 'reply', delay: '0', script: '', reply: JSON.stringify(reply) })
+    this.fake({ mode: 'reply', delay: '0', script: '', reply: JSON.stringify(reply), 'tool-calls.jsonl': '' })
   }
 
-  /** Claude's replies in order, one per call; the last one repeats. Forgets earlier calls. */
-  script(steps: { reply: unknown; delay?: number }[]) {
+  /** Claude's steps in order, kept across runs: tool calls, with each run ending at an answer. Forgets earlier calls. */
+  script(steps: { reply: unknown; delay?: number; repeat?: boolean }[]) {
     this.fake({ mode: 'reply', delay: '0', script: JSON.stringify(steps), 'script-at': '0', 'calls.jsonl': '', 'tool-calls.jsonl': '' })
   }
 
@@ -230,6 +249,12 @@ export class App {
       const chat = await this.json<any>('/chat/messages?channel=telegram')
       return chat.messages.at(-1)?.card?.message_ids?.length ?? 0
     }, { timeout: 20_000, intervals: [200] }).toBeGreaterThan(0)
+  }
+
+  /** Starts both chats afresh. */
+  async newChats() {
+    await this.post('/chat/new', { channel: 'bubble' })
+    await this.post('/chat/new', { channel: 'telegram' })
   }
 
   /** Waits until a chat's queue is empty. */
@@ -387,6 +412,11 @@ export class TelegramStub {
       return Boolean(found)
     }, { timeout: 220_000, intervals: [300] }).toBe(true)
     return found!
+  }
+
+  /** The next card the bot sent with this text: the live log also names a card it is preparing, but has no Apply. */
+  card_after(count: number, text: string) {
+    return this.reply_after(count, m => m.text.includes(text) && (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply'))
   }
 
   button(message: StubMessage, label: string) {

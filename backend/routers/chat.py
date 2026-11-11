@@ -46,10 +46,19 @@ def post_message(body: ChatMessageIn):
     )
 
 
-@router.delete("/messages")
-def delete_messages(channel: Channel):
-    service.clear(channel)
-    return {"cleared": channel}
+class ChannelIn(BaseModel):
+    channel: Channel
+
+
+@router.post("/new")
+def post_new_chat(body: ChannelIn):
+    service.new_chat(body.channel)
+    return {"new_chat": body.channel}
+
+
+@router.post("/stop")
+def post_stop(body: ChannelIn):
+    return {"stopped": service.stop(body.channel)}
 
 
 @router.get("/outbox")

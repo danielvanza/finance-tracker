@@ -80,7 +80,7 @@ test.describe.serial('chat with the real Claude', () => {
     expect(await bankRows()).toHaveLength(8)
   })
 
-  test('R-013: a question matches the Month page and needs no confirmation', async () => {
+  test('R-013 (agent R-004): a question matches the Month page and needs no confirmation', async () => {
     const before = await app.transactions()
     const pace = await app.json(`/dashboard/pace`)
     await say(page, 'How are we doing this month?')
@@ -90,18 +90,11 @@ test.describe.serial('chat with the real Claude', () => {
     const left = pace.spendable_plan_cents - pace.spendable_actual_cents
     const euros = Math.floor(Math.abs(left) / 100).toString().replace(/\B(?=(\d{3})+$)/g, '.')
     await expect(reply).toContainText(euros)
-    // Figures at a glance, equal to the app's, in the agreed labels.
+    // The fixed layout is retired (finance agent R-002); the figures still equal the Month page's (agent R-004).
     const text = await reply.evaluate(el => (el as HTMLElement).innerText)
-    const lines = text.split('\n')
     const money = (cents: number) => `€${Math.floor(Math.abs(cents) / 100).toString().replace(/\B(?=(\d{3})+$)/g, '.')},${String(Math.abs(cents) % 100).padStart(2, '0')}`
-    expect(lines).toContain(`Left: ${money(left)}`)
-    expect(text).toContain(`Vs plan: ${money(pace.pace_delta_cents)} ${pace.pace_delta_cents < 0 ? 'under' : 'over'}`)
-    for (const [label, kind] of [['Needs', 'needs'], ['Wants', 'wants'], ['Savings', 'savings']]) {
-      expect(lines).toContain(`${label}: ${money(pace.actual_cents[kind])} of ${money(pace.plan_cents[kind])}`)
-    }
-    const emoji = /\p{Extended_Pictographic}/gu
-    expect((text.match(emoji) ?? []).length).toBeLessThanOrEqual(2)
-    expect(lines.filter(line => /€/.test(line) && emoji.test(line))).toEqual([])
+    expect(text).toContain(money(left))
+    expect(text).not.toMatch(/\*\*|^#/m)
     await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
     expect(await app.transactions()).toEqual(before)
     await shot(page, 'month-answer-desktop')
@@ -279,16 +272,21 @@ test.describe.serial('chat with the real Claude', () => {
     expect(all.some(t => t.description === 'Bank Twin Row')).toBe(true)
   })
 
-  test('R-014: review only on request, shows which, and one Yes confirms them', async () => {
+  // "One card for all the guesses" is replaced by finance-agent R-006 and R-008: the agent picks the groups.
+  test('R-014 (agent R-006 R-008): review only on request, shows which, and Apply confirms what the card shows', async () => {
     const waiting = (await app.transactions()).filter(t => t.categorised_by === 'ai' && !t.confirmed)
     expect(waiting.length).toBeGreaterThan(0)
     await say(page, 'Go through the ones to review')
+    await expect(lastPending(page)).toBeVisible()
+    await app.settled('bubble')
     const card = lastPending(page)
-    await expect(card).toBeVisible()
-    for (const row of waiting) await expect(card).toContainText(row.description)
+    const listed: number[] = []
+    for (const row of waiting) if (await card.getByText(row.description, { exact: false }).count()) listed.push(row.id)
+    expect(listed.length).toBeGreaterThan(0)
     await expect(await decide(page, card, 'Apply')).toContainText('Done.')
     const after = await app.transactions()
-    expect(after.filter(t => waiting.some(w => w.id === t.id)).every(t => t.confirmed)).toBe(true)
+    for (const id of listed) expect(after.find(t => t.id === id).confirmed, String(id)).toBe(true)
+    expect(after.filter(t => t.confirmed && waiting.some(w => w.id === t.id) && !listed.includes(t.id))).toEqual([])
   })
 
   test('R-016: the same message on the same data proposes the same change in both chats', async () => {
@@ -365,7 +363,7 @@ test.describe.serial('chat with the real Claude', () => {
     expect(await app.json('/rules')).toEqual(rulesBefore)
   })
 
-  test('R-028: the bubble survives a reload, is shared, stays apart from Telegram, and Clear asks first', async ({ browser }) => {
+  test('R-028: the bubble survives a reload, is shared, stays apart from Telegram, and New chat asks first', async ({ browser }) => {
     await page.reload()
     await openChat(page)
     await expect(thread(page)).toContainText('How are we doing this month?')
@@ -377,12 +375,12 @@ test.describe.serial('chat with the real Claude', () => {
     const telegram = await app.json('/chat/messages?channel=telegram')
     expect(telegram.messages.some((m: any) => m.text === 'How are we doing this month?')).toBe(false)
 
-    await page.getByRole('button', { name: 'Clear' }).click()
+    await page.getByRole('button', { name: 'New chat' }).click()
     await expect(page.locator('.chat-confirm')).toBeVisible()
-    await page.getByRole('button', { name: 'Keep it' }).click()
+    await page.getByRole('button', { name: 'Keep this one' }).click()
     await expect(thread(page)).toContainText('How are we doing this month?')
-    await page.getByRole('button', { name: 'Clear' }).click()
-    await page.getByRole('button', { name: 'Clear it' }).click()
+    await page.getByRole('button', { name: 'New chat' }).click()
+    await page.getByRole('button', { name: 'Start new chat' }).click()
     await expect(page.locator('.chat-empty')).toBeVisible()
     await other.reload()
     await openChat(other)

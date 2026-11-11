@@ -189,10 +189,13 @@ export const api = {
   rejectChatProposal: (id: number): Promise<import('./types').ChatCard> =>
     apiFetch(`${BASE}/chat/proposals/${id}/reject`, { method: 'POST' }),
 
-  // Ids restart after Clear; the time keeps a browser from reusing a cleared chat's picture.
+  // The time keeps a browser from reusing an older picture under the same id.
   chatChartUrl: (messageId: number, createdAt: string, theme: 'day' | 'night') =>
     `${BASE}/chat/messages/${messageId}/chart?theme=${theme}&v=${encodeURIComponent(createdAt)}`,
 
-  clearChat: () =>
-    apiFetch(`${BASE}/chat/messages?channel=bubble`, { method: 'DELETE' }),
+  newChat: () =>
+    apiFetch(`${BASE}/chat/new`, { method: 'POST', body: { channel: 'bubble' } }),
+
+  stopChat: (): Promise<{ stopped: number }> =>
+    apiFetch(`${BASE}/chat/stop`, { method: 'POST', body: { channel: 'bubble' } }),
 }

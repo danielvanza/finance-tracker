@@ -21,9 +21,10 @@ from models import CategorisedBy, ChatMessage, ChatProposal, Transaction
 logger = logging.getLogger(__name__)
 
 CHANNELS = ("bubble", "telegram")
-HISTORY_LIMIT = 200
+HISTORY_LIMIT = 400
 MAX_FILE_BYTES = 10 * 1024 * 1024
-_IN_FLIGHT = ("queued", "running", "waiting", "digging")
+_IN_FLIGHT = ("queued", "running", "waiting", "stopping")
+_STOPPED_IN_LINE = "Stopped before I started on that. Nothing changed."
 _ING_HEADERS = ("Date", "Name / Description", "Amount (EUR)", "Debit/credit")
 _ING_AMOUNT = re.compile(r"\d+([.,]\d{1,2})?")
 _STALE_NOTE = "Something changed since this was shown, so nothing was applied. Check it again."
@@ -88,9 +89,11 @@ def message_out(message: ChatMessage) -> dict:
 
 
 def conversation(channel: str) -> dict:
+    """The current conversation, from the last New chat on."""
     with SessionLocal() as db:
         rows = (
-            db.query(ChatMessage).filter(ChatMessage.channel == channel)
+            db.query(ChatMessage)
+            .filter(ChatMessage.channel == channel, ChatMessage.id > brain.conversation_start(db, channel))
             .order_by(ChatMessage.id.desc()).limit(HISTORY_LIMIT).all()
         )
         guesses = db.query(func.count(Transaction.id)).filter(
@@ -119,7 +122,8 @@ def outbox(channel: str) -> dict:
         return {
             "replies": [message_out(r) for r in replies],
             "in_flight": [
-                {"id": m.id, "status": m.status, "age_seconds": (now - m.created_at.replace(tzinfo=None)).total_seconds()}
+                {"id": m.id, "kind": m.kind, "status": m.status, "age_seconds": (now - m.created_at.replace(tzinfo=None)).total_seconds(),
+                 "steps": (m.payload or {}).get("steps", [])}
                 for m in working
             ],
         }
@@ -150,20 +154,24 @@ def _normalise(text: str) -> str:
 
 
 def _waiting_card(db, channel: str, seen_message_id: int | None) -> ChatProposal | None:
-    """The one card a typed yes or no can mean: pending, alone, last in the chat, and actually shown."""
-    if db.query(ChatMessage).filter(ChatMessage.channel == channel, ChatMessage.status.in_(_IN_FLIGHT)).count():
+    """The one card a typed yes or no can mean: the only one still open that was made since the person
+    last spoke, and actually shown."""
+    last_said = db.query(func.max(ChatMessage.id)).filter(ChatMessage.channel == channel, ChatMessage.role == "user").scalar() or 0
+    pending = (
+        db.query(ChatProposal)
+        .filter(ChatProposal.channel == channel, ChatProposal.status == "pending",
+                ChatProposal.message_id > max(last_said, brain.conversation_start(db, channel)))
+        .all()
+    )
+    if len(pending) != 1 or pending[0].note == _STALE_NOTE:  # a yes can't say which version it meant
         return None
-    last = db.query(ChatMessage).filter(ChatMessage.channel == channel).order_by(ChatMessage.id.desc()).first()
-    if last is None or last.proposal is None or last.proposal.status != "pending":
+    card = pending[0]
+    # The reply that made the card may still be finishing its words; anything else in progress makes a yes unclear.
+    working = db.query(ChatMessage.id).filter(ChatMessage.channel == channel, ChatMessage.status.in_(_IN_FLIGHT)).all()
+    if any(row.id != card.message.reply_to for row in working):
         return None
-    if last.proposal.note == _STALE_NOTE:  # a yes can't say which version it meant
-        return None
-    shown = last.delivered_ids is not None if channel == "telegram" else (seen_message_id or 0) >= last.id
-    if not shown:
-        return None
-    if db.query(ChatProposal).filter(ChatProposal.channel == channel, ChatProposal.status == "pending").count() != 1:
-        return None
-    return last.proposal
+    shown = card.message.delivered_ids is not None if channel == "telegram" else (seen_message_id or 0) >= card.message_id
+    return card if shown else None
 
 
 def submit_text(
@@ -206,11 +214,50 @@ def submit_file(channel: str, filename: str, content: bytes) -> dict:
     return out
 
 
-def clear(channel: str) -> None:
+def new_chat(channel: str) -> None:
+    """Start the conversation afresh. What came before stays saved, but is no longer shown or remembered,
+    its open suggestions are withdrawn and a reply still being worked on is stopped and never lands."""
     with SessionLocal() as db:
-        for message in db.query(ChatMessage).filter(ChatMessage.channel == channel).all():
-            db.delete(message)
+        db.execute(
+            update(ChatMessage)
+            .where(ChatMessage.channel == channel, ChatMessage.status.in_(("running", "waiting")))
+            .values(status="stopping")
+        )
+        db.execute(
+            update(ChatMessage)
+            .where(ChatMessage.channel == channel, ChatMessage.status == "queued")
+            .values(status="done", file_content=None)
+        )
+        db.execute(
+            update(ChatProposal)
+            .where(ChatProposal.channel == channel, ChatProposal.status == "pending", ChatProposal.op != "merge")
+            .values(status="superseded")
+        )
+        db.add(ChatMessage(channel=channel, role="system", kind=brain.NEW_CHAT, text="", status="done"))
         db.commit()
+
+
+def stop(channel: str) -> int:
+    """End the reply being worked on in a chat, and anything of its waiting in line. Returns how many."""
+    with SessionLocal() as db:
+        working = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.channel == channel, ChatMessage.role == "user", ChatMessage.status.in_(_IN_FLIGHT))
+            .all()
+        )
+        queued = []
+        for message in working:
+            if message.status == "queued":
+                message.status = "done"
+                message.file_content = None
+                message.payload = {**(message.payload or {}), "ended": "stopped"}
+                queued.append(message.id)
+            else:
+                message.status = "stopping"
+        db.commit()
+    for message_id in queued:
+        _say(message_id, "answer", _STOPPED_IN_LINE)
+    return len(working)
 
 
 # ---- Yes and No ---------------------------------------------------------------------------------
@@ -287,7 +334,7 @@ def resume() -> None:
     """After a restart: anything half done goes back in line."""
     with SessionLocal() as db:
         db.execute(
-            update(ChatMessage).where(ChatMessage.status.in_(("running", "waiting", "digging"))).values(status="queued")
+            update(ChatMessage).where(ChatMessage.status.in_(("running", "waiting", "stopping"))).values(status="queued")
         )
         db.commit()
         waiting = db.query(ChatMessage).filter(ChatMessage.status == "queued").count()
@@ -347,11 +394,16 @@ def _finish(message_id: int) -> None:
         db.commit()
 
 
+def _overtaken(db, asked: ChatMessage | None) -> bool:
+    """The conversation it belongs to was replaced by a new chat while it was being worked out."""
+    return asked is None or brain.conversation_start(db, asked.channel) > asked.id
+
+
 def _say(reply_to: int, kind: str, text: str, payload: dict | None = None) -> int | None:
-    """Add a reply, unless the conversation was cleared while it was being worked out."""
+    """Add a reply, unless a new chat was started while it was being worked out."""
     with SessionLocal() as db:
         asked = db.get(ChatMessage, reply_to)
-        if asked is None:
+        if _overtaken(db, asked):
             return None
         reply = ChatMessage(
             channel=asked.channel, role="assistant", kind=kind, text=text, reply_to=reply_to, payload=payload,
@@ -374,6 +426,34 @@ def explain_claude(error: Exception) -> str:
     return "Claude could not be reached."
 
 
+def _note_step(message_id: int, step: str) -> None:
+    with SessionLocal() as db:
+        message = db.get(ChatMessage, message_id)
+        if message is not None:
+            payload = message.payload or {}
+            message.payload = {**payload, "steps": [*payload.get("steps", []), step]}
+            db.commit()
+
+
+def _end_note(message_id: int, **notes) -> None:
+    with SessionLocal() as db:
+        message = db.get(ChatMessage, message_id)
+        if message is not None:
+            message.payload = {**(message.payload or {}), **notes}
+            db.commit()
+
+
+def _stopping(message_id: int) -> bool:
+    with SessionLocal() as db:
+        message = db.get(ChatMessage, message_id)
+        return message is None or message.status == "stopping" or _overtaken(db, message)
+
+
+def _abandoned(message_id: int) -> bool:
+    with SessionLocal() as db:
+        return _overtaken(db, db.get(ChatMessage, message_id))
+
+
 def _handle_text(message_id: int) -> None:
     if not claude_cli.enabled():
         _say(message_id, "error", "Claude is not set up on this machine. Nothing changed.")
@@ -387,47 +467,44 @@ def _handle_text(message_id: int) -> None:
         prompt = brain.build_prompt(db, channel, message)
         recent_options: set[int] = set()  # every row offered in this run of "which one?" questions
         for earlier in reversed(brain.history_of(db, channel, message_id)):
-            if earlier.kind == "clarify" and earlier.payload:
-                recent_options |= {o["id"] for o in earlier.payload.get("options", [])}
+            options = (earlier.payload or {}).get("options") if earlier.role == "assistant" else None
+            if options:
+                recent_options |= {o["id"] for o in options}
             elif earlier.role == "assistant":
                 break
 
-    digging = False
-
-    def on_digging() -> None:
-        nonlocal digging
-        if not digging:
-            digging = True
-            _set_status(message_id, "digging")
-
     def on_wait(waiting: bool) -> None:
-        _set_status(message_id, "waiting" if waiting else "digging" if digging else "running")
+        with SessionLocal() as db:
+            db.execute(
+                update(ChatMessage).where(ChatMessage.id == message_id, ChatMessage.status != "stopping")
+                .values(status="waiting" if waiting else "running")
+            )
+            db.commit()
+
+    def propose(call: brain.ProposeChange) -> str | None:
+        return _propose(message_id, channel, text, call, recent_options)
 
     try:
-        decision = brain.decide(prompt, on_wait, on_digging)
+        reply = brain.converse(
+            prompt, on_wait, lambda step: _note_step(message_id, step), propose, lambda: _stopping(message_id),
+            abandoned=lambda: _abandoned(message_id),
+        )
     except claude_cli.ClaudeCliError as e:
         logger.warning("[chat] Claude failed: %s", e)
         _say(message_id, "error", f"{explain_claude(e)} Nothing changed.")
         return
     except brain.UnreadableReply:
-        _say(message_id, "error", "Claude's answer could not be understood, so nothing changed. Try saying it another way.")
+        _say(message_id, "error", "Claude's answer came back empty, so nothing changed. Try saying it another way.")
         return
 
-    if isinstance(decision, brain.Insight):
-        _say(message_id, "answer", decision.text, {"chart": decision.chart} if decision.chart else None)
-    elif isinstance(decision, brain.Answer):
-        _say(message_id, "answer", decision.text)
-    elif isinstance(decision, brain.Clarify):
-        _clarify(message_id, decision.text, decision.transaction_ids)
-    else:
-        _propose(message_id, channel, text, decision, recent_options)
-
-
-def _clarify(message_id: int, text: str, transaction_ids: list[int]) -> None:
-    with SessionLocal() as db:
-        rows = [db.get(Transaction, tx_id) for tx_id in transaction_ids]
-        options = [actions.describe_transaction(t) for t in rows if t is not None]
-    _say(message_id, "clarify", text, {"options": options})
+    _end_note(message_id, lookups=reply.lookups, **({"ended": reply.ended} if reply.ended else {}))
+    if reply.choices:
+        with SessionLocal() as db:
+            rows = [db.get(Transaction, tx_id) for tx_id in reply.choices]
+            options = [actions.describe_transaction(t) for t in rows if t is not None]
+        _say(message_id, "clarify", reply.text or "Which one do you mean?", {"options": options})
+    elif reply.text:
+        _say(message_id, "answer", reply.text, {"chart": reply.chart} if reply.chart else None)
 
 
 def _names_date(text: str, tx: Transaction) -> bool:
@@ -456,44 +533,55 @@ def _lookalikes(db, target: Transaction, text: str, chosen_from: set[int]) -> li
     return [t for t in twins if _shop(t.description) == _shop(target.description)]
 
 
-def _propose(message_id: int, channel: str, text: str, decision: brain.Propose, chosen_from: set[int]) -> None:
-    if decision.op not in actions.OPS:
-        _say(message_id, "error", "That is not something the app can do, so nothing changed.")
-        return
+_TARGET_KEYS = {
+    "transaction.update": ["id"], "transaction.split": ["id"], "transaction.delete": ["id"],
+    "transaction.rule": ["id"], "refund.book": ["refund_id", "purchase_id"], "refund.add": ["purchase_id"],
+}
 
-    target_keys = {"transaction.update": ["id"], "transaction.split": ["id"], "transaction.delete": ["id"],
-                   "transaction.rule": ["id"], "refund.book": ["refund_id", "purchase_id"],
-                   "refund.add": ["purchase_id"]}.get(decision.op, [])
+
+def _propose(message_id: int, channel: str, text: str, call: brain.ProposeChange, chosen_from: set[int]) -> str | None:
+    """Turn a suggested change into a card, or say why the app won't take it, for Claude to put right."""
+    if call.op not in actions.OPS:
+        return f"there is no change called '{call.op}'"
     with SessionLocal() as db:
-        for key in target_keys:
-            target = db.get(Transaction, decision.args.get(key)) if isinstance(decision.args.get(key), int) else None
+        for key in _TARGET_KEYS.get(call.op, []):
+            target = db.get(Transaction, call.args.get(key)) if isinstance(call.args.get(key), int) else None
             if target is None:
                 continue
             twins = _lookalikes(db, target, text, chosen_from)
             if twins:
-                options = [actions.describe_transaction(t) for t in sorted([target, *twins], key=lambda t: t.date)]
-                _say(message_id, "clarify", "More than one payment matches that. Which one do you mean?", {"options": options})
-                return
-
+                rows = ", ".join(
+                    f"id {t.id} on {t.date.isoformat()}" for t in sorted([target, *twins], key=lambda t: t.date)
+                )
+                return (
+                    f"more than one payment looks like the one you picked ({rows}), and the person has not said which. "
+                    "Ask them, with show_choices."
+                )
     try:
-        preview = actions.preview(decision.op, decision.args)
+        preview = actions.preview(call.op, call.args)
     except actions.ActionError as e:
-        _say(message_id, "error", f"The app would not accept that: {e}. Nothing changed.")
-        return
-
-    _save_proposal(message_id, channel, decision.op, decision.args, decision.summary, decision.note, preview, supersede=True)
+        return str(e)
+    except Exception:
+        logger.exception("[chat] previewing a change failed")
+        return "the app could not work out what this would change"
+    if not _save_proposal(message_id, channel, call.op, call.args, call.summary, call.note, preview, replaces=call.replaces):
+        return "the conversation moved on, so this card was not shown"
+    return None
 
 
 def _save_proposal(
-    message_id: int, channel: str, op: str, args: dict, summary: str, note: str | None, preview: dict, supersede: bool,
-) -> None:
+    message_id: int, channel: str, op: str, args: dict, summary: str, note: str | None, preview: dict,
+    replaces: list[int] = (),
+) -> bool:
+    """Show a card. The open cards it replaces are withdrawn; every other card stays as it is."""
     with SessionLocal() as db:
-        if db.get(ChatMessage, message_id) is None:
-            return
-        if supersede:
+        if _overtaken(db, db.get(ChatMessage, message_id)):
+            return False
+        if replaces:
             db.execute(
                 update(ChatProposal)
-                .where(ChatProposal.channel == channel, ChatProposal.status == "pending", ChatProposal.op != "merge")
+                .where(ChatProposal.channel == channel, ChatProposal.status.in_(("pending", "failed")),
+                       ChatProposal.id.in_(list(replaces)))
                 .values(status="superseded")
             )
         message = ChatMessage(channel=channel, role="assistant", kind="proposal", text=summary, reply_to=message_id)
@@ -502,6 +590,7 @@ def _save_proposal(
         )
         db.add(message)
         db.commit()
+        return True
 
 
 # ---- Files --------------------------------------------------------------------------------------
@@ -593,7 +682,7 @@ def _handle_file(message_id: int) -> None:
     for args, description in offers:
         try:
             preview = actions.preview("merge", args)
-            _save_proposal(message_id, channel, "merge", args, description, None, preview, supersede=False)
+            _save_proposal(message_id, channel, "merge", args, description, None, preview)
         except Exception:
             logger.exception("[chat] could not offer a merge")
             merge_check_failed = True

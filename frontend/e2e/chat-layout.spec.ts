@@ -114,7 +114,7 @@ test.describe.serial('the bubble on screen', () => {
     await page.getByRole('link', { name: 'Trends' }).click()
     await expect(page).toHaveURL(/trends/)
     await expect(page.locator('dialog.chat-dialog')).toBeVisible()
-    await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+    await app.post('/chat/new', { channel: 'bubble' })
   })
 
   for (const [route, width] of PAGES.flatMap(r => [1024, 1100, 1280].map(w => [r, w] as const))) {
@@ -153,7 +153,7 @@ test.describe.serial('the bubble on screen', () => {
       const page = viewport === PHONE ? await phonePage(browser) : await browser.newPage({ viewport })
       await open(page, 'day')
       await openChat(page)
-      await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+      await app.post('/chat/new', { channel: 'bubble' })
       for (let i = 0; i < 8; i++) {
         app.fakeReply({ kind: 'answer', text: `Answer ${i}\n\nWith a second paragraph to fill the thread.` })
         await say(page, `Question ${i}`)
@@ -169,7 +169,7 @@ test.describe.serial('the bubble on screen', () => {
       expect(geometry.foot.bottom).toBeLessThanOrEqual(geometry.dialog.bottom + 0.5)
       expect(geometry.body.bottom).toBeLessThanOrEqual(geometry.foot.top + 0.5)
       await shot(page, `long-thread-${name}`)
-      await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+      await app.post('/chat/new', { channel: 'bubble' })
       await page.close()
     })
   }
@@ -205,7 +205,7 @@ test.describe.serial('the bubble on screen', () => {
     await page.getByRole('button', { name: 'Close' }).click()
     await expect(page.locator('dialog.chat-dialog')).toBeHidden()
     await expect(page.locator('.chat-fab')).toBeVisible()
-    await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+    await app.post('/chat/new', { channel: 'bubble' })
     await page.close()
   })
 
@@ -213,7 +213,7 @@ test.describe.serial('the bubble on screen', () => {
     await page.setViewportSize(PHONE)
     await open(page, 'day')
     await openChat(page)
-    await expect(page.locator('.chat-empty p')).toContainText('Nothing changes until it is confirmed')
+    await expect(page.locator('.chat-empty p')).toContainText('nothing changes until it is applied')
     await expect(page.locator('.chat-starters .btn')).toHaveCount(2)
     await expect(page.locator('.chat-starters')).not.toContainText('to review')
     await shot(page, 'first-open-phone-empty')
@@ -237,9 +237,9 @@ test.describe.serial('the bubble on screen', () => {
       const page = await phonePage(browser)
       await open(page, theme)
       await openChat(page)
-      await app.json('/chat/messages?channel=bubble', { method: 'DELETE' })
+      await app.post('/chat/new', { channel: 'bubble' })
       app.fakeReply({
-        kind: 'clarify', text: 'Which one?',
+        kind: 'choices', text: 'Which one?',
         transaction_ids: (await app.transactions()).slice(0, 2).map(t => t.id),
       })
       await say(page, 'which')
@@ -250,8 +250,8 @@ test.describe.serial('the bubble on screen', () => {
       })
       await say(page, 'add')
       await expect(lastPending(page)).toBeVisible()
-      await page.getByRole('button', { name: 'Clear', exact: true }).click()
-      await expect(page.getByRole('button', { name: 'Clear it' })).toBeVisible()
+      await page.getByRole('button', { name: 'New chat', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Start new chat' })).toBeVisible()
 
       const small = await page.locator('dialog.chat-dialog').evaluate(dialog =>
         [...dialog.querySelectorAll<HTMLElement>('button, textarea, input:not([type=file])')]

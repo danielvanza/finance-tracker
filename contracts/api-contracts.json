@@ -268,16 +268,25 @@
       "frontend_caller": "api.sendChatMessage"
     },
     {
-      "id": "chat-messages-clear",
-      "method": "DELETE", "path": "/chat/messages",
-      "response": "{ cleared }",
+      "id": "chat-new",
+      "method": "POST", "path": "/chat/new",
+      "request": {"channel": "bubble|telegram"},
+      "response": "{ new_chat }: later messages start a fresh conversation; what came before is kept but not shown or remembered",
       "error_contract": "422 unknown channel",
-      "frontend_caller": "api.clearChat"
+      "frontend_caller": "api.newChat"
+    },
+    {
+      "id": "chat-stop",
+      "method": "POST", "path": "/chat/stop",
+      "request": {"channel": "bubble|telegram"},
+      "response": "{ stopped }: how many messages in that chat were being worked on or waiting",
+      "error_contract": "422 unknown channel",
+      "frontend_caller": "api.stopChat"
     },
     {
       "id": "chat-outbox-get",
       "method": "GET", "path": "/chat/outbox",
-      "response": "{ replies, in_flight }: replies a pushing chat has not shown yet",
+      "response": "{ replies, in_flight }: replies a pushing chat has not shown yet, and each in-flight message with its live steps",
       "error_contract": "422 unknown channel",
       "frontend_caller": null
     },

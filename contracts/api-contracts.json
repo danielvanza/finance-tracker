@@ -106,7 +106,8 @@
         "category_id": "int|null (optional)",
         "confirmed": "bool (optional)",
         "is_refund": "bool (optional; validated against category types)",
-        "splits": "[{category_id:int, amount_cents:int}] | [] to unsplit | absent to leave untouched (optional; 2+ parts, sum must equal amount_cents, parts share parent's sign)"
+        "splits": "[{category_id:int, amount_cents:int}] | [] to unsplit | absent to leave untouched (optional; 2+ parts, sum must equal amount_cents, parts share parent's sign)",
+        "remember": "bool (optional; also make this payment's category the rule for its shop)"
       },
       "response": "TransactionOut",
       "frontend_caller": "api.patchTransaction"
@@ -416,6 +417,14 @@
       "response": "Card",
       "error_contract": "404",
       "frontend_caller": "api.rejectChatProposal"
+    },
+    {
+      "id": "chat-proposal-remember",
+      "method": "POST",
+      "path": "/chat/proposals/{proposal_id}/remember",
+      "response": "Card; makes a rule for each shop the applied card sorted; idempotent",
+      "error_contract": "404",
+      "frontend_caller": "api.rememberChatShops"
     },
     {
       "id": "set-asides-list",

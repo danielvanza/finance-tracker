@@ -506,6 +506,7 @@
 /* A card in plain words: Claude's sentence, then the app's own lines. */
 .chat-says {
   margin-bottom: 0.5rem;
+  white-space: pre-wrap;
 }
 
 .chat-lines {

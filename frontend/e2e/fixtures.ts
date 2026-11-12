@@ -299,7 +299,22 @@ export const STRANGER = 777001
 export const GROUP = -1004242420000
 export const TOKEN = '999:e2e-finance-bot-token'
 
-type StubMessage = { message_id: number; chat_id: number; text: string; reply_markup?: any; edits: string[]; deleted?: boolean }
+/** `text` is what a person reads; `html` is what the bot sent, layout and all. */
+type StubMessage = { message_id: number; chat_id: number; text: string; html: string; reply_markup?: any; edits: string[]; deleted?: boolean }
+
+const TAG = /<(\/?)(b|i|pre|blockquote)( expandable)?>/g
+
+/** What Telegram would show for a message sent as HTML, or null when it would refuse to parse it. */
+export function shownText(html: string): string | null {
+  const open: string[] = []
+  for (const tag of html.matchAll(TAG)) {
+    if (!tag[1]) open.push(tag[2])
+    else if (open.pop() !== tag[2]) return null
+  }
+  const bare = html.replace(TAG, '')
+  if (open.length || /<|>/.test(bare) || /&(?!(amp|lt|gt|quot);)/.test(bare)) return null
+  return bare.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&amp;', '&')
+}
 
 export class TelegramStub {
   readonly base: string
@@ -311,6 +326,8 @@ export class TelegramStub {
   lateButtonPresses = false
   garbledAcknowledge = false
   failSendContaining: string | null = null
+  /** Messages whose layout Telegram would have refused. */
+  readonly unreadable: string[] = []
   private updates: any[] = []
   private waiters: (() => void)[] = []
   private nextUpdate = 1
@@ -333,6 +350,18 @@ export class TelegramStub {
   private reply(res: http.ServerResponse, result: unknown) {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ ok: true, result }))
+  }
+
+  /** The text a person would read, or null after refusing a layout Telegram could not parse. */
+  private shown(body: any, res: http.ServerResponse): string | null {
+    if (body.parse_mode !== 'HTML') return body.text
+    const shown = shownText(body.text)
+    if (shown === null) {
+      this.unreadable.push(body.text)
+      res.writeHead(400, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, description: "Bad Request: can't parse entities: unsupported start tag" }))
+    }
+    return shown
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -380,14 +409,18 @@ export class TelegramStub {
           res.end(JSON.stringify({ ok: false, description: 'Too Many Requests' }))
           return
         }
-        const message: StubMessage = { message_id: this.nextMessage++, chat_id: body.chat_id, text: body.text, reply_markup: body.reply_markup, edits: [] }
+        const shown = this.shown(body, res)
+        if (shown === null) return
+        const message: StubMessage = { message_id: this.nextMessage++, chat_id: body.chat_id, text: shown, html: body.text, reply_markup: body.reply_markup, edits: [] }
         this.sent.push(message)
-        this.reply(res, { message_id: message.message_id, chat: { id: body.chat_id, type: 'private' }, text: body.text })
+        this.reply(res, { message_id: message.message_id, chat: { id: body.chat_id, type: 'private' }, text: shown })
         return
       }
       case 'editMessageText': {
+        const shown = this.shown(body, res)
+        if (shown === null) return
         const message = this.sent.find(m => m.message_id === body.message_id)
-        if (message) { message.edits.push(message.text); message.text = body.text; message.reply_markup = body.reply_markup }
+        if (message) { message.edits.push(message.text); message.text = shown; message.html = body.text; message.reply_markup = body.reply_markup }
         this.reply(res, true)
         return
       }

@@ -10,6 +10,7 @@ export interface ReviewDecision {
   category_id?: number
   is_refund: boolean
   splits?: SplitInput[]
+  remember?: boolean
 }
 
 type PositiveKind = 'income' | 'refund' | 'transfer'
@@ -51,6 +52,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
 
   const [selectedCategory, setSelectedCategory] = useState<number | null>(tx.category_id ?? (isPositive ? filteredCategories[0]?.id ?? null : null))
   const [splitMode, setSplitMode] = useState(tx.splits.length > 0)
+  const [remember, setRemember] = useState(false)
   const [splitRows, setSplitRows] = useState<SplitRow[]>(() =>
     tx.splits.length > 0
       ? tx.splits.map(s => ({ category_id: s.category_id, amount: centsToInputString(Math.abs(s.amount_cents)) }))
@@ -83,7 +85,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
     if (splitMode) {
       onConfirm(tx.id, { is_refund: isRefund, splits: splitsPayload })
     } else {
-      onConfirm(tx.id, { category_id: selectedCategory ?? undefined, is_refund: isRefund })
+      onConfirm(tx.id, { category_id: selectedCategory ?? undefined, is_refund: isRefund, ...(remember && !isRefund ? { remember: true } : {}) })
     }
   }
 
@@ -169,7 +171,13 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
         </div>
 
         {!splitMode && !isRefund && (
-          <p className="tx-hint">Your answer is remembered: this shop's other waiting payments, and later ones, follow it.</p>
+          <>
+            <label className="rev-remember">
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+              <span>Remember this shop for next time</span>
+            </label>
+            <p className="tx-hint">This shop's other waiting payments follow your answer either way.</p>
+          </>
         )}
       </div>
     </div>

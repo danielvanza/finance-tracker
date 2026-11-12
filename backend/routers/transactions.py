@@ -25,6 +25,7 @@ class SplitPartIn(SplitIn):
 
 class TransactionPatchV2(TransactionPatch):
     splits: Optional[list[SplitPartIn]] = None
+    remember: bool = False  # also make this payment's category the rule for its shop
 
 
 def _cat_type(category: Category) -> str:
@@ -192,12 +193,14 @@ def patch_transaction(tx_id: int, body: TransactionPatchV2, db: Session = Depend
         categories = [db.get(Category, cid) for cid in cat_ids if cid is not None]
         _validate_refund(tx.amount, [c for c in categories if c])
     # A person answering for a waiting payment, or putting right one the app sorted by itself, settles
-    # that shop: its other waiting payments follow, and so does every later one.
+    # that shop's other waiting payments. Later ones only follow when the person asks to remember it.
     answered = tx.confirmed and (was_waiting or (was_guess and body.category_id is not None))
     if answered and tx.category_id is not None and not tx.splits and not tx.is_refund:
         db.flush()
         db.refresh(tx)
-        guesses.learn(db, tx)
+        guesses.settle_like(db, tx)
+        if body.remember:
+            guesses.remember(db, tx)
     db.commit()
     db.refresh(tx)
     return _to_out(tx)

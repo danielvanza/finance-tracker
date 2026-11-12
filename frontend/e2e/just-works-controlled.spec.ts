@@ -259,27 +259,32 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(showingSince(count), 'one message whatever the size').toHaveLength(1)
     expect(big.text.length).toBeLessThanOrEqual(4096)
     const lines = big.text.split('\n')
-    expect(lines[0]).toBe('120 payments:')
-    expect(lines).toContain('• Confirm as Food - Essential: 60 payments, €600,00 (sample grocer ×60)')
-    expect(lines).toContain('• Confirm as Food - Not Essential: 40 payments, €1.000,00 (sample bistro ×40)')
-    expect(lines).toContain('• Confirm as Miscellaneous: 20 payments, €66,60 (sample odds ×20)')
+    expect(lines[0]).toBe('120 payments')
+    expect(big.html.split('\n')[0], 'the count is bold').toBe('<b>120 payments</b>')
+    expect(lines).toContain('• Confirm as Food - Essential: 60 payments, €600,00')
+    expect(lines).toContain('• Confirm as Food - Not Essential: 40 payments, €1.000,00')
+    expect(lines).toContain('• Confirm as Miscellaneous: 20 payments, €66,60')
+    expect(big.text, 'the shops are left to Show all').not.toContain('sample grocer')
     expect(lines.length, 'a summary, not a row per payment').toBeLessThan(12)
     expect(big.text).not.toContain('Sample Grocer 17')
-    expect(labels(big)).toEqual(['Apply', 'Not this', expect.stringMatching(/^Show all \d+ rows$/)])
+    expect(labels(big)).toEqual(['Apply', 'Not this', 'Show all 120 payments'])
 
     // Asking to see everything lists the rows: by typing it, and by the button. They come grouped by
-    // what changes, one short line per payment.
+    // what changes under a bold heading, as columns of date, amount and name that fit a phone.
     count = stub.sent.length
     const calls = app.calls().length
     stub.text(PARTNER, 'Show all')
     const everything = () => stub.sent.slice(count).map(m => m.text).join('\n').split('\n')
-    const listed = () => everything().filter(line => /^• 5 Sep · -⁠€\d+,\d\d · Sample (Grocer|Bistro|Odds) \d+ Enschede$/.test(line))
+    const listed = () => everything().filter(line => /^5 Sep {2,}\d+,\d\d {2}Sample (Grocer|Bistro|Odds) \d+/.test(line))
     await expect.poll(() => listed().length, { timeout: 20_000 }).toBe(120)
-    expect(listed()).toContain('• 5 Sep · -⁠€10,00 · Sample Grocer 17 Enschede')
-    for (const heading of ['Confirmed as Food - Essential (60)', 'Confirmed as Food - Not Essential (40)', 'Confirmed as Miscellaneous (20)', 'Remembered for next time (3)']) {
+    expect(listed()).toContain('5 Sep  10,00  Sample Grocer 17 En…')
+    expect(listed().every(line => line.length <= 34), 'no line wraps on a phone').toBe(true)
+    for (const heading of ['Confirmed as Food - Essential · 60', 'Confirmed as Food - Not Essential · 40', 'Confirmed as Miscellaneous · 20']) {
       expect(everything()).toContain(heading)
     }
-    expect(everything()).toContain('• “sample grocer” → Food - Essential')
+    const html = stub.sent.slice(count).map(m => m.html).join('\n')
+    expect(html).toContain('<b>Confirmed as Food - Essential</b> · 60\n<pre>5 Sep  10,00  Sample Grocer ')
+    expect(everything().join('\n'), 'confirming remembers no shop by itself').not.toContain('Remembered')
     expect(everything().join('\n')).not.toContain('Reviewed')
     expect(app.calls().length, 'listing the rows did not go to Claude').toBe(calls)
     expect((await rows('Sample Grocer')).every(t => !t.confirmed), 'listing changed nothing').toBe(true)
@@ -311,8 +316,20 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await app.cardShown()
     stub.tap(PARTNER, again, stub.button(again, 'Apply'))
     await expect.poll(() => again.text, { timeout: 30_000 }).toMatch(/^Applied\./)
-    expect(again.text).toContain('Confirm as Food - Essential: 60 payments')
+    // Once applied it is one sentence and what is left, not the whole summary again.
+    expect(again.text.split('\n')[0]).toBe('Applied. 120 payments are now sorted, in 3 categories, €1.666,60 in all.')
+    expect(again.html).toMatch(/^<b>Applied\.<\/b> 120 payments/)
+    expect(again.text).not.toContain('Confirm as')
+    expect(again.text).toMatch(/\n(\d+ payments? still waits?|Nothing is waiting any more)\.$/)
     for (const prefix of ['Sample Grocer', 'Sample Bistro', 'Sample Odds']) expect((await rows(prefix)).every(t => t.confirmed)).toBe(true)
+    // R-013: nothing was remembered by itself; the applied card offers it, and one press remembers every shop it sorted.
+    const sampleRules = async () => (await app.json<any[]>('/rules')).filter(r => /^sample (grocer|bistro|odds)$/.test(r.pattern)).map(r => `${r.pattern} → ${r.category_name}`).sort()
+    expect(await sampleRules()).toEqual([])
+    expect(labels(again)).toEqual(['Remember these 3 shops'])
+    stub.tap(DANIEL, again, stub.button(again, 'Remember these 3 shops'))
+    await expect.poll(() => labels(again), { timeout: 15_000 }).toEqual([])
+    expect(again.text.split('\n').at(-1)).toBe('Remembered 3 shops for next time.')
+    expect(await sampleRules()).toEqual(['sample bistro → Food - Not Essential', 'sample grocer → Food - Essential', 'sample odds → Miscellaneous'])
 
     // 480 payments from 480 differently named shops in every spending category still fit one message.
     const spending = (await app.json<any[]>('/categories')).filter(c => ['needs', 'wants', 'savings'].includes(c.type))
@@ -327,7 +344,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await quiet()
     expect(showingSince(count)).toHaveLength(1)
     expect(wide.text.length).toBeLessThanOrEqual(4096)
-    expect(wide.text.split('\n')[0]).toBe('480 payments:')
+    expect(wide.text.split('\n')[0]).toBe('480 payments')
     await app.cardShown()
     stub.tap(DANIEL, wide, stub.button(wide, 'Apply'))
     await expect.poll(() => wide.text, { timeout: 60_000 }).toMatch(/^Applied\./)
@@ -503,7 +520,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect((await app.transactions()).length).toBe(total)
   })
 
-  test('R-011 R-012 R-013: sure guesses count at once, doubtful ones become questions with buttons and count nowhere, and an answer is remembered', async () => {
+  test('R-011 R-012 R-013: sure guesses count at once, doubtful ones become questions with buttons and count nowhere, and an answer is remembered when asked', async () => {
     const before = await pace()
     const foodBefore = (await app.budgetRow(MONTH, 'Food - Essential')).actual_amount_cents
     const waitingBefore = before.to_review
@@ -546,11 +563,12 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     const asked = () => showingSince(count).filter(isQuestion)
     await expect.poll(() => asked().length, { timeout: 20_000 }).toBe(3)
     const [tango, person, webshop] = asked()
-    expect(tango.text.split('\n')).toEqual(['Tango Sample: 2 payments, €40,00 in all. Where does it belong?', '• 13 Nov · -€10,00', '• 12 Nov · -€30,00'])
+    expect(tango.text.split('\n')).toEqual(['Tango Sample · 2 payments, €40,00', '13 Nov · -€10,00', '12 Nov · -€30,00', '', 'Where does it belong?'])
+    expect(tango.html.split('\n')[0], 'who was paid is bold').toBe('<b>Tango Sample</b> · 2 payments, €40,00')
     expect(labels(tango)).toEqual(['Transportation', 'Food - Not Essential', 'Something else'])
-    expect(person.text).toBe('Mw P Voorbeeld, 12 Nov, -€25,00. Where does it belong?')
+    expect(person.text).toBe('Mw P Voorbeeld · 12 Nov · -€25,00\n\nWhere does it belong?')
     expect(labels(person)).toEqual(['Miscellaneous', 'To personal accounts', 'Something else'])
-    expect(webshop.text).toBe('Sample Webshop, 12 Nov, +€20,00. What was this money for?')
+    expect(webshop.text).toBe('Sample Webshop · 12 Nov · +€20,00\n\nWhat was this money for?')
     expect(labels(webshop)).toEqual(['Other Income', 'Refund: Clothing', 'Something else'])
     // The same payments are in the app's review list.
     await expect(page.locator('.page-head')).toContainText(`${waitingBefore + 6} to review`)
@@ -566,16 +584,22 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // An answer by either person sorts the shop's payments, and the next question comes.
     const eatingBefore = (await app.budgetRow(MONTH, 'Food - Not Essential')).actual_amount_cents
     stub.tap(PARTNER, tango, stub.button(tango, 'Food - Not Essential'))
-    await expect.poll(() => tango.text, { timeout: 15_000 }).toBe('Tango Sample: Food - Not Essential. 2 payments sorted, and remembered for next time.')
-    expect(labels(tango)).toEqual([])
+    await expect.poll(() => tango.text, { timeout: 15_000 }).toBe('Tango Sample: Food - Not Essential. 2 payments sorted.')
+    // R-013: the answer made no rule; the answered question offers to remember the shop.
+    expect(labels(tango)).toEqual(['Remember Tango Sample for next time'])
+    expect((await app.json<any[]>('/rules')).filter(r => r.pattern === 'tango sample')).toEqual([])
     expect((await rows('Tango Sample')).map(t => [t.confirmed, t.category_name, t.categorised_by])).toEqual([[true, 'Food - Not Essential', 'manual'], [true, 'Food - Not Essential', 'manual']])
     expect((await app.budgetRow(MONTH, 'Food - Not Essential')).actual_amount_cents).toBe(eatingBefore + 4000)
     await expect.poll(() => asked().length, { timeout: 20_000 }).toBe(3)
-    expect(asked().map(m => m.text.split(/[,:]/)[0])).toEqual(['Mw P Voorbeeld', 'Sample Webshop', 'Kiosk Onbekend'])
+    expect(asked().map(m => m.text.split(' · ')[0])).toEqual(['Mw P Voorbeeld', 'Sample Webshop', 'Kiosk Onbekend'])
     // A second tap on an answered question changes nothing.
     stub.tap(DANIEL, tango, 'q:0:0')
 
-    // R-013: the shop is remembered. Its later payments are sorted the same way, with no question and without asking Claude.
+    // R-013: asked to, the shop is remembered. Its later payments are sorted the same way, with no question and without asking Claude.
+    expect((await rows('Tango Sample')).length, 'the second tap sorted nothing again').toBe(2)
+    stub.tap(PARTNER, tango, stub.button(tango, 'Remember Tango Sample'))
+    await expect.poll(() => tango.text, { timeout: 15_000 }).toBe('Tango Sample: Food - Not Essential. 2 payments sorted.\nRemembered: “tango sample” → Food - Not Essential.')
+    expect(labels(tango)).toEqual([])
     expect((await app.json<any[]>('/rules')).filter(r => r.pattern === 'tango sample').map(r => r.category_name)).toEqual(['Food - Not Essential'])
     const calls = app.calls().length
     const later = await importInTelegram(DANIEL, ingCsv([ingRow('2026-11-14', 'Tango Sample 99 Utrecht', -500)]))
@@ -587,13 +611,17 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     addWaiting([{ description: 'Kiosk Onbekend Filiaal 2', cents: -150, category: await idOf('Miscellaneous'), date: '2026-11-11' }])
     const kiosk = asked().find(m => m.text.startsWith('Kiosk Onbekend'))!
     stub.tap(DANIEL, kiosk, stub.button(kiosk, 'Miscellaneous'))
-    await expect.poll(() => kiosk.text, { timeout: 15_000 }).toBe('Kiosk Onbekend: Miscellaneous. 2 payments sorted, and remembered for next time.')
+    await expect.poll(() => kiosk.text, { timeout: 15_000 }).toBe('Kiosk Onbekend: Miscellaneous. 2 payments sorted.')
     expect((await rows('Kiosk Onbekend')).map(t => [t.confirmed, t.category_name])).toEqual([[true, 'Miscellaneous'], [true, 'Miscellaneous']])
+    // Left unpressed, the offer remembers nothing.
+    expect(labels(kiosk)).toEqual(['Remember Kiosk Onbekend for next time'])
+    expect((await app.json<any[]>('/rules')).filter(r => r.pattern.startsWith('kiosk'))).toEqual([])
 
     // Money that came back from a shop: the button books it as a refund, and that is not made a rule.
     const clothingBefore = (await app.budgetRow(MONTH, 'Clothing')).actual_amount_cents
     stub.tap(PARTNER, webshop, stub.button(webshop, 'Refund: Clothing'))
     await expect.poll(() => webshop.text, { timeout: 15_000 }).toBe('Sample Webshop: Refund: Clothing. 1 payment sorted.')
+    expect(labels(webshop), 'a refund is not offered as a rule').toEqual([])
     expect((await rows('Sample Webshop'))[0]).toMatchObject({ confirmed: true, is_refund: true, category_name: 'Clothing' })
     expect((await app.budgetRow(MONTH, 'Clothing')).actual_amount_cents).toBe(clothingBefore - 2000)
     expect((await app.json<any[]>('/rules')).some(r => r.pattern.includes('webshop'))).toBe(false)
@@ -623,12 +651,19 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     await expect.poll(() => person.text, { timeout: 15_000 }).toBe('Mw P Voorbeeld: Sorted as Home & DIY.')
     expect(labels(person)).toEqual([])
-    expect((await app.json<any[]>('/rules')).filter(r => r.pattern === 'mw p voorbeeld').map(r => r.category_name)).toEqual(['Home & DIY'])
+    // The applied card offers to remember the one shop it sorted, by name.
+    const ruleFor = async (pattern: string) => (await app.json<any[]>('/rules')).filter(r => r.pattern === pattern).map(r => r.category_name)
+    expect(await ruleFor('mw p voorbeeld')).toEqual([])
+    expect(labels(card)).toEqual(['Remember Mw P Voorbeeld for next time'])
+    stub.tap(DANIEL, card, stub.button(card, 'Remember Mw P Voorbeeld'))
+    await expect.poll(() => card.text.split('\n').at(-1), { timeout: 15_000 }).toBe('Remembered: “mw p voorbeeld” → Home & DIY.')
+    expect(labels(card)).toEqual([])
+    expect(await ruleFor('mw p voorbeeld')).toEqual(['Home & DIY'])
 
-    // R-011: an automatically sorted payment can still be changed, and the correction is remembered for the shop.
-    await app.json(`/transactions/${supermarket.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Food - Not Essential') }) })
+    // R-011: an automatically sorted payment can still be changed. The correction is remembered for the shop when asked.
+    await app.json(`/transactions/${supermarket.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Food - Not Essential'), remember: true }) })
     expect((await rows('Sample Supermarket'))[0]).toMatchObject({ confirmed: true, category_name: 'Food - Not Essential', categorised_by: 'manual' })
-    expect((await app.json<any[]>('/rules')).filter(r => r.pattern === 'sample supermarket').map(r => r.category_name)).toEqual(['Food - Not Essential'])
+    expect(await ruleFor('sample supermarket')).toEqual(['Food - Not Essential'])
 
     // The last one is answered in the app's review list instead, which closes its question.
     await expect.poll(() => asked().some(m => m.text.startsWith('Zzz Unknown')), { timeout: 20_000 }).toBe(true)
@@ -660,11 +695,13 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     const asked = () => showingSince(first.count).filter(isQuestion).filter(m => m.text.startsWith('AAB INZ TIKKIE'))
     await expect.poll(() => asked().length, { timeout: 20_000 }).toBe(2) // one question each, not one for both
     expect(asked().map(m => m.text).sort()).toEqual([
-      'AAB INZ TIKKIE, 12 Nov, -€12,00. Where does it belong?', 'AAB INZ TIKKIE, 13 Nov, -€34,00. Where does it belong?',
+      'AAB INZ TIKKIE · 12 Nov · -€12,00 · “etentje”\n\nWhere does it belong?', 'AAB INZ TIKKIE · 13 Nov · -€34,00 · “cadeau”\n\nWhere does it belong?',
     ])
     const dinner = asked().find(m => m.text.includes('12 Nov'))!
     stub.tap(PARTNER, dinner, stub.button(dinner, 'Food - Not Essential'))
+    expect(dinner.html, 'what the payer typed stands in italics').toContain(' · <i>“etentje”</i>')
     await expect.poll(() => dinner.text, { timeout: 15_000 }).toBe('AAB INZ TIKKIE: Food - Not Essential. 1 payment sorted.')
+    expect(labels(dinner), 'a payment service is never offered as a rule').toEqual([])
     const tikkies = await rows('AAB INZ TIKKIE')
     expect(tikkies.find(t => t.amount_cents === -1200)).toMatchObject({ confirmed: true, category_name: 'Food - Not Essential' })
     expect(tikkies.find(t => t.amount_cents === -3400), 'the other one still waits').toMatchObject({ confirmed: false })
@@ -681,8 +718,8 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect((await app.json<any[]>('/rules')).filter(r => r.pattern.includes('tikkie'))).toEqual([])
     await quiet()
 
-    // The other services, as the bank writes them: an answer sorts that payment and is never made a rule.
-    // A shop that only pays through one ("Sample Boekhandel via Mollie") is a shop, and is remembered.
+    // The other services, as the bank writes them: an answer sorts that payment and is never made a rule, even
+    // when asked to remember it. A shop that only pays through one ("Sample Boekhandel via Mollie") is a shop, and is.
     const hidden = [
       'Stg Mollie Payments', 'Klarna Bank AB', 'Stichting Derdengelden Buckaroo', 'Stg Adyen', 'Riverty Netherlands B.V.',
       'Stripe Technology Europe Ltd', 'ING Bank NV inzake Tikkie', 'PayPal Europe S.a.r.l. et Cie S.C.A',
@@ -696,7 +733,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     const rulesBefore = new Set((await app.json<any[]>('/rules')).map(r => r.id))
     for (const name of names) {
       const [first, second] = (await rows(name)).sort((a, b) => b.amount_cents - a.amount_cents)
-      await app.json(`/transactions/${first.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Home & DIY'), confirmed: true }) })
+      await app.json(`/transactions/${first.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Home & DIY'), confirmed: true, remember: true }) })
       const other = (await rows(name)).find(t => t.id === second.id)!
       if (hidden.includes(name)) expect(other, `${name}: the next payment still waits`).toMatchObject({ confirmed: false })
       else expect(other, `${name}: a shop, so its other payment follows`).toMatchObject({ confirmed: true, category_name: 'Home & DIY' })
@@ -704,7 +741,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     const made = async () => (await app.json<any[]>('/rules')).filter(r => !rulesBefore.has(r.id)).map(r => r.pattern)
     expect(await made()).toEqual(['sample boekhandel via mollie'])
     for (const tx of (await app.transactions()).filter(t => !t.confirmed && hidden.includes(t.description))) {
-      await app.json(`/transactions/${tx.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Miscellaneous'), confirmed: true }) })
+      await app.json(`/transactions/${tx.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Miscellaneous'), confirmed: true, remember: true }) })
     }
     expect(await made(), 'and answering the rest made no rule either').toEqual(['sample boekhandel via mollie'])
     await quiet()
@@ -730,13 +767,18 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await page.getByRole('button', { name: 'Import 1 new transaction' }).click()
     await expect(page.getByText('needs your answer')).toBeVisible()
     const question = await stub.reply_after(count, isQuestion)
-    expect(question.text).toBe('Pretpark Voorbeeld, 12 Nov, -€45,00. Where does it belong?')
+    expect(question.text).toBe('Pretpark Voorbeeld · 12 Nov · -€45,00\n\nWhere does it belong?')
     expect(labels(question)).toEqual(['Recreation & Entertainment', 'Miscellaneous', 'Something else'])
     // Answered in the app's review list instead.
     await page.goto(`${app.base}/transactions`)
     const review = page.locator('.rev')
     await expect(review).toContainText('Pretpark Voorbeeld')
     await expect(review).toContainText('Claude was not sure. Its guess: Recreation & Entertainment')
+    // The review card remembers the shop only when its box is ticked.
+    const box = review.getByRole('checkbox', { name: 'Remember this shop for next time' })
+    await expect(box).not.toBeChecked()
+    await box.check()
+    await shot(page, 'review-remember-desktop')
     await review.getByRole('button', { name: 'Confirm category' }).click()
     await expect.poll(async () => (await rows('Pretpark Voorbeeld'))[0].confirmed, { timeout: 15_000 }).toBe(true)
     await expect.poll(() => question.text, { timeout: 15_000 }).toBe('Pretpark Voorbeeld: Sorted as Recreation & Entertainment.')
@@ -768,7 +810,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     }
     expect((await rows('M Anderenaam'))[0].confirmed).toBe(false)
     const asked = showingSince(count).filter(isQuestion)
-    expect(asked.map(m => m.text.split(',')[0])).toEqual(['M Anderenaam'])
+    expect(asked.map(m => m.text.split(' · ')[0])).toEqual(['M Anderenaam'])
     const after = await pace()
     expect(after.spendable_actual_cents).toBe(before.spendable_actual_cents + 3000 + 6000 + 4000)
     expect(after.free.free_cents).toBe(before.free.free_cents - 13000)
@@ -807,7 +849,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(paid.find(t => t.amount_cents === -2500), 'a doubtful one waits for an answer').toMatchObject({ confirmed: false })
     expect((await rows('Mw P Partnernaam')).find(t => t.amount_cents === -4000)).toMatchObject({ confirmed: true, category_name: 'To personal accounts', categorised_by: 'rule' })
     const asked = showingSince(count).filter(isQuestion)
-    expect(asked.map(m => m.text.split(',')[0])).toEqual(['BELASTING VOORBEELD'])
+    expect(asked.map(m => m.text.split(' · ')[0])).toEqual(['BELASTING VOORBEELD'])
     expect(labels(asked[0])).toEqual(['Miscellaneous', 'Taxes & Mortgage', 'Something else'])
     // The transfer counts as spending and lowers what is free to spend.
     const after = await pace()
@@ -822,7 +864,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(planned.free.free_cents).toBe(after.free.free_cents + 20000)
     // Saying where the doubtful one belongs does not make that name the household's own either.
     stub.tap(DANIEL, asked[0], stub.button(asked[0], 'Taxes & Mortgage'))
-    await expect.poll(() => asked[0].text, { timeout: 15_000 }).toBe('BELASTING VOORBEELD: Taxes & Mortgage. 1 payment sorted, and remembered for next time.')
+    await expect.poll(() => asked[0].text, { timeout: 15_000 }).toBe('BELASTING VOORBEELD: Taxes & Mortgage. 1 payment sorted.')
     expect((await rows('BELASTING VOORBEELD')).filter(t => t.amount_cents < 0).map(t => t.category_name)).toEqual(['Taxes & Mortgage', 'Taxes & Mortgage'])
     expect((await app.budgetRow(MONTH, 'To personal accounts')).actual_amount_cents).toBe(personalBefore + 4000)
     await quiet()
@@ -1215,7 +1257,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     sortsAs([unsure(0, 'Miscellaneous', ['Miscellaneous'])])
     await importInTelegram(DANIEL, ingCsv([ingRow('2026-11-12', '1448 Enschede Enschede NLD', -1063)]))
     const numbered = (await rows('1448 Enschede'))[0]
-    await app.json(`/transactions/${numbered.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Food - Essential'), confirmed: true }) })
+    await app.json(`/transactions/${numbered.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Food - Essential'), confirmed: true, remember: true }) })
     const patterns = (await app.json<any[]>('/rules')).map(r => r.pattern)
     expect(patterns).toContain('1448 enschede enschede')
     expect(patterns.filter(p => p.startsWith('enschede'))).toEqual([])

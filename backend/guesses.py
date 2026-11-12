@@ -105,20 +105,53 @@ def waiting(db: Session) -> list[Transaction]:
 
 # ---- What an answer teaches ---------------------------------------------------------------------
 
-def remember(db: Session, tx: Transaction) -> Rule | None:
-    """A person put this payment in its category: make that the rule for its shop."""
+def rule_text(tx: Transaction) -> str | None:
+    """The text a rule for this payment's shop would have, or None when no rule can stand for it."""
     if tx.category is None or tx.is_refund or tx.splits or not is_sign_compatible(tx.amount, tx.category):
         return None
     pattern = shop_pattern(tx.description)
-    if len(pattern) < MIN_PATTERN or hides_shop(pattern):
+    return None if len(pattern) < MIN_PATTERN or hides_shop(pattern) else pattern
+
+
+def _rule_of(rules: list[Rule], pattern: str, tx: Transaction) -> Rule | None:
+    return next((r for r in rules if squeeze(r.pattern) == pattern and is_sign_compatible(tx.amount, r.category)), None)
+
+
+def shop_name(tx: Transaction) -> str:
+    """The shop as the bank writes it."""
+    text = " ".join(tx.description.split())
+    pattern = shop_pattern(tx.description)
+    at = text.lower().find(pattern)
+    return text if at < 0 else text[at:at + len(pattern)]
+
+
+def to_remember(db: Session, rows: list[Transaction]) -> list[Transaction]:
+    """One payment per shop among these that remembering would make or change a rule for. Nothing is
+    remembered by itself: this is what a person is offered after an answer."""
+    rules = db.query(Rule).all()
+    seen: set[tuple[str, bool]] = set()
+    offered = []
+    for tx in rows:
+        pattern = rule_text(tx)
+        if pattern is None or (pattern, tx.amount > 0) in seen:
+            continue
+        seen.add((pattern, tx.amount > 0))
+        same = _rule_of(rules, pattern, tx)
+        if same is None or same.category_id != tx.category_id:
+            offered.append(tx)
+    return offered
+
+
+def remember(db: Session, tx: Transaction) -> Rule | None:
+    """A person asked to remember this payment's shop: its category becomes the rule for the shop."""
+    pattern = rule_text(tx)
+    if pattern is None:
         return None
-    same = [
-        r for r in db.query(Rule).all()
-        if squeeze(r.pattern) == pattern and is_sign_compatible(tx.amount, r.category)
-    ]
-    if same:
-        same[0].category_id = tx.category_id
-        return same[0]
+    same = _rule_of(db.query(Rule).all(), pattern, tx)
+    if same is not None:
+        same.category_id = tx.category_id
+        db.flush()
+        return same
     rule = Rule(pattern=pattern, category_id=tx.category_id)
     db.add(rule)
     db.flush()
@@ -141,14 +174,6 @@ def settle_like(db: Session, tx: Transaction) -> list[Transaction]:
             other.confirmed = True
             other.categorised_by = "rule"
             settled.append(other)
-    return settled
-
-
-def learn(db: Session, tx: Transaction) -> list[Transaction]:
-    """What a person's answer for one payment settles: the shop's rule and its other waiting payments."""
-    remember(db, tx)
-    settled = settle_like(db, tx)
-    db.flush()
     return settled
 
 
@@ -260,9 +285,7 @@ class Group:
     @property
     def name(self) -> str:
         """The shop as the bank writes it, taken from the newest payment."""
-        text = " ".join(self.rows[0].description.split())
-        at = text.lower().find(self.pattern)
-        return text if at < 0 else text[at:at + len(self.pattern)]
+        return shop_name(self.rows[0])
 
 
 def groups(db: Session, judged_only: bool = False, tried: frozenset[int] | set[int] = frozenset()) -> list[Group]:
@@ -314,10 +337,10 @@ def options_for(db: Session, group: Group) -> list[dict]:
 
 
 def answer(db: Session, rows: list[Transaction], category: Category) -> list[Transaction]:
-    """A person's answer for a group: its waiting payments get the category, and the shop is remembered.
+    """A person's answer for a group: its waiting payments get the category.
 
     Money coming in that is put in a spending category is a refund of it. Returns every payment sorted,
-    the shop's other waiting ones included.
+    the shop's other waiting ones included. The shop is only remembered for later when asked (`remember`).
     """
     sorted_rows = []
     for tx in rows:
@@ -334,5 +357,6 @@ def answer(db: Session, rows: list[Transaction], category: Category) -> list[Tra
         sorted_rows.append(tx)
     db.flush()
     if sorted_rows and not sorted_rows[0].is_refund:
-        sorted_rows += learn(db, sorted_rows[0])
+        sorted_rows += settle_like(db, sorted_rows[0])
+        db.flush()
     return sorted_rows

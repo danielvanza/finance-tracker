@@ -78,10 +78,12 @@ A payment Claude is not sure about is put to the household as a question.
 
 **Acceptance:** After an import the group gets questions grouped per shop or person, each with buttons for the likely categories. The same payments are in the app's review list. They count nowhere until answered.
 
-### R-013 — Answers are remembered
-Once a person has confirmed or corrected a shop, it is not asked about again.
+### R-013 — Answers can be remembered
+Once a person has confirmed or corrected a shop, they can have it remembered, so it is not asked about again.
 
-**Acceptance:** The answer sorts that shop's other waiting payments at once, and every later payment from that shop is sorted the same way with no question.
+**Acceptance:** The answer sorts that shop's other waiting payments at once. Nothing is remembered by itself: after an answer in the group and after an applied card, one button offers to remember the shop or shops, and the review card in the app has a tick box for it. Once remembered, every later payment from that shop is sorted the same way with no question.
+
+*Changed 2026-11-12, with Daniel:* remembering was automatic ("every later payment from that shop is sorted the same way"). One answer for a person or for a holiday's shops made rules nobody wanted, so it is now offered after the answer.
 
 ### R-014 — The existing pile is cleared the same way
 The payments already waiting are handled by R-011 to R-013 without importing them again.
@@ -190,5 +192,6 @@ Superseded by this feature, by decision on 2026-11-11:
 
 - 2026-11-11: R-001 to R-028 agreed and locked.
 - 2026-11-11: R-004 narrowed to English voice notes, by Daniel during the build. R-006 (Dutch ING exports) confirmed unchanged.
+- 2026-11-12: R-013 changed, with Daniel: a shop is remembered only when asked, through a button after an answer or an applied card, or the tick box on the review card.
 - 2026-11-12: after the second independent review, with Daniel: R-010 clarified (one message also when only the bot could not deliver), R-016 changed (names from Setup only), R-020 clarified (a later month changed by hand keeps its amount), R-023 changed (a short rule text fits whole words only).
 - 2026-11-12: after the first independent review, with Daniel: R-010 clarified (one combined message after downtime; quiet hours hold at delivery), R-016 clarified (own names entered in Setup), R-023 second sentence reworded to rules that do not overlap. A typed yes in the group keeps applying the one open card, by Daniel's choice.

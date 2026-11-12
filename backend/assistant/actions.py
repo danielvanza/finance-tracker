@@ -216,8 +216,8 @@ def _confirm_guesses(db: Session, a: dict):
         tx.confirmed = True
         tx.categorised_by = "manual"
     db.flush()
-    for tx in rows:  # each confirmed shop is remembered, and its other waiting payments follow
-        guesses.learn(db, tx)
+    for tx in rows:  # each confirmed shop's other waiting payments follow
+        guesses.settle_like(db, tx)
     db.commit()
 
 
@@ -553,7 +553,8 @@ def _changes(before: dict, after: dict) -> list[dict]:
         how = "new" if not old else "removed" if not new else (
             "moved" if "Category" in changed else "confirmed" if changed == {"Reviewed"} and new["confirmed"] else "changed")
         out.append({"title": heading + tx_title(row), "fields": fields, "payment": {
-            "how": how, "shop": guesses.shop_pattern(row["description"]), "amount_cents": _cents_of(row["amount"]),
+            # A row that is only being added has no id yet that will still be its id at Apply.
+            "id": tx_id if old else None, "how": how, "shop": guesses.shop_pattern(row["description"]), "amount_cents": _cents_of(row["amount"]),
             "category": new_values.get("Category") or old_values.get("Category"),
         }})
 
@@ -779,6 +780,7 @@ _GROUP_LINES = 12
 _SHOPS = 3
 _OTHER_LINES = 4
 _EFFECT_LINES = 3
+_REMEMBERED, _OTHER = "Remembered for next time", "Other changes"
 _ACTIONS = {"confirmed": "Confirm as", "moved": "Move to", "new": "Add to", "removed": "Remove from", "changed": "Change in"}
 
 
@@ -820,8 +822,9 @@ def _count(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
-def _summed_up(payments: list[dict], others: list[dict]) -> list[str]:
-    """Many changes, summed up per category with counts, totals and the shops that weigh most."""
+def _summed_up(payments: list[dict], others: list[dict], shops_named: bool = True) -> list[str]:
+    """Many changes, summed up per category with counts and totals, and the shops that weigh most
+    when `shops_named`."""
     groups: dict[tuple[str, str], list[dict]] = {}
     for change in payments:
         groups.setdefault((change["payment"]["how"], change["payment"]["category"]), []).append(change)
@@ -836,7 +839,8 @@ def _summed_up(payments: list[dict], others: list[dict]) -> list[str]:
         named = ", ".join(f"{shop}{f' ×{n}' if n > 1 else ''}" for shop, n in top[:_SHOPS])
         if len(top) > _SHOPS:
             named += f" and {len(top) - _SHOPS} more"
-        lines.append(f"• {_ACTIONS[how]} {category}: {_count(len(rows), 'payment')}, {eur(total)} ({named})")
+        lines.append(f"• {_ACTIONS[how]} {category}: {_count(len(rows), 'payment')}, {eur(total)}"
+                     + (f" ({named})" if shops_named else ""))
     if len(ordered) > _GROUP_LINES:
         rest = [r for _, rows in ordered[_GROUP_LINES:] for r in rows]
         lines.append(f"• And {_count(len(rest), 'payment')} in {_count(len(ordered) - _GROUP_LINES, 'other group')}")
@@ -865,9 +869,31 @@ def plain(preview: dict) -> dict:
         lines = [_plain_line(c) for c in told]
         if remembered:
             lines.append("Remembered for next time." if len(remembered) == 1 else f"Remembers {len(remembered)} shops for next time.")
-        return {"lines": lines, "summed_up": False, "rows": len(changes)}
-    head = f"{_count(len(payments), 'payment')}:" if payments else f"{_count(len(changes), 'change')}:"
-    return {"lines": [head, *_summed_up(payments, others)], "summed_up": True, "rows": len(changes)}
+        return {"lines": lines, "summed_up": False, "rows": len(changes), "payments": len(payments)}
+    head = _count(len(payments), "payment") if payments else _count(len(changes), "change")
+    return {
+        "lines": [f"{head}:", *_summed_up(payments, others)], "summed_up": True, "rows": len(changes),
+        "payments": len(payments),
+        # The same without the shops, for a chat that keeps a card short, and one sentence for once it is applied.
+        "head": head, "short_lines": _summed_up(payments, others, shops_named=False),
+        "applied_line": _applied_line(payments, len(changes)),
+    }
+
+
+def _applied_line(payments: list[dict], changes: int) -> str:
+    """A card with many changes, once applied, in one sentence."""
+    sorted_now = [c for c in payments if c["payment"]["how"] in ("moved", "confirmed")]
+    said = []
+    if sorted_now:
+        categories = {c["payment"]["category"] for c in sorted_now}
+        total = eur(sum(abs(c["payment"]["amount_cents"]) for c in sorted_now))
+        one = len(sorted_now) == 1
+        where = f"in {categories.pop()}" if len(categories) == 1 else f"sorted, in {len(categories)} categories"
+        said.append(f"{_count(len(sorted_now), 'payment')} {'is' if one else 'are'} now {where}, {total} in all")
+    rest = changes - len(sorted_now)
+    if rest:
+        said.append(f"{_count(rest, 'other change')} made" if said else f"{_count(rest, 'change')} made")
+    return " and ".join(said) + "."
 
 
 def plain_effect(effect: list[dict], applied: bool = False) -> list[str]:
@@ -888,10 +914,10 @@ def plain_effect(effect: list[dict], applied: bool = False) -> list[str]:
     return lines
 
 
-def details(preview: dict) -> str:
-    """Every row of a card, for when a person asks to see them all: grouped by what changes, with one
-    short line per payment."""
-    groups: dict[str, list[str]] = {}
+def detail_groups(preview: dict) -> list[dict]:
+    """Every row of a card, grouped by what changes: a group of payments has `rows` (when, amount,
+    name), any other group has `lines`."""
+    groups: dict[str, dict] = {}
     for change in preview["changes"]:
         fields = {f["label"]: f for f in change["fields"]}
         payment = change.get("payment")
@@ -903,14 +929,27 @@ def details(preview: dict) -> str:
                 heading = f"Now {fields['Category']['after']}"
             else:
                 heading = f"{fields['Category']['before']} → {fields['Category']['after']}"
-            line = f"{when} · {amount} · {name}"
-        elif change["title"].startswith("New: Rule") and "Pattern" in fields and "Category" in fields:
-            heading, line = "Remembered for next time", f"“{fields['Pattern']['after']}” → {fields['Category']['after']}"
+            groups.setdefault(heading, {"heading": heading, "rows": []})["rows"].append(
+                {"when": when, "amount": amount, "name": name})
+            continue
+        if change["title"].startswith("New: Rule") and "Pattern" in fields and "Category" in fields:
+            heading, line = _REMEMBERED, f"“{fields['Pattern']['after']}” → {fields['Category']['after']}"
         else:
-            heading, line = "Other changes", _plain_line(change)
-        groups.setdefault(heading, []).append(line)
-    if list(groups) == ["Other changes"]:
-        return "\n".join(f"• {line}" for line in groups["Other changes"])
-    last = ("Remembered for next time", "Other changes")
-    ordered = sorted(groups.items(), key=lambda item: (last.index(item[0]) + 1 if item[0] in last else 0, -len(item[1])))
-    return "\n\n".join("\n".join([f"{heading} ({len(lines)})", *[f"• {line}" for line in lines]]) for heading, lines in ordered)
+            heading, line = _OTHER, _plain_line(change)
+        groups.setdefault(heading, {"heading": heading, "lines": []})["lines"].append(line)
+    last = (_REMEMBERED, _OTHER)
+    return sorted(groups.values(), key=lambda g: (
+        last.index(g["heading"]) + 1 if g["heading"] in last else 0, -len(g.get("rows") or g["lines"])))
+
+
+def details(preview: dict) -> str:
+    """Every row of a card as plain text, for when a person asks to see them all: grouped by what
+    changes, with one short line per payment."""
+    groups = detail_groups(preview)
+    if [g["heading"] for g in groups] == [_OTHER]:
+        return "\n".join(f"• {line}" for line in groups[0]["lines"])
+    said = []
+    for group in groups:
+        lines = group.get("lines") or [f"{r['when']} · {r['amount']} · {r['name']}" for r in group["rows"]]
+        said.append("\n".join([f"{group['heading']} ({len(lines)})", *[f"• {line}" for line in lines]]))
+    return "\n\n".join(said)

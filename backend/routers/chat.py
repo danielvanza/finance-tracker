@@ -103,6 +103,11 @@ def answer_question(message_id: int, body: AnswerIn):
     return _found(service.answer_question, message_id, body.option)
 
 
+@router.post("/questions/{message_id}/remember")
+def remember_question(message_id: int):
+    return _found(service.remember_question, message_id)
+
+
 @router.post("/questions/{message_id}/something-else")
 def something_else(message_id: int):
     return _found(service.something_else, message_id)
@@ -117,6 +122,11 @@ def show_all(proposal_id: int):
 @router.post("/proposals/{proposal_id}/apply")
 def apply_proposal(proposal_id: int, body: ApplyIn):
     return _found(service.apply_proposal, proposal_id, body.version)
+
+
+@router.post("/proposals/{proposal_id}/remember")
+def remember_shops(proposal_id: int):
+    return _found(service.remember_shops, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/reject")

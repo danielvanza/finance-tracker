@@ -9,9 +9,14 @@ Needs TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_IDS (the two numeric accounts, c
 TELEGRAM_GROUP_ID (the group's numeric id); FINANCE_API_URL points at the app. Without a group id the
 bot answers nobody and only logs the id of any group one of the two writes in, so it can be set.
 In BotFather the bot's group privacy must be off, or Telegram hands it commands only.
+
+Messages go out as Telegram's HTML: bold, italics, quotes (folded when long) and fixed-width blocks.
+Every render_* function returns HTML with the text in it escaped; `Bot.say` takes plain text.
 """
+import html
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -40,6 +45,8 @@ PHOTO_LOST = "That photo could not be used because Telegram would not hand it ov
 VOICE_LOST = "That voice note could not be used because Telegram would not hand it over. Nothing changed."
 MAX_SAYS = 700  # Claude's words longer than this go out ahead of the card instead of on it
 LINE_LIMIT = 110  # a card that would not fit one message has its lines cut to this
+FOLD_OVER = 6  # a list in Claude's words longer than this is folded until tapped
+MONO_WIDTH = 34  # how many fixed-width characters fit one line of a phone
 NOTHING_TO_STOP = "Nothing is being worked on right now."
 STOP_WORDS = {"stop", "/stop"}
 LOG_STEPS = 40
@@ -126,6 +133,12 @@ class Finance:
     def something_else(self, message_id: int):
         return self._request("POST", f"/chat/questions/{message_id}/something-else")
 
+    def remember_question(self, message_id: int):
+        return self._request("POST", f"/chat/questions/{message_id}/remember")
+
+    def remember_shops(self, proposal_id: int):
+        return self._request("POST", f"/chat/proposals/{proposal_id}/remember")
+
     def show_all(self, proposal_id: int):
         return self._request("POST", f"/chat/proposals/{proposal_id}/show-all")
 
@@ -165,70 +178,178 @@ def eur(cents: int) -> str:
     return f"{sign}€{whole:,}".replace(",", ".") + f",{rem:02d}"
 
 
-def _fit(head: list[str], lines: list[str], tail: list[str]) -> str:
-    """The card as one message: when it would not fit, its lines are cut short rather than spilling over."""
-    text = "\n".join([*head, *lines, *tail])
-    if len(text) <= TEXT_LIMIT:
-        return text
-    cut = [line if len(line) <= LINE_LIMIT else line[:LINE_LIMIT - 1] + "…" for line in lines]
-    return "\n".join([*head, *cut, *tail])[:TEXT_LIMIT]
+def esc(text) -> str:
+    return html.escape(str(text), quote=False)
+
+
+_TAG = re.compile(r"<(/?)(b|i|pre|blockquote)( expandable)?>")
+_BOLD = re.compile(r"\*\*(\S(?:.*?\S)?)\*\*")
+_ITEM = re.compile(r"^\s*[-*•]\s+")
+
+
+def plain_text(text: str) -> str:
+    """A message without its layout, for when Telegram will not read the layout."""
+    return html.unescape(_TAG.sub("", text))
+
+
+def quote(lines: list[str], folded: bool = False) -> list[str]:
+    """Lines set apart as a quote, as one piece of a message. A folded one shows three lines until tapped."""
+    if not lines:
+        return []
+    return [f"<blockquote{' expandable' if folded else ''}>" + "\n".join(lines) + "</blockquote>"]
+
+
+def rich(text: str) -> str:
+    """Claude's words as Telegram shows them: **leads** in bold, list lines with a bullet, and a list
+    of more than FOLD_OVER lines folded until tapped."""
+    out: list[str] = []
+    items: list[str] = []
+
+    def end_list() -> None:
+        out.extend(quote(items, folded=True) if len(items) > FOLD_OVER else [f"• {item}" for item in items])
+        items.clear()
+
+    for line in text.split("\n"):
+        shown = _BOLD.sub(r"<b>\1</b>", esc(line))
+        if _ITEM.match(line):
+            items.append(_ITEM.sub("", shown, count=1))
+        else:
+            end_list()
+            out.append(shown)
+    end_list()
+    return "\n".join(out)
+
+
+def _card_text(head: list[str], lines: list[str], tail: list[str]) -> str:
+    """The card as one message: `head` and `tail` are ready, `lines` are plain. When it would not fit,
+    the lines are cut short rather than spilling over."""
+    def build(limit: int | None) -> str:
+        shown = [esc(line if limit is None or len(line) <= limit else line[:limit - 1] + "…") for line in lines]
+        return "\n".join([*head, *shown, *tail])
+
+    text = build(None)
+    return text if len(text) <= TEXT_LIMIT else build(LINE_LIMIT)
+
+
+def _still_waiting(waiting: int | None) -> list[str]:
+    if waiting is None:
+        return []
+    if waiting == 0:
+        return ["Nothing is waiting any more."]
+    return [f"{waiting} payment{' still waits' if waiting == 1 else 's still wait'}."]
 
 
 def render_card(card: dict) -> tuple[str, list | None]:
-    """The card as text, and its buttons (None once there is nothing left to decide)."""
+    """The card as a message, and its buttons (None once there is nothing left to decide or offer)."""
     status = card["status"]
+    effect = quote([esc(line) for line in card["effect_lines"]])
     if status == "applied":
+        # One sentence for what happened, the budget set apart, then what is left.
         lines = card["lines"]
-        first = f"Applied. {lines[0]}" if len(lines) == 1 else "Applied."
-        rest = lines if len(lines) != 1 else []
-        return _fit([first], rest, card["effect_lines"]), None
+        summed_up = card.get("applied_line") or (lines[0] if len(lines) == 1 else None)
+        tail = [*effect, *_still_waiting(card.get("waiting")), *([esc(card["remembered"])] if card.get("remembered") else [])]
+        offer = [[{"text": card["offer"], "callback_data": f"m:{card['id']}"}]] if card.get("offer") else None
+
+        def said(sentence: str | None) -> str:
+            head = [f"<b>Applied.</b> {esc(sentence)}" if sentence else "<b>Applied.</b>"]
+            return _card_text(head, [] if sentence else lines, tail)
+
+        text = said(summed_up)
+        if summed_up and len(text) > TEXT_LIMIT:  # one message, whatever the length of the row it names
+            text = said(summed_up[:LINE_LIMIT - 1] + "…")
+        return text, offer
     if status == "rejected":
         return ("Kept both. Nothing changed." if card["reject_label"] == "Keep both"
                 else "Not applied. Nothing changed."), None
     if status == "superseded":
         return "Replaced by a newer suggestion. Nothing changed.", None
     if status == "failed":
-        text = f"That didn't go through, and nothing changed.\n\n{card['error']}"
+        text = f"That didn't go through, and nothing changed.\n\n{esc(card['error'])}"
         return text, [[{"text": "Try again", "callback_data": f"a:{card['id']}:{card['version']}"}]]
 
     head = []
     says = card.get("says")
     if says and len(says) <= MAX_SAYS:
-        head += [says, ""]
+        head += [rich(says), ""]
     if card["apply_label"] == "Merge":
-        head += [card["heading"], card["summary"]]
+        head += [esc(card["heading"]), esc(card["summary"])]
+    lines = card["lines"]
+    if card["summed_up"] and card.get("short_lines"):
+        # A long card: its count in bold, then a line per category without the shops.
+        head.append(f"<b>{esc(card['head'])}</b>")
+        lines = card["short_lines"]
     tail = []
     if card["note"]:
-        tail.append(card["note"])
+        tail.append(esc(card["note"]))
     if card["purchase"]:
         purchase = card["purchase"]
-        tail.append(f"Refund for: {purchase['description']}, {purchase['date_label']} ({purchase['amount_label']})")
-    tail += card["effect_lines"]
+        tail.append(esc(f"Refund for: {purchase['description']}, {purchase['date_label']} ({purchase['amount_label']})"))
+    tail += effect
     buttons = [[
         {"text": card["apply_label"], "callback_data": f"a:{card['id']}:{card['version']}"},
         {"text": card["reject_label"], "callback_data": f"r:{card['id']}"},
     ]]
     if card["summed_up"]:
-        buttons.append([{"text": f"Show all {card['rows']} rows", "callback_data": f"d:{card['id']}"}])
-    return _fit(head, card["lines"], tail), buttons
+        count = card.get("payments") or 0
+        everything = f"{count} payments" if count > 1 else f"{card['rows']} rows"
+        buttons.append([{"text": f"Show all {everything}", "callback_data": f"d:{card['id']}"}])
+    return _card_text(head, lines, tail), buttons
 
 
 def render_question(message: dict) -> tuple[str, list | None]:
-    """A question about payments Claude was not sure of: the likely categories as buttons."""
+    """A question about payments Claude was not sure of: who was paid in bold, each payment with what
+    the payer typed, the question last, and the likely categories as buttons."""
     payload = message["payload"]
     if payload["status"] != "open":
-        return f"{payload['name']}: {payload.get('result') or 'Sorted.'}", None
-    lines = [message["text"]]
-    if payload["count"] > 1:
-        lines += [f"• {e['date_label']} · {e['amount_label']}" for e in payload["examples"]]
-        if payload["count"] > len(payload["examples"]):
-            lines.append(f"• and {payload['count'] - len(payload['examples'])} more")
+        offer = payload.get("offer")
+        buttons = [[{"text": offer["label"], "callback_data": f"q:{message['id']}:m"}]] if offer else None
+        return esc(f"{payload['name']}: {payload.get('result') or 'Sorted.'}"), buttons
+
+    def payment(example: dict) -> str:
+        note = f" · <i>“{esc(example['note'])}”</i>" if example.get("note") else ""
+        return f"{esc(example['date_label'])} · {esc(example['amount_label'])}{note}"
+
+    name, examples = f"<b>{esc(payload['name'])}</b>", payload["examples"]
+    if payload["count"] == 1 and examples:
+        lines = [f"{name} · {payment(examples[0])}"]
+    else:
+        lines = [f"{name} · {payload['count']} payments, {eur(abs(payload['total_cents']))}", *map(payment, examples)]
+        if payload["count"] > len(examples):
+            lines.append(f"and {payload['count'] - len(examples)} more")
+    lines += ["", "What was this money for?" if payload.get("incoming") else "Where does it belong?"]
     buttons = [
         [{"text": option["label"][:60], "callback_data": f"q:{message['id']}:{i}"}]
         for i, option in enumerate(payload["options"])
     ]
     buttons.append([{"text": "Something else", "callback_data": f"q:{message['id']}:x"}])
     return "\n".join(lines), buttons
+
+
+def _columns(rows: list[dict]) -> str:
+    """Payments as fixed-width columns: date, amount, name. The name is cut to what fits a phone."""
+    amounts = [r["amount"].replace("⁠", "").replace("€", "").removeprefix("-") for r in rows]
+    wide = max(len(a) for a in amounts)
+    room = max(8, MONO_WIDTH - 6 - 1 - wide - 2)
+    lines = []
+    for r, amount in zip(rows, amounts):
+        name = " ".join(r["name"].split())
+        lines.append(f"{r['when']:<6} {amount:>{wide}}  {name if len(name) <= room else name[:room - 1] + '…'}")
+    return "\n".join(lines)
+
+
+def render_details(groups: list[dict]) -> str:
+    """Every row of a card: a bold heading per kind of change, its payments in columns."""
+    if len(groups) == 1 and "lines" in groups[0] and groups[0]["heading"] == "Other changes":
+        return "\n".join(f"• {esc(line)}" for line in groups[0]["lines"])
+    parts = []
+    for group in groups:
+        rows = group.get("rows")
+        parts.append(f"<b>{esc(group['heading'])}</b> · {len(rows or group['lines'])}")
+        if rows:
+            parts.append(f"<pre>{esc(_columns(rows))}</pre>")
+        else:
+            parts += [esc(line) for line in group["lines"]]
+    return "\n".join(parts)
 
 
 def render_import(counts: dict) -> str:
@@ -250,8 +371,10 @@ def render_import(counts: dict) -> str:
 
 
 def _chunks(text: str) -> list[str]:
-    """Pieces that fit one Telegram message, broken between lines where possible."""
+    """Pieces that fit one Telegram message, broken between lines where possible. A quote or block
+    that is open where a piece ends is closed there and opened again in the next piece."""
     chunks, current = [], ""
+    open_tags: list[re.Match] = []
     for line in text.split("\n"):
         while len(line) > TEXT_LIMIT:
             if current:
@@ -259,11 +382,17 @@ def _chunks(text: str) -> list[str]:
                 current = ""
             chunks.append(line[:TEXT_LIMIT])
             line = line[TEXT_LIMIT:]
-        if current and len(current) + 1 + len(line) > TEXT_LIMIT:
-            chunks.append(current)
-            current = line
+        closing = "".join(f"</{tag.group(2)}>" for tag in reversed(open_tags))
+        if current and len(current) + 1 + len(line) + len(closing) > TEXT_LIMIT:
+            chunks.append(current + closing)
+            current = "".join(tag.group(0) for tag in open_tags) + line
         else:
             current = f"{current}\n{line}" if current else line
+        for tag in _TAG.finditer(line):
+            if not tag.group(1):
+                open_tags.append(tag)
+            elif open_tags:
+                open_tags.pop()
     if current.strip():
         chunks.append(current)
     return chunks or [" "]
@@ -277,7 +406,7 @@ def render_log(steps: list[str], status: str, heard: str | None = None) -> tuple
     lines = [*([f"Heard: “{heard}”"] if heard else []), heading,
              *(["…"] if len(steps) > len(shown) else []), *[f"• {step}" for step in shown]]
     buttons = None if status == "stopping" else [[{"text": "Stop", "callback_data": "s:0"}]]
-    return "\n".join(lines), buttons
+    return esc("\n".join(lines)), buttons
 
 
 def _option_label(option: dict) -> str:
@@ -315,22 +444,34 @@ class Bot:
             self._groups_seen.add(chat["id"])
             logger.info("one of the household wrote in group %s, which is not the group set in TELEGRAM_GROUP_ID", chat["id"])
 
+    def _laid_out(self, method: str, params: dict):
+        """Send or edit a message with its layout; if Telegram cannot read the layout, as plain text."""
+        try:
+            return self.telegram.call(method, **params, parse_mode="HTML")
+        except RuntimeError as e:
+            if "parse entities" not in str(e):
+                raise
+            logger.warning("Telegram could not read a message's layout, so it went as plain text")
+            return self.telegram.call(method, **{**params, "text": plain_text(params["text"])})
+
     def _send(self, chunk: str, buttons: list | None) -> int:
         params = {"chat_id": self.group, "text": chunk}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": buttons}
-        return self.telegram.call("sendMessage", **params)["message_id"]
+        return self._laid_out("sendMessage", params)["message_id"]
 
-    def say(self, text: str, buttons: list | None = None) -> list[int]:
-        """Send text, in several messages if long. Buttons go on the last one."""
-        chunks = _chunks(text)
+    def say(self, text: str, buttons: list | None = None, laid_out: bool = False) -> list[int]:
+        """Send text, in several messages if long. Buttons go on the last one. `laid_out` text is
+        already Telegram's HTML; anything else is plain and shown as typed."""
+        chunks = _chunks(text if laid_out else esc(text))
         return [self._send(chunk, buttons if i == len(chunks) - 1 else None) for i, chunk in enumerate(chunks)]
 
     def edit(self, message_id: int, text: str, buttons: list | None) -> None:
+        """Replace a message with this HTML."""
         params = {"chat_id": self.group, "message_id": message_id, "text": text[:TEXT_LIMIT]}
         params["reply_markup"] = {"inline_keyboard": buttons or []}
         try:
-            self.telegram.call("editMessageText", **params)
+            self._laid_out("editMessageText", params)
         except RuntimeError:
             logger.info("could not edit a message; it was probably already up to date")
 
@@ -358,9 +499,9 @@ class Bot:
         text, buttons = render_card(card)
         ids = []
         if card["status"] == "pending" and card.get("says") and len(card["says"]) > MAX_SAYS and not card["message_ids"]:
-            self.say(card["says"])  # too long to sit on the card
+            self.say(rich(card["says"]), laid_out=True)  # too long to sit on the card
         if heard:
-            text = f"Heard: “{heard}”\n\n{text}"
+            text = f"Heard: “{esc(heard)}”\n\n{text}"
         return ids + self._show(text, buttons, list(card["message_ids"]), card["message_id"])
 
     def show_question(self, message: dict, shown: list[int]) -> list[int]:
@@ -381,8 +522,13 @@ class Bot:
             lines = [said + reply["text"], "", *[f"• {_option_label(o)}" for o in options]]
             buttons = [[{"text": _option_label(o)[:60], "callback_data": f"c:{o['id']}"}] for o in options]
             return self.say("\n".join(lines), buttons or None)
-        ids = self.say(said + reply["text"])
-        if (reply.get("payload") or {}).get("chart"):
+        payload = reply.get("payload") or {}
+        if reply["kind"] == "answer":  # Claude's own words, or every row of a card
+            shown = render_details(payload["groups"]) if payload.get("groups") else rich(reply["text"])
+            ids = self.say(esc(said) + shown, laid_out=True)
+        else:
+            ids = self.say(said + reply["text"])
+        if payload.get("chart"):
             ids += self._send_chart(reply["id"])
         return ids
 
@@ -541,23 +687,27 @@ class Bot:
         item = int(raw_id)
         try:
             if action == "c":
-                self.edit(message_id, query["message"].get("text", "Which one?"), None)
+                self.edit(message_id, esc(query["message"].get("text", "Which one?")), None)
                 self.finance.send(choose=item)
             elif action == "q":
                 if version == "x":
                     self.finance.something_else(item)  # the app asks what it is, as a line of the conversation
+                elif version == "m":
+                    self.show_question(self.finance.remember_question(item), [message_id])
                 elif version.isdigit():
                     self.show_question(self.finance.answer(item, int(version)), [message_id])
             elif action == "d":
                 self.finance.show_all(item)
+            elif action == "m":
+                self.show_card(self.finance.remember_shops(item))
             else:
                 self.show_card(self.finance.apply(item, version) if action == "a" else self.finance.reject(item))
         except AppDown as e:
-            if action in ("c", "q", "d"):
+            if action in ("c", "q", "d", "m"):
                 self.say(e.message)
             else:
                 text = e.message if e.unknown else f"That didn't go through, and nothing changed.\n\n{e.message}"
-                self.edit(message_id, text, [[{"text": "Try again", "callback_data": query["data"]}]])
+                self.edit(message_id, esc(text), [[{"text": "Try again", "callback_data": query["data"]}]])
 
     def run(self) -> None:
         if self.group is not None:

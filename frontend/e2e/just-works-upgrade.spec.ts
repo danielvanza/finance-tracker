@@ -212,7 +212,7 @@ print("RESULT" + json.dumps(out))
     // The rest arrive as grouped questions, and answering them brings the number waiting to zero.
     const open = () => stub.sent.filter(m => !m.deleted && m.chat_id === GROUP && isQuestion(m))
     await expect.poll(() => open().length, { timeout: 30_000 }).toBe(3)
-    expect(open().map(m => m.text.split(',')[0]).sort()).toEqual(['Mw Q Voorbeeld', 'Sample Shoe Shop Retour', 'Sample Webshop Retour'])
+    expect(open().map(m => m.text.split(' · ')[0]).sort()).toEqual(['Mw Q Voorbeeld', 'Sample Shoe Shop Retour', 'Sample Webshop Retour'])
     expect(labels(open().find(m => m.text.startsWith('Mw Q Voorbeeld')))).toEqual(['Miscellaneous', 'To personal accounts', 'Something else'])
     expect(labels(open().find(m => m.text.startsWith('Sample Shoe Shop Retour')))).toEqual(['Other Income', 'Refund: Clothing', 'Something else'])
     let presses = 0
@@ -220,7 +220,7 @@ print("RESULT" + json.dumps(out))
       const question = open()[0]
       const choice = labels(question).find((l: string) => l.startsWith('Refund:') || l === 'To personal accounts') ?? labels(question)[0]
       stub.tap(round % 2 ? DANIEL : PARTNER, question, stub.button(question, choice))
-      await expect.poll(() => labels(question).length, { timeout: 15_000 }).toBe(0)
+      await expect.poll(() => isQuestion(question), { timeout: 15_000 }).toBe(false)
       presses++
       await new Promise(resolve => setTimeout(resolve, 1500))
     }
@@ -451,7 +451,7 @@ test.describe('just works for two: questions keep the quiet hours too', () => {
       app.clock('2026-11-15T09:01')
       await expect.poll(() => group().length, { timeout: 20_000 }).toBe(1)
       await wait()
-      expect(group().map(m => m.text)).toEqual(['Nachtwinkel Voorbeeld, 13 Nov, -€12,00. Where does it belong?'])
+      expect(group().map(m => m.text)).toEqual(['Nachtwinkel Voorbeeld · 13 Nov · -€12,00\n\nWhere does it belong?'])
       expect(isQuestion(group()[0])).toBe(true)
 
       // Late in the evening someone sends a file in the group: that was asked for, so its summary and question come at once.
@@ -461,11 +461,11 @@ test.describe('just works for two: questions keep the quiet hours too', () => {
       stub.document(DANIEL, 'late.csv', ingCsv([ingRow('2026-11-14', 'Avondwinkel Voorbeeld', -900)]))
       await expect.poll(() => group().filter(isQuestion).length, { timeout: 30_000 }).toBe(2)
       expect(group().some(m => m.text.startsWith('ING import: 1 new payment.'))).toBe(true)
-      expect(group().find(m => m.text.startsWith('Avondwinkel Voorbeeld'))!.text).toBe('Avondwinkel Voorbeeld, 14 Nov, -€9,00. Where does it belong?')
+      expect(group().find(m => m.text.startsWith('Avondwinkel Voorbeeld'))!.text).toBe('Avondwinkel Voorbeeld · 14 Nov · -€9,00\n\nWhere does it belong?')
       // And a press on a question at night is answered, with the next question if there is one.
       const first = group().find(m => m.text.startsWith('Nachtwinkel Voorbeeld'))!
       stub.tap(PARTNER, first, stub.button(first, 'Clothing'))
-      await expect.poll(() => first.text, { timeout: 15_000 }).toBe('Nachtwinkel Voorbeeld: Clothing. 1 payment sorted, and remembered for next time.')
+      await expect.poll(() => first.text, { timeout: 15_000 }).toBe('Nachtwinkel Voorbeeld: Clothing. 1 payment sorted.')
     } finally {
       stopBot()
       await stub.stop()
@@ -542,13 +542,13 @@ test.describe('just works for two: the waiting pile with the bot\'s own messages
       expect((await find('Pile Bakery Corner')).confirmed).toBe(false)
       // Someone sorts one of them in the app meanwhile.
       const meanwhile = await find('Pile Answered Meanwhile')
-      await app.json(`/transactions/${meanwhile.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: (await app.category('Home & DIY')).id, confirmed: true }) })
+      await app.json(`/transactions/${meanwhile.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: (await app.category('Home & DIY')).id, confirmed: true, remember: true }) })
       // Claude is done: the sure ones count, the doubtful one is asked about with its buttons, and only that one.
       await expect.poll(async () => (await find('Pile Bakery Corner')).confirmed, { timeout: 40_000 }).toBe(true)
       expect(await find('Pile Bakery Corner')).toMatchObject({ categorised_by: 'ai', category_name: 'Food - Not Essential' })
       expect(await find('Pile Filling Station')).toMatchObject({ confirmed: true, categorised_by: 'ai', category_name: 'Transportation' })
       await expect.poll(() => questions().length, { timeout: 20_000 }).toBe(1)
-      expect(questions()[0].text).toBe('Pile Mw Q Voorbeeld, 11 Nov, -€40,00. Where does it belong?')
+      expect(questions()[0].text).toBe('Pile Mw Q Voorbeeld · 11 Nov · -€40,00\n\nWhere does it belong?')
       expect(labels(questions()[0])).toEqual(['Miscellaneous', 'To personal accounts', 'Something else'])
       // The person's answer stands: Claude's "Clothing" for it was not written over it.
       expect(await find('Pile Answered Meanwhile')).toMatchObject({ confirmed: true, categorised_by: 'manual', category_name: 'Home & DIY' })
@@ -792,7 +792,7 @@ test.describe('just works for two: payments Claude gives no answer for', () => {
         expect(open().length, 'never more than three at once').toBeLessThanOrEqual(3)
         const question = open()[0]
         expect(labels(question), 'no guess to offer').toEqual(['Something else'])
-        const name = question.text.split(',')[0]
+        const name = question.text.split(' · ')[0]
         seen.push(name)
         const tx = (await app.transactions()).find(t => t.description === name)
         expect(tx).toMatchObject({ confirmed: false, category_id: null })

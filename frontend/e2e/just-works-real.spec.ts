@@ -95,14 +95,16 @@ test.describe.serial('just works for two, with the real Claude', () => {
     expect(summary.text).toContain('4 sorted and counted, 3 need your answer')
     const asked = stub.sent.slice(count).filter(m => !m.deleted && m.chat_id === GROUP && isQuestion(m))
     expect(asked).toHaveLength(3)
-    expect(asked.map(m => m.text.split(',')[0]).sort()).toEqual(['Hr P Bakker', 'Mw A de Vries', 'XQZ 8841 Holding'].sort())
+    expect(asked.map(m => m.text.split(' · ')[0]).sort()).toEqual(['Hr P Bakker', 'Mw A de Vries', 'XQZ 8841 Holding'].sort())
     for (const question of asked) expect(labels(question).length, question.text).toBeGreaterThanOrEqual(2)
 
-    // One is answered by a button, and that is remembered: the next payment to her is sorted without a question.
+    // One is answered by a button and then remembered on request: the next payment to her is sorted without a question.
     const vries = asked.find(m => m.text.startsWith('Mw A de Vries'))!
     const choice = labels(vries)[0]
     stub.tap(DANIEL, vries, stub.button(vries, choice))
-    await expect.poll(() => vries.text, { timeout: 20_000 }).toBe(`Mw A de Vries: ${choice}. 1 payment sorted, and remembered for next time.`)
+    await expect.poll(() => vries.text, { timeout: 20_000 }).toBe(`Mw A de Vries: ${choice}. 1 payment sorted.`)
+    stub.tap(DANIEL, vries, stub.button(vries, 'Remember Mw A de Vries'))
+    await expect.poll(() => vries.text, { timeout: 20_000 }).toContain('\nRemembered: “mw a de vries” → ')
     const again = stub.sent.length
     stub.document(DANIEL, 'next.csv', ingCsv([ingRow('2026-11-14', 'Mw A de Vries', -2500, 'second')]))
     expect((await stub.reply_after(again, m => m.text.startsWith('ING import'))).text).toContain('1 sorted and counted.')

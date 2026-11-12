@@ -1,6 +1,23 @@
 import type { ChatCard, ChatChange, ChatImportCounts, ChatTransactionRef } from '../types'
 
-export type CardAction = 'apply' | 'reject'
+export type CardAction = 'apply' | 'reject' | 'remember'
+
+/** Claude's words: **bold** leads and list lines, everything else as typed. */
+export function Rich({ text }: { text: string }) {
+  return (
+    <>
+      {text.split('\n').map((line, i) => {
+        const shown = line.replace(/^\s*[-*•]\s+/, '• ')
+        return (
+          <span key={i}>
+            {i > 0 && '\n'}
+            {shown.split(/\*\*(\S(?:.*?\S)?)\*\*/).map((part, j) => (j % 2 ? <strong key={j}>{part}</strong> : part))}
+          </span>
+        )
+      })}
+    </>
+  )
+}
 export type CardError = { unknown: boolean; action: CardAction }
 
 /** Every row of a card that was summed up, for when someone wants to see them. */
@@ -23,12 +40,13 @@ function AllRows({ changes }: { changes: ChatChange[] }) {
 }
 
 /** The proposed change in the app's own plain words, then what became of it. */
-export function ProposalCard({ card, localError, busy, onApply, onReject }: {
+export function ProposalCard({ card, localError, busy, onApply, onReject, onRemember }: {
   card: ChatCard
   localError: CardError | null
   busy: boolean
   onApply: () => void
   onReject: () => void
+  onRemember: () => void
 }) {
   if (card.status === 'applied') {
     return (
@@ -36,6 +54,13 @@ export function ProposalCard({ card, localError, busy, onApply, onReject }: {
         <p><span className="chat-done">Done.</span> {card.lines.length === 1 && card.lines[0]}</p>
         {card.lines.length > 1 && card.lines.map((line, i) => <p key={i}>{line}</p>)}
         {card.effect_lines.map((line, i) => <p key={`e${i}`}>{line}</p>)}
+        {card.remembered && <p>{card.remembered}</p>}
+        {card.offer && (
+          <div className="chat-actions">
+            <button type="button" className="btn" disabled={busy} onClick={onRemember}>{card.offer}</button>
+          </div>
+        )}
+        {card.offer && localError?.action === 'remember' && <p className="chat-failed">That didn't go through. Nothing was remembered.</p>}
       </div>
     )
   }
@@ -66,7 +91,7 @@ export function ProposalCard({ card, localError, busy, onApply, onReject }: {
   }
   return (
     <div className="chat-card" data-state="pending" data-summary={card.summary}>
-      {card.says && <p className="chat-says">{card.says}</p>}
+      {card.says && <p className="chat-says"><Rich text={card.says} /></p>}
       {card.apply_label === 'Merge' && (
         <>
           <p className="lab">{card.heading}</p>

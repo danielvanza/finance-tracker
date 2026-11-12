@@ -38,6 +38,16 @@ test('calls onConfirm with the decision when confirm button clicked', () => {
   expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false })
 })
 
+test('remembers the shop only when the box is ticked', () => {
+  const onConfirm = vi.fn()
+  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  const box = screen.getByRole('checkbox', { name: 'Remember this shop for next time' })
+  expect(box).not.toBeChecked()
+  fireEvent.click(box)
+  fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false, remember: true })
+})
+
 describe('ReviewCard incoming-money choice', () => {
   const allCategories: Category[] = [
     { id: 1, name: 'Food', type: 'needs', sort_order: 1 },

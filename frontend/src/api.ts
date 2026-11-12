@@ -72,7 +72,7 @@ export const api = {
     return apiFetch(`${BASE}/transactions/review${params}`, { method: 'GET' })
   },
 
-  patchTransaction: (id: number, body: Partial<Omit<import('./types').Transaction, 'splits'>> & { splits?: import('./types').SplitInput[] }) =>
+  patchTransaction: (id: number, body: Partial<Omit<import('./types').Transaction, 'splits'>> & { splits?: import('./types').SplitInput[]; remember?: boolean }) =>
     apiFetch(`${BASE}/transactions/${id}`, {
       method: 'PATCH',
       body,
@@ -183,6 +183,10 @@ export const api = {
 
   rejectChatProposal: (id: number): Promise<import('./types').ChatCard> =>
     apiFetch(`${BASE}/chat/proposals/${id}/reject`, { method: 'POST' }),
+
+  /** Make the shops an applied card sorted into rules, when the person asks for it. */
+  rememberChatShops: (id: number): Promise<import('./types').ChatCard> =>
+    apiFetch(`${BASE}/chat/proposals/${id}/remember`, { method: 'POST' }),
 
   chatChartUrl: (messageId: number, createdAt: string, theme: 'day' | 'night') =>
     `${BASE}/chat/messages/${messageId}/chart?theme=${theme}&v=${encodeURIComponent(createdAt)}`,

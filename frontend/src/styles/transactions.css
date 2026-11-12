@@ -241,6 +241,13 @@
   color: var(--quiet);
 }
 
+/* The tick box that makes an answer the rule for its shop */
+.rev-remember {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 /* A row of choices sharing the full width */
 .seg-fill {
   display: flex;

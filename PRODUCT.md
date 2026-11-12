@@ -29,7 +29,7 @@ A private household ledger that sits beside the life dashboard: the household's 
 
 - Sibling app of life-dashboard: separate repository, backend, build and deploy (loopback port 18600, proxied at `/finances`). It has no sign-in of its own; the dashboard's sign-in protects it.
 - The shared ING account only: ING exports with English or Dutch columns, plus manually added transactions. A row already in is skipped, whichever language its earlier export was in.
-- Sorting: rules first (the longest matching text wins), then Claude. A guess Claude is sure of counts at once; a doubtful one waits, counts nowhere, and is asked about. A person's answer for a shop becomes a rule.
+- Sorting: rules first (the longest matching text wins), then Claude. A guess Claude is sure of counts at once; a doubtful one waits, counts nowhere, and is asked about. A person's answer for a shop becomes a rule when they ask for it: a button after the answer, or a tick box in the app.
 - Category types: needs, wants, savings, income, exclude. Categories are user-managed and ordered.
 - A plan per category; a changed amount applies from its month on. The household sets its own target split between needs, wants and savings.
 - The headline is "free to spend until payday": what is left in the plan, less fixed bills still to come and what the month sets aside.

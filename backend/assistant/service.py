@@ -16,7 +16,7 @@ import voice
 from assistant import actions, brain, charts
 from categorizer import claude_cli
 from db import SessionLocal
-from importers.ing import BadFile, parse_ing
+from importers.ing import BadFile, parse_ing, written
 from models import Category, ChatMessage, ChatProposal, Transaction
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_PICTURE_BYTES = 8 * 1024 * 1024
 QUESTIONS_OPEN = 3  # how many questions about waiting payments are in front of the household at once
 QUESTION_CHANNEL = "telegram"
+NOTE_CHARS = 80  # how much of what a payer typed is shown beside a payment in a question
+REMEMBER_NAME = 30  # how much of a shop's name fits on the button that offers to remember it
 _IN_FLIGHT = ("queued", "running", "waiting", "stopping")
 _STOPPED_IN_LINE = "Stopped before I started on that. Nothing changed."
 ONLY_ING = "I can only read an ING export: a CSV file from ING, with English or Dutch column names."
@@ -72,6 +74,17 @@ def card_of(proposal: ChatProposal) -> dict:
         "lines": plain["lines"],
         "summed_up": plain["summed_up"],
         "rows": plain["rows"],
+        "payments": plain["payments"],
+        # For a chat that keeps a long card short: its count, its lines without the shops, and one
+        # sentence for once it is applied.
+        "head": plain.get("head"),
+        "short_lines": plain.get("short_lines"),
+        "applied_line": plain.get("applied_line"),
+        # After Apply: how many payments still wait, the offer to remember the shops it sorted, and
+        # what was remembered once that was taken up.
+        "waiting": (proposal.result or {}).get("waiting") if applied else None,
+        "offer": ((proposal.result or {}).get("offer") or {}).get("label") if applied else None,
+        "remembered": (proposal.result or {}).get("remembered") if applied else None,
         "effect_lines": actions.plain_effect(effect, applied),
         "says": (proposal.message.payload or {}).get("says"),
         "status": proposal.status,
@@ -293,6 +306,7 @@ def show_all(proposal_id: int, reply_to: int | None = None) -> None:
         db.add(ChatMessage(
             channel=proposal.channel, role="assistant", kind="answer", text=actions.details(proposal.preview),
             reply_to=reply_to or proposal.message.reply_to,
+            payload={"groups": actions.detail_groups(proposal.preview)},
         ))
         db.commit()
 
@@ -425,7 +439,8 @@ def ask_questions(channel: str = QUESTION_CHANNEL, unasked: bool = False) -> int
                     **({"unasked": True} if unasked else {}),
                     "transaction_ids": [t.id for t in rows], "count": len(rows), "total_cents": group.total_cents,
                     "examples": [
-                        {k: actions.describe_transaction(t)[k] for k in ("date_label", "amount_label", "description")}
+                        {**{k: actions.describe_transaction(t)[k] for k in ("date_label", "amount_label", "description")},
+                         "note": " ".join(written(t.note).split())[:NOTE_CHARS]}
                         for t in rows[:3]
                     ],
                     "options": guesses.options_for(db, group),
@@ -437,8 +452,8 @@ def ask_questions(channel: str = QUESTION_CHANNEL, unasked: bool = False) -> int
 
 
 def answer_question(message_id: int, option: int) -> dict:
-    """A tap on one of a question's buttons: its payments are sorted, the shop remembered, and the
-    next question asked."""
+    """A tap on one of a question's buttons: its payments are sorted, remembering the shop is offered,
+    and the next question is asked."""
     with SessionLocal() as db:
         message = db.get(ChatMessage, message_id)
         if message is None or message.kind != "question":
@@ -457,15 +472,85 @@ def answer_question(message_id: int, option: int) -> dict:
                 count = f"{len(done)} payment{'' if len(done) == 1 else 's'}"
                 if not done:
                     result = "These were already sorted."
-                elif done[0].is_refund or guesses.hides_shop(guesses.shop_pattern(done[0].description)):
-                    result = f"{options[option]['label']}. {count} sorted."
                 else:
-                    result = f"{options[option]['label']}. {count} sorted, and remembered for next time."
+                    result = f"{options[option]['label']}. {count} sorted."
+                    if guesses.to_remember(db, done[:1]):
+                        payload = {**payload, "offer": {
+                            "transaction_id": done[0].id, "label": _remember_label([done[0]]),
+                        }}
             message.payload = {**payload, "status": "answered", "result": result}
             db.commit()
         out, channel = message_out(message), message.channel
     ask_questions(channel)
     return out
+
+
+def _remember_label(rows: list[Transaction]) -> str:
+    if len(rows) == 1:
+        return f"Remember {guesses.shop_name(rows[0])[:REMEMBER_NAME]} for next time"
+    return f"Remember these {len(rows)} shops"
+
+
+def _remembered(rules: list) -> str:
+    if not rules:
+        return "Nothing was remembered: the payment has changed since."
+    if len(rules) == 1:
+        return f"Remembered: “{rules[0].pattern}” → {rules[0].category.name}."
+    return f"Remembered {len(rules)} shops for next time."
+
+
+def remember_question(message_id: int) -> dict:
+    """A tap on "Remember … for next time" under an answered question: the shop gets its rule."""
+    with SessionLocal() as db:
+        message = db.get(ChatMessage, message_id)
+        if message is None or message.kind != "question":
+            raise NotFound()
+        payload = dict(message.payload or {})
+        offer = payload.pop("offer", None)
+        if offer:
+            tx = db.get(Transaction, offer["transaction_id"])
+            rule = guesses.remember(db, tx) if tx is not None and tx.confirmed else None
+            payload["result"] = f"{payload.get('result') or 'Sorted.'}\n{_remembered([rule] if rule else [])}"
+            message.payload = payload
+            db.commit()
+        return message_out(message)
+
+
+def remember_shops(proposal_id: int) -> dict:
+    """A tap on "Remember these shops" under an applied card: each shop it sorted gets its rule."""
+    with SessionLocal() as db:
+        proposal = db.get(ChatProposal, proposal_id)
+        if proposal is None:
+            raise NotFound()
+        result = dict(proposal.result or {})
+        offer = result.pop("offer", None)
+        if proposal.status == "applied" and offer:
+            rows = [db.get(Transaction, i) for i in offer["transaction_ids"]]
+            rules = [guesses.remember(db, t) for t in rows if t is not None and t.confirmed]
+            result["remembered"] = _remembered([r for r in rules if r is not None])
+            proposal.result = result
+            db.commit()
+        return card_of(proposal)
+
+
+def _after_apply(proposal_id: int, fresh: dict) -> None:
+    """What an applied card still has to say: how many payments wait now, when it sorted waiting
+    ones, and the offer to remember the shops it sorted."""
+    with SessionLocal() as db:
+        proposal = db.get(ChatProposal, proposal_id)
+        if proposal is None or proposal.status != "applied":
+            return
+        extra = {}
+        sorts = [c for c in fresh["changes"] if c.get("payment") and c["payment"]["how"] in ("moved", "confirmed")]
+        if any(f["label"] == "Reviewed" for c in sorts for f in c["fields"]):
+            extra["waiting"] = db.query(func.count(Transaction.id)).filter(Transaction.confirmed == False).scalar()  # noqa: E712
+        rows = [t for t in (db.get(Transaction, c["payment"]["id"]) for c in sorts) if t is not None and t.confirmed]
+        shops = guesses.to_remember(db, rows)
+        if shops:
+            extra["offer"] = {"transaction_ids": [t.id for t in shops], "label": _remember_label(shops)}
+        if extra:
+            proposal.result = {**(proposal.result or {}), **extra}
+            db.commit()
 
 
 SOMETHING_ELSE = "Tell me in a few words what {name} is, and I will sort it."
@@ -586,7 +671,7 @@ def apply_proposal(proposal_id: int, version: str | None = None) -> dict:
         ))
 
     try:
-        actions.apply(op, args, shown, on_commit, precheck)
+        _after_apply(proposal_id, actions.apply(op, args, shown, on_commit, precheck))
     except _AlreadySettled:
         pass
     except actions.StaleProposal as stale:

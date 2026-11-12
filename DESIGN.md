@@ -108,8 +108,9 @@ A slim clay top row, the page, and a fixed tab slab on a phone; from 1024 px a s
 | goals | section on Trends | components/goals/*, styles/goals.css |
 | setup | `/setup` | pages/Setup.tsx, Rules.tsx, Settings.tsx, components/CategoryManager.tsx, SetAsides.tsx, TargetSplit.tsx, RuleSuggestions.tsx, BudgetPlanner.tsx, budget/*, styles/setup.css |
 | import | `/import` | pages/Import.tsx, pages/import/*, styles/import.css |
+| telegram | the bot's messages in the household's group | backend/telegram_bot.py (`render_*`, `rich`) |
 
-Detail and special rules per area: `docs/design/<id>.md`. Shared (a change ripples, check every page): `styles/base.css`, `styles/controls.css`, `styles/tables.css`, `index.css`, `components/ErrorBanner.tsx`. Month uses CategorySelect too. Not covered: `chat/` and `styles/chat.css`, built separately.
+Detail and special rules per area: `docs/design/<id>.md`. Shared (a change ripples, check every page): `styles/base.css`, `styles/controls.css`, `styles/tables.css`, `index.css`, `components/ErrorBanner.tsx`. Month uses CategorySelect too. Not covered: `chat/` and `styles/chat.css`, built separately; it shows Claude's bold and list lines through `Rich` in `chat/cards.tsx`.
 
 ## Elevation & Depth
 Clay is the only depth. Raised surfaces use `--raise`, `--raise-sm` and `--raise-lg`; wells and current choices use `--press-sm`, held fingers `--press-held`. Sheets and popovers float with `--float-sheet`, `--float-pop` and the scrim. `--bead` is only for the sun.

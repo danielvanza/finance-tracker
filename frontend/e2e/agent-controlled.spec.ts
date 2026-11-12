@@ -289,9 +289,11 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     // Asking to see everything lists the rows.
     const beforeAll = stub.sent.length
     stub.tap(DANIEL, parts[0], stub.button(parts[0], 'Show all'))
-    await expect.poll(() => stub.sent.slice(beforeAll).map(m => m.text).join('\n').split('\n').filter(line => line.startsWith('• ') && line.includes(' · Sample Batch Shop Number')).length, { timeout: 20_000 }).toBe(85)
-    const all = stub.sent.slice(beforeAll).map(m => m.text).join('\n')
-    for (const g of guesses) expect(all).toContain(g.description)
+    const listed = () => stub.sent.slice(beforeAll).map(m => m.text).join('\n').split('\n').filter(line => / {2}Sample Batch Shop/.test(line))
+    await expect.poll(() => listed().length, { timeout: 20_000 }).toBe(85)
+    // Date, amount and as much of the name as fits a phone, in columns.
+    expect(listed().every(line => /^\d+ \w{3} +\d+,\d\d {2}Sample Batch Shop/.test(line) && line.length <= 34)).toBe(true)
+    expect(stub.unreadable, 'Telegram could read every layout').toEqual([])
 
     stub.tap(DANIEL, parts.at(-1)!, stub.button(parts.at(-1)!, 'Apply'))
     await expect.poll(() => parts[0].text, { timeout: 20_000 }).toMatch(/^Applied/)
@@ -542,6 +544,45 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     ])
     await replyTo('And now?')
     expect(app.queryResults().at(-1).rows).toEqual([['Geld terug voor vliegtickets']])
+  })
+
+  test('Claude\'s bold leads and lists show as such in both chats, with a long list folded in Telegram', async () => {
+    const items = ['Miscellaneous: 26', 'Food & drink: 16', 'Transfers: 15', 'Personal: 11', 'Groceries: 7', 'Transport: 7', 'Income <other>: 6']
+    const words = `**96 payments are waiting**, mostly old ones.\n- Names are people\n- PRT is Portugal\n\nBy category:\n${items.map(i => `- ${i}`).join('\n')}\n**Where shall we start?**`
+    app.fakeReply(answer(words))
+    await replyTo('Can we go through the payments slowly?')
+    const reply = page.locator('.chat-reply').last()
+    await expect(reply.locator('strong')).toHaveText(['96 payments are waiting', 'Where shall we start?'])
+    await expect(reply).toContainText('• Names are people')
+    await expect(reply).toContainText('• Income <other>: 6')
+    expect(await reply.innerText()).not.toContain('**')
+
+    app.fakeReply(answer(words))
+    const count = stub.sent.length
+    await telegramReply('Can we go through the payments slowly, here?')
+    const sent = await stub.reply_after(count, m => m.text.startsWith('96 payments are waiting'))
+    expect(sent.html.split('\n').slice(0, 3)).toEqual(['<b>96 payments are waiting</b>, mostly old ones.', '• Names are people', '• PRT is Portugal'])
+    expect(sent.html).toContain(`By category:\n<blockquote expandable>Miscellaneous: 26\nFood &amp; drink: 16`)
+    expect(sent.html).toContain('Income &lt;other&gt;: 6</blockquote>\n<b>Where shall we start?</b>')
+    expect(sent.text).not.toContain('**')
+    expect(stub.unreadable).toEqual([])
+  })
+
+  test('an applied card in the panel offers to remember the shop it sorted, and remembers it only when pressed', async () => {
+    const guesses = await addGuesses(2, 'Sample Offer Shop')
+    app.fakeReply(propose('Accept these two.', 'review.confirm', { ids: guesses.map(g => g.id) }))
+    await replyTo('Confirm the two offer shop guesses')
+    await page.locator('.chat-card[data-state="pending"]').last().getByRole('button', { name: 'Apply' }).click()
+    const done = page.locator('[data-state="applied"]').last()
+    const offer = done.getByRole('button', { name: 'Remember Sample Offer Shop for next time' })
+    await expect(offer).toBeVisible()
+    await shot(page, 'agent-remember-offer-desktop')
+    const rule = async () => (await app.json<any[]>('/rules')).filter(r => r.pattern === 'sample offer shop').map(r => r.category_name)
+    expect(await rule(), 'nothing is remembered by itself').toEqual([])
+    await offer.click()
+    await expect(done).toContainText('Remembered: “sample offer shop” → Miscellaneous.')
+    await expect(offer).toHaveCount(0)
+    expect(await rule()).toEqual(['Miscellaneous'])
   })
 })
 

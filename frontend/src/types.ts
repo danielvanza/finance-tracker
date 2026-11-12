@@ -206,6 +206,8 @@ export interface ChatCard {
   rows: number
   effect_lines: string[]
   says: string | null      // Claude's words that came with the card
+  offer: string | null     // once applied: the button that remembers the shops it sorted
+  remembered: string | null  // what was remembered, once that button was pressed
 }
 export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number; noted?: number }
 export interface ChatChart {

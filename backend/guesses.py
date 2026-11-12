@@ -54,9 +54,11 @@ def shop_pattern(description: str) -> str:
     """The words of a description that name the shop or person, as text every payment of theirs contains.
 
     "ALBERT HEIJN 1172 ENSCHEDE NLD" gives "albert heijn": the name up to its branch number. A payment
-    service's prefix ("BCK*") and a reference in front are left out. A description without a number is a
-    name in full, such as a person's, and is kept whole: "Mw A de Vries" must not shrink to "mw a de".
-    A name too short to be safe as a rule ("XQZ 8841 Holding") is kept with what follows it.
+    service's prefix ("BCK*") and a reference in front are left out. A number in front is part of the
+    name: "1448 Enschede Enschede NLD" gives "1448 enschede enschede", never the town alone. A description
+    without a number is a name in full, such as a person's, and is kept whole: "Mw A de Vries" must not
+    shrink to "mw a de". A name too short to be safe as a rule ("XQZ 8841 Holding") is kept with what
+    follows it.
     """
     whole = squeeze(description)
     text = whole
@@ -72,12 +74,13 @@ def shop_pattern(description: str) -> str:
     for word in text.split():
         if _is_number(word) or _is_code(word):
             numbered = True
-            if words:
+            if any(not _is_number(w) for w in words):
                 break
-            continue
+            if _is_code(word):
+                continue
         words.append(word)
     pattern = " ".join(words[:PATTERN_WORDS if numbered else NAME_WORDS])
-    safe = len(pattern) >= MIN_PATTERN and (" " in pattern or len(pattern) >= MIN_ONE_WORD)
+    safe = len(pattern) >= MIN_PATTERN and (" " in pattern or len(pattern) >= MIN_ONE_WORD) and any(ch.isalpha() for ch in pattern)
     return pattern if safe else whole
 
 

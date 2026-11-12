@@ -889,9 +889,28 @@ def plain_effect(effect: list[dict], applied: bool = False) -> list[str]:
 
 
 def details(preview: dict) -> str:
-    """Every row of a card, for when a person asks to see them all."""
-    lines = []
+    """Every row of a card, for when a person asks to see them all: grouped by what changes, with one
+    short line per payment."""
+    groups: dict[str, list[str]] = {}
     for change in preview["changes"]:
-        said = "; ".join(f"{f['label']}: {f['before']} → {f['after']}" for f in change["fields"])
-        lines.append(f"• {change['title']}: {said}")
-    return "\n".join(lines)
+        fields = {f["label"]: f for f in change["fields"]}
+        payment = change.get("payment")
+        if payment and payment["how"] in ("moved", "confirmed") and set(fields) <= {"Category", "Reviewed"}:
+            name, when, amount = change["title"].rsplit(" · ", 2)
+            if payment["how"] == "confirmed":
+                heading = f"Confirmed as {payment['category']}"
+            elif fields["Category"]["before"] == "None":
+                heading = f"Now {fields['Category']['after']}"
+            else:
+                heading = f"{fields['Category']['before']} → {fields['Category']['after']}"
+            line = f"{when} · {amount} · {name}"
+        elif change["title"].startswith("New: Rule") and "Pattern" in fields and "Category" in fields:
+            heading, line = "Remembered for next time", f"“{fields['Pattern']['after']}” → {fields['Category']['after']}"
+        else:
+            heading, line = "Other changes", _plain_line(change)
+        groups.setdefault(heading, []).append(line)
+    if list(groups) == ["Other changes"]:
+        return "\n".join(f"• {line}" for line in groups["Other changes"])
+    last = ("Remembered for next time", "Other changes")
+    ordered = sorted(groups.items(), key=lambda item: (last.index(item[0]) + 1 if item[0] in last else 0, -len(item[1])))
+    return "\n\n".join("\n".join([f"{heading} ({len(lines)})", *[f"• {line}" for line in lines]]) for heading, lines in ordered)

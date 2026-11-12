@@ -267,19 +267,38 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(big.text).not.toContain('Sample Grocer 17')
     expect(labels(big)).toEqual(['Apply', 'Not this', expect.stringMatching(/^Show all \d+ rows$/)])
 
-    // Asking to see everything lists the rows: by typing it, and by the button.
+    // Asking to see everything lists the rows: by typing it, and by the button. They come grouped by
+    // what changes, one short line per payment.
     count = stub.sent.length
     const calls = app.calls().length
     stub.text(PARTNER, 'Show all')
-    const listed = () => stub.sent.slice(count).map(m => m.text).join('\n').split('\n').filter(line => /^• Sample (Grocer|Bistro|Odds) \d+ Enschede/.test(line))
+    const everything = () => stub.sent.slice(count).map(m => m.text).join('\n').split('\n')
+    const listed = () => everything().filter(line => /^• 5 Sep · -⁠€\d+,\d\d · Sample (Grocer|Bistro|Odds) \d+ Enschede$/.test(line))
     await expect.poll(() => listed().length, { timeout: 20_000 }).toBe(120)
-    expect(listed().some(line => line.includes('Sample Grocer 17 Enschede') && line.includes('Reviewed: No → Yes'))).toBe(true)
+    expect(listed()).toContain('• 5 Sep · -⁠€10,00 · Sample Grocer 17 Enschede')
+    for (const heading of ['Confirmed as Food - Essential (60)', 'Confirmed as Food - Not Essential (40)', 'Confirmed as Miscellaneous (20)', 'Remembered for next time (3)']) {
+      expect(everything()).toContain(heading)
+    }
+    expect(everything()).toContain('• “sample grocer” → Food - Essential')
+    expect(everything().join('\n')).not.toContain('Reviewed')
     expect(app.calls().length, 'listing the rows did not go to Claude').toBe(calls)
     expect((await rows('Sample Grocer')).every(t => !t.confirmed), 'listing changed nothing').toBe(true)
     await quiet()
     count = stub.sent.length
     stub.tap(DANIEL, big, stub.button(big, 'Show all'))
     await expect.poll(() => listed().length, { timeout: 20_000 }).toBe(120)
+
+    await quiet()
+    // The same card a second time, while the first is open, is not made.
+    app.fakeReply({ ...confirmAll, text: 'The card is above.' })
+    count = stub.sent.length
+    stub.text(DANIEL, 'confirm the lot, I said')
+    const pointed = await stub.reply_after(count, m => m.text.includes('The card is above.'))
+    await quiet()
+    expect(isCard(pointed), 'no second card').toBe(false)
+    expect(showingSince(count).filter(isCard)).toHaveLength(0)
+    expect(app.toolCalls().at(-1)).toMatchObject({ tool: 'propose_change', isError: true })
+    expect(app.toolCalls().at(-1)!.text).toContain('already open')
 
     // Not this changes nothing; a new card and Apply confirm all 120.
     stub.tap(DANIEL, big, stub.button(big, 'Not this'))
@@ -1191,6 +1210,19 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     ])
     // A rule that fits nothing else behaves as it always did: the seed's Albert Heijn rule.
     expect((await rows('Albert Heijn 1234')).every(t => t.category_name === 'Food - Essential' && t.categorised_by === 'rule')).toBe(true)
+
+    // A name that starts with a number keeps it in the rule an answer makes: the town alone is never a rule.
+    sortsAs([unsure(0, 'Miscellaneous', ['Miscellaneous'])])
+    await importInTelegram(DANIEL, ingCsv([ingRow('2026-11-12', '1448 Enschede Enschede NLD', -1063)]))
+    const numbered = (await rows('1448 Enschede'))[0]
+    await app.json(`/transactions/${numbered.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category_id: await idOf('Food - Essential'), confirmed: true }) })
+    const patterns = (await app.json<any[]>('/rules')).map(r => r.pattern)
+    expect(patterns).toContain('1448 enschede enschede')
+    expect(patterns.filter(p => p.startsWith('enschede'))).toEqual([])
+    sortsAs([sure(0, 'Clothing')])
+    await importInTelegram(DANIEL, ingCsv([ingRow('2026-11-13', 'Sample Kleding Enschede Enschede NLD', -1230)]))
+    expect((await rows('Sample Kleding'))[0]).toMatchObject({ category_name: 'Clothing', categorised_by: 'ai' })
+    await quiet()
 
     // No priority anywhere: not in what the app returns, takes, or shows.
     const rules = await app.json<any[]>('/rules')

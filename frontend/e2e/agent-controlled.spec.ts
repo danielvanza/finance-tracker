@@ -289,7 +289,7 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     // Asking to see everything lists the rows.
     const beforeAll = stub.sent.length
     stub.tap(DANIEL, parts[0], stub.button(parts[0], 'Show all'))
-    await expect.poll(() => stub.sent.slice(beforeAll).map(m => m.text).join('\n').split('\n').filter(line => line.startsWith('• Sample Batch Shop Number')).length, { timeout: 20_000 }).toBe(85)
+    await expect.poll(() => stub.sent.slice(beforeAll).map(m => m.text).join('\n').split('\n').filter(line => line.startsWith('• ') && line.includes(' · Sample Batch Shop Number')).length, { timeout: 20_000 }).toBe(85)
     const all = stub.sent.slice(beforeAll).map(m => m.text).join('\n')
     for (const g of guesses) expect(all).toContain(g.description)
 

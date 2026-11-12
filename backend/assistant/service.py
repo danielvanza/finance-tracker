@@ -897,6 +897,19 @@ def _propose(message_id: int, channel: str, text: str, call: brain.ProposeChange
     except Exception:
         logger.exception("[chat] previewing a change failed")
         return "the app could not work out what this would change"
+    with SessionLocal() as db:
+        open_cards = (
+            db.query(ChatProposal)
+            .filter(ChatProposal.channel == channel, ChatProposal.status == "pending", ChatProposal.op == call.op)
+            .all()
+        )
+        said = json.dumps(preview, sort_keys=True, default=str)
+        if any(
+            card.id not in call.replaces and card.args == call.args
+            and json.dumps(card.preview, sort_keys=True, default=str) == said
+            for card in open_cards
+        ):
+            return "a card for exactly this change is already open, so it was not made a second time. Point the person to that card"
     if not _save_proposal(message_id, channel, call.op, call.args, call.summary, call.note, preview, replaces=call.replaces):
         return "the conversation moved on, so this card was not shown"
     return None

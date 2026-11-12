@@ -19,10 +19,30 @@ _COLUMNS = {
 _REQUIRED = ("date", "name", "direction", "amount")
 _OUT, _IN = ("debit", "af"), ("credit", "bij")
 _AMOUNT = re.compile(r"\d+([.,]\d{1,2})?")
+# The fields ING writes into a payment's note, in either language.
+_NOTE_FIELDS = (
+    "name", "naam", "description", "omschrijving", "iban", "reference", "kenmerk", "mandate id", "machtiging id",
+    "creditor id", "incassant id", "date/time", "datum/tijd", "value date", "valutadatum", "card sequence no.",
+    "pasvolgnr", "transaction", "transactie", "term",
+)
+_NOTE_FIELD = re.compile(r"(?:^|\s)(" + "|".join(re.escape(f) for f in _NOTE_FIELDS) + r")\s*:", re.IGNORECASE)
+_TYPED = ("description", "omschrijving")
 
 
 class BadFile(Exception):
     """Not a usable ING export. The message finishes the sentence "That file could not be used because …"."""
+
+
+def written(note: str | None) -> str:
+    """What the payer typed with a payment ("Back for the flight tickets"), without the fields the bank
+    adds around it. Empty for a note that is only bank fields, as a card payment's is."""
+    note = note or ""
+    fields = list(_NOTE_FIELD.finditer(note))
+    for i, found in enumerate(fields):
+        if found.group(1).lower() in _TYPED:
+            end = fields[i + 1].start() if i + 1 < len(fields) else len(note)
+            return note[found.end():end].strip()
+    return note[:fields[0].start()].strip() if fields else note.strip()
 
 
 def _rows(text: str) -> list[dict[str, str]]:
@@ -69,7 +89,7 @@ def parse_ing(content: bytes | str) -> list[ParsedTransaction]:
             if direction in _OUT:
                 amount = -amount
             results.append(ParsedTransaction(
-                date=day, amount=amount, description=row["name"], source="ing",
+                date=day, amount=amount, description=row["name"], source="ing", note=row.get("notifications", ""),
                 import_hash=make_hash("ing", day, amount, row["name"], row.get("notifications", ""), row.get("balance", "")),
             ))
     except (ValueError, InvalidOperation, csv.Error):

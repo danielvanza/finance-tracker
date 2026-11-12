@@ -58,6 +58,7 @@ class ImportConfirmResponse(BaseModel):
     categorised_by_ai: int  # Claude was sure: these count already
     doubtful: int  # Claude was not sure: these wait for an answer
     uncategorised: int
+    notes_added: int = 0  # rows already in that got the bank's note they were imported without
 
 class SplitIn(BaseModel):
     category_id: int

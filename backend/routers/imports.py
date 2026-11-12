@@ -40,5 +40,5 @@ def confirm(file: UploadFile = ..., db: Session = Depends(get_db)):
     return ImportConfirmResponse(
         imported=outcome.imported, skipped_duplicates=outcome.skipped,
         categorised_by_rule=outcome.by_rule, categorised_by_ai=outcome.by_ai,
-        doubtful=outcome.doubtful, uncategorised=outcome.uncategorised,
+        doubtful=outcome.doubtful, uncategorised=outcome.uncategorised, notes_added=outcome.noted,
     )

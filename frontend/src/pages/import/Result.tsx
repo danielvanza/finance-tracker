@@ -66,6 +66,7 @@ export default function Result({ data, bank, catchup, headingRef, onAgain }: Pro
           <div><dt>Sorted automatically (Claude was sure)</dt><dd>{data.categorised_by_ai}</dd></div>
           <div><dt>Waiting for your answer</dt><dd>{data.doubtful}</dd></div>
           <div><dt>Could not be sorted</dt><dd>{data.uncategorised}</dd></div>
+          {!!data.notes_added && <div><dt>Already in, bank note added</dt><dd>{data.notes_added}</dd></div>}
         </dl>
       </details>
     </section>

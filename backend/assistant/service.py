@@ -396,6 +396,7 @@ def _can_judge() -> bool:
 
 
 _no_answer: set[int] = set()  # payments Claude was asked about and gave no answer for, since the app started
+_asking = threading.Lock()  # an import, a finished backlog and the nudge tick may all ask at the same moment
 
 
 def ask_questions(channel: str = QUESTION_CHANNEL, unasked: bool = False) -> int:
@@ -406,7 +407,7 @@ def ask_questions(channel: str = QUESTION_CHANNEL, unasked: bool = False) -> int
     gave no answer for is asked about like the rest. `unasked` marks questions nobody in the chat
     prompted, which keep the quiet hours.
     """
-    with SessionLocal() as db:
+    with _asking, SessionLocal() as db:
         _refresh_questions(db, channel)
         open_now = _open_questions(db, channel)
         asked = {m.payload.get("key") for m in open_now}
@@ -987,11 +988,13 @@ def _handle_file(message_id: int) -> None:
     counts = {
         "imported": outcome.imported, "skipped": outcome.skipped, "by_rule": outcome.by_rule,
         "by_ai": outcome.by_ai, "doubtful": outcome.doubtful, "uncategorised": outcome.uncategorised,
+        "noted": outcome.noted,
     }
     _say(message_id, "import", (
         f"Imported {outcome.imported} new, skipped {outcome.skipped} already here. "
         f"{outcome.by_rule + outcome.by_ai} sorted and counted ({outcome.by_rule} by rules, {outcome.by_ai} Claude was sure of), "
         f"{outcome.doubtful + outcome.uncategorised} waiting for an answer."
+        + (f" {outcome.noted} already here got the bank's note." if outcome.noted else "")
     ), counts)
     after_import(asked_in_chat=True)
 

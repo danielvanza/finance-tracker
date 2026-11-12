@@ -234,8 +234,10 @@ def render_question(message: dict) -> tuple[str, list | None]:
 def render_import(counts: dict) -> str:
     waiting = counts.get("doubtful", 0) + counts["uncategorised"]
     sorted_now = counts["by_rule"] + counts["by_ai"]
+    noted = counts.get("noted", 0)
+    notes = f"{noted} payment{'' if noted == 1 else 's'} already here got the bank's note." if noted else ""
     if not counts["imported"]:
-        return f"ING import: nothing new. All {counts['skipped']} payments were here already."
+        return "\n".join(filter(None, [f"ING import: nothing new. All {counts['skipped']} payments were here already.", notes]))
     lines = [f"ING import: {counts['imported']} new payment{'' if counts['imported'] == 1 else 's'}"
              + (f" ({counts['skipped']} were here already)." if counts["skipped"] else ".")]
     said = [f"{sorted_now} sorted and counted"] if sorted_now else []
@@ -243,6 +245,7 @@ def render_import(counts: dict) -> str:
         said.append(f"{waiting} need{'s' if waiting == 1 else ''} your answer, which I will ask about here")
     sentence = ", ".join(said)
     lines.append(sentence[:1].upper() + sentence[1:] + "." if said else "")
+    lines.append(notes)
     return "\n".join(line for line in lines if line)
 
 

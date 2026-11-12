@@ -167,6 +167,7 @@ export interface ImportConfirmResponse {
   categorised_by_ai: number   // Claude was sure: counted already
   doubtful: number            // Claude was not sure: waiting for an answer
   uncategorised: number
+  notes_added?: number        // rows already in that got the bank's note they were imported without
 }
 
 export interface ChatFieldChange { label: string; before: string; after: string }
@@ -206,7 +207,7 @@ export interface ChatCard {
   effect_lines: string[]
   says: string | null      // Claude's words that came with the card
 }
-export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number }
+export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number; noted?: number }
 export interface ChatChart {
   type: 'line' | 'bars'
   title: string

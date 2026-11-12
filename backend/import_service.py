@@ -23,6 +23,7 @@ class ImportOutcome:
     by_ai: int = 0  # Claude was sure: counted at once
     doubtful: int = 0  # Claude was not sure: waiting for an answer
     uncategorised: int = 0
+    noted: int = 0  # rows already here that got the bank's note they were imported without
     new_transactions: list[Transaction] = field(default_factory=list)
 
 
@@ -52,19 +53,27 @@ def already_here(rows: list, db: Session) -> list[bool]:
 
 def import_rows(rows: list, db: Session, cli_only: bool = False) -> ImportOutcome:
     """Add the rows not seen before: rules first, then Claude, whose sure guesses count at once and
-    whose doubtful ones wait for an answer.
+    whose doubtful ones wait for an answer. A row that is here already without its bank note gets it.
 
     With cli_only a Claude failure raises before anything is written.
     """
     outcome = ImportOutcome()
     ai_pending = []  # (index into new_transactions, ParsedTransaction)
 
+    noteless = {
+        t.import_hash: t for t in db.query(Transaction).filter(Transaction.note.is_(None)).all()
+    } if any(r.note for r in rows) else {}
+
     for r, known in zip(rows, already_here(rows, db)):
         if known:
             outcome.skipped += 1
+            earlier = noteless.get(r.import_hash)
+            if earlier is not None and r.note:
+                earlier.note = r.note
+                outcome.noted += 1
             continue
         tx = Transaction(
-            date=r.date, amount=r.amount, description=r.description,
+            date=r.date, amount=r.amount, description=r.description, note=r.note or None,
             source=r.source, import_hash=r.import_hash, confirmed=False,
         )
         cat = apply_rules(r, db)

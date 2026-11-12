@@ -513,6 +513,36 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     await expect(card).toContainText('New1')
     expect(app.calls().slice(calls).some(c => c.argv.includes('--mcp-config'))).toBe(false)
   })
+
+  test('what the payer typed with a payment reaches the sorter and the agent, and a row without its note gets it on a second import', async () => {
+    const note = 'Name: Sample Note Payer Description: Geld terug voor vliegtickets IBAN: NL00INGB0000000001 Value date: 05/09/2026'
+    const csv = ingCsv([ingRow(d.inMonth(4), 'Sample Note Payer', 30000, note)])
+    const calls = app.calls().length
+    expect((await app.importCsv(csv)).imported).toBe(1)
+    const sorter = app.calls().slice(calls).find(c => !c.argv.includes('--mcp-config'))!
+    expect(sorter.prompt).toContain('"Sample Note Payer" (€300.00) note: "Geld terug voor vliegtickets"')
+    expect(sorter.prompt, 'the bank fields around it stay out').not.toContain('NL00INGB0000000001')
+
+    app.script([
+      { reply: query('Reading the note', "SELECT description, note FROM transactions WHERE description = 'Sample Note Payer'") },
+      { reply: answer('It was money back for the flight tickets.') },
+    ])
+    await replyTo('What was the money from Sample Note Payer for?')
+    expect(app.queryResults().at(-1).rows).toEqual([['Sample Note Payer', 'Geld terug voor vliegtickets']])
+
+    // A row from before notes were kept: the same file sent again gives it its note and adds nothing.
+    app.sql("UPDATE transactions SET note = NULL WHERE description = 'Sample Note Payer'")
+    const sent = stub.sent.length
+    stub.document(DANIEL, 'again.csv', csv)
+    const summary = await stub.reply_after(sent, m => m.text.startsWith('ING import'))
+    expect(summary.text).toBe("ING import: nothing new. All 1 payments were here already.\n1 payment already here got the bank's note.")
+    app.script([
+      { reply: query('Reading the note', "SELECT note FROM transactions WHERE description = 'Sample Note Payer'") },
+      { reply: answer('Still the flight tickets.') },
+    ])
+    await replyTo('And now?')
+    expect(app.queryResults().at(-1).rows).toEqual([['Geld terug voor vliegtickets']])
+  })
 })
 
 test.describe.serial('the finance agent at its time limit', () => {

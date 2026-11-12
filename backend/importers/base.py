@@ -10,6 +10,7 @@ class ParsedTransaction:
     description: str
     source: str
     import_hash: str
+    note: str = ""  # what the bank wrote with the payment, as it stands in the file
 
 def make_hash(source: str, date: date, amount: Decimal, description: str, *extra: str) -> str:
     """SHA-256 hash for deduplication.

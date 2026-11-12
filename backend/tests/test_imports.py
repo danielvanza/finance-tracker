@@ -41,3 +41,30 @@ def test_confirm_deduplicates_on_reimport(client):
     body = r.json()
     assert body["imported"] == 0
     assert body["skipped_duplicates"] == 2
+
+
+NOTED = ING_CSV.replace(b'"Maandloon"', b'"Name: Bedrijf BV Description: Maandloon maart IBAN: NL00INGB0002222222"')
+
+
+def test_confirm_keeps_the_bank_note(client, db):
+    from models import Transaction
+
+    client.post("/import/confirm", data={"source": "ing"}, files={"file": ("ing.csv", NOTED, "text/csv")})
+    notes = {t.description: t.note for t in db.query(Transaction).all()}
+    assert notes == {"Albert Heijn": None, "Salaris": "Name: Bedrijf BV Description: Maandloon maart IBAN: NL00INGB0002222222"}
+
+
+def test_reimport_fills_in_a_note_that_was_not_kept(client, db):
+    """Rows from before notes were kept get theirs when the same file comes in again, and only then."""
+    from models import Transaction
+
+    client.post("/import/confirm", data={"source": "ing"}, files={"file": ("ing.csv", NOTED, "text/csv")})
+    db.query(Transaction).update({Transaction.note: None})
+    db.commit()
+
+    body = client.post("/import/confirm", data={"source": "ing"}, files={"file": ("ing.csv", NOTED, "text/csv")}).json()
+    assert (body["imported"], body["skipped_duplicates"], body["notes_added"]) == (0, 2, 1)
+    assert db.query(Transaction).filter_by(description="Salaris").one().note.endswith("NL00INGB0002222222")
+
+    again = client.post("/import/confirm", data={"source": "ing"}, files={"file": ("ing.csv", NOTED, "text/csv")}).json()
+    assert again["notes_added"] == 0

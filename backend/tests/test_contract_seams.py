@@ -204,7 +204,7 @@ def test_seam_import_preview(client):
 def test_seam_import_confirm(client):
     quintet = {
         "imported", "skipped_duplicates", "categorised_by_rule",
-        "categorised_by_ai", "doubtful", "uncategorised",
+        "categorised_by_ai", "doubtful", "uncategorised", "notes_added",
     }
     r1 = client.post(
         ep("import-confirm")["path"],

@@ -36,6 +36,9 @@ class Transaction(Base):
     date = Column(Date, nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     description = Column(String, nullable=False)
+    # What the bank wrote with the payment, whole. NULL for a manual entry and for a row imported
+    # before notes were kept; importing its file again fills it in.
+    note = Column(Text, nullable=True)
     source = Column(SAEnum(TransactionSource), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     confirmed = Column(Boolean, default=False)

@@ -98,6 +98,7 @@ export function ImportCard({ counts }: { counts: ChatImportCounts }) {
     ['Already here, skipped', counts.skipped],
     ['Sorted and counted', counts.by_rule + counts.by_ai],
     ['Waiting for your answer', (counts.doubtful ?? 0) + counts.uncategorised],
+    ...(counts.noted ? [['Already here, bank note added', counts.noted] as [string, number]] : []),
   ]
   return (
     <div className="chat-card">

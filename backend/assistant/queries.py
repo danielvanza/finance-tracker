@@ -21,6 +21,7 @@ import spend_service
 from aggregate import is_spend_part, spend_contribution
 import db as database
 from db import SessionLocal
+from importers.ing import written
 from financial_month import get_financial_month_range, label_month_for_date
 from models import Budget, Category, Rule, Transaction, TransactionSource
 from routers import budget as budget_router
@@ -43,7 +44,7 @@ SCHEMA = """spending: one row per effective part of a confirmed transaction, exa
 category_months: one row per expense category per financial month that has any rows, zero included, equal to the Month page. Columns: month, category, category_type (needs, wants, savings), spent_cents (refunds already netted; can be negative).
 month_totals: one row per financial month that has any rows. Columns: month, income_cents, expenses_cents, needs_cents, wants_cents, savings_cents, left_over_cents.
 coverage: one row per financial month from the first imported month to now. Columns: month, start_date, end_date, bank_rows, first_bank_date, last_bank_date, to_review (payments waiting for an answer, not counted in the views above), status (complete, in progress, partial, no data), detail (which bank's rows are missing, when partial).
-transactions: the raw rows, not resolved: a split shows as one row and refunds are not netted, so totals from here will differ from the app. confirmed = 0 is a payment waiting for a person's answer (Claude was not sure of it), with its guessed category if it has one; confirmed = 1 with categorised_by 'ai' was sorted automatically because Claude was sure. set_aside_id is set when the payment settled a set-aside bill. Columns: id, date, month, amount_cents, description, merchant, source, category_id, category, category_type, is_refund, confirmed, categorised_by, has_splits, set_aside_id.
+transactions: the raw rows, not resolved: a split shows as one row and refunds are not netted, so totals from here will differ from the app. confirmed = 0 is a payment waiting for a person's answer (Claude was not sure of it), with its guessed category if it has one; confirmed = 1 with categorised_by 'ai' was sorted automatically because Claude was sure. set_aside_id is set when the payment settled a set-aside bill. note is what the payer typed with the payment, such as what a transfer between people was for (empty when nothing was typed, for a manual entry, and for rows imported before notes were kept). Columns: id, date, month, amount_cents, description, note, merchant, source, category_id, category, category_type, is_refund, confirmed, categorised_by, has_splits, set_aside_id.
 categories: every category. Columns: id, name, type (needs, wants, savings, income, exclude), position.
 budgets: planned amounts. A plan stays as it is until changed: a month without rows of its own has the amounts of the newest earlier month (rows with month NULL are only the starting amounts from before any month was planned). Columns: month, category_id, category, planned_cents.
 rules: what sorts imported rows automatically: a description containing pattern gets category; when several fit, the longest pattern wins. Columns: id, pattern, category_id, category.
@@ -58,7 +59,8 @@ CREATE TABLE month_totals (month TEXT, income_cents INTEGER, expenses_cents INTE
   wants_cents INTEGER, savings_cents INTEGER, left_over_cents INTEGER);
 CREATE TABLE coverage (month TEXT, start_date TEXT, end_date TEXT, bank_rows INTEGER, first_bank_date TEXT,
   last_bank_date TEXT, to_review INTEGER, status TEXT, detail TEXT);
-CREATE TABLE transactions (id INTEGER, date TEXT, month TEXT, amount_cents INTEGER, description TEXT, merchant TEXT,
+CREATE TABLE transactions (id INTEGER, date TEXT, month TEXT, amount_cents INTEGER, description TEXT, note TEXT,
+  merchant TEXT,
   source TEXT, category_id INTEGER, category TEXT, category_type TEXT, is_refund INTEGER, confirmed INTEGER,
   categorised_by TEXT, has_splits INTEGER, set_aside_id INTEGER);
 CREATE TABLE categories (id INTEGER, name TEXT, type TEXT, position INTEGER);
@@ -239,7 +241,7 @@ def _fill(conn: sqlite3.Connection, db) -> None:
         category = categories.get(tx.category_id)
         raw.append((
             tx.id, tx.date.isoformat(), label, money.to_cents(tx.amount), tx.description[:MAX_TEXT],
-            merchant_key(tx.description), tx.source.value, tx.category_id, category.name if category else None,
+            written(tx.note)[:MAX_TEXT], merchant_key(tx.description), tx.source.value, tx.category_id, category.name if category else None,
             category.type.value if category else None, bool(tx.is_refund), bool(tx.confirmed),
             tx.categorised_by.value if tx.categorised_by else None, bool(tx.splits), tx.set_aside_id,
         ))
@@ -289,7 +291,7 @@ def _fill(conn: sqlite3.Connection, db) -> None:
     conn.executemany("INSERT INTO category_months VALUES (?,?,?,?)", by_category)
     conn.executemany("INSERT INTO month_totals VALUES (?,?,?,?,?,?,?)", totals)
     conn.executemany("INSERT INTO coverage VALUES (?,?,?,?,?,?,?,?,?)", coverage)
-    conn.executemany("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", raw)
+    conn.executemany("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", raw)
     conn.commit()
 
 

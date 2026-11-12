@@ -230,3 +230,28 @@ def test_time_budget_stops_new_batches(db):
 def test_no_print_statements_in_ai_module():
     source = (Path(__file__).resolve().parents[1] / "categorizer" / "ai.py").read_text()
     assert "print(" not in source
+
+
+def test_ai_categoriser_is_shown_what_the_payer_typed(db):
+    """The typed part of the bank's note goes with the payment; a note of only bank fields does not."""
+    db.add(Category(name="Travel", type="wants", sort_order=1))
+    db.commit()
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text="[]")]
+    typed = ParsedTransaction(
+        date=date(2026, 3, 1), amount=Decimal("-300.00"), description="J Jansen", source="ing", import_hash="h1",
+        note='Name: J Jansen Description: Terug voor "vliegtickets" IBAN: NL00INGB0000000000 Value date: 01/03/2026',
+    )
+    card = ParsedTransaction(
+        date=date(2026, 3, 1), amount=Decimal("-12.00"), description="Sample Shop", source="ing", import_hash="h2",
+        note="Card sequence no.: 001 01/03/2026 12:34 Transaction: A1B2C3 Term: AB1234 Value date: 02/03/2026",
+    )
+
+    with patch("categorizer.ai.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.create.return_value = mock_response
+        batch_categorise_with_ai([typed, card], db)
+
+    prompt = MockClient.return_value.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert '0: "J Jansen" (€300.00) note: "Terug voor \'vliegtickets\'"\n' in prompt
+    assert prompt.count("NL00INGB") == 0
+    assert '1: "Sample Shop" (€12.00)\n' in prompt

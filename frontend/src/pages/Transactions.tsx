@@ -9,9 +9,10 @@ import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import AddTransactionModal from '../components/AddTransactionModal'
 import SplitModal from '../components/SplitModal'
+import ImportLink from '../components/ImportLink'
 import CsvChip from '../components/reports/CsvChip'
 import {
-  MerchantSheetProvider, MerchantsView, ViewSwitch, merchantFor, createMerchantRule, type MerchantView,
+  MerchantSheetProvider, MerchantsView, ViewSwitch, type MerchantView,
 } from '../components/merchants'
 import TransactionsToolbar from './transactions/TransactionsToolbar'
 import TransactionsTable from './transactions/TransactionsTable'
@@ -103,23 +104,6 @@ export default function Transactions() {
     invalidate()
   }
 
-  // The rule matches the shop (the cleaned name), not the whole bank text with its order number.
-  const handleCreateRule = async (id: number, categoryId: number) => {
-    setActionError('')
-    try {
-      const tx = reviewTx?.id === id ? reviewTx : transactions.find(t => t.id === id)
-      if (!tx) throw new Error('That transaction is no longer listed.')
-      await api.patchTransaction(id, { category_id: categoryId })
-      await createMerchantRule(merchantFor(tx.description).key, categoryId, transactions)
-    } catch (e) {
-      setActionError(describeApiError(e))
-      return
-    }
-    setSkippedIds([])
-    invalidate()
-    qc.invalidateQueries({ queryKey: ['rules'] })
-  }
-
   const handleSkip = (id: number) => {
     setSkippedIds(prev => [...prev, id])
   }
@@ -199,6 +183,7 @@ export default function Transactions() {
           </p>
         </div>
         <div className="page-actions">
+          <ImportLink />
           <button type="button" className="btn" onClick={() => setShowAdd(true)}>
             <Plus size={15} aria-hidden="true" />
             Add transaction
@@ -242,7 +227,6 @@ export default function Transactions() {
                   categories={categories}
                   onConfirm={handleConfirm}
                   onSkip={() => handleSkip(reviewTx.id)}
-                  onCreateRule={handleCreateRule}
                 />
               </>
             )}

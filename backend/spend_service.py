@@ -7,8 +7,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session, selectinload
 from models import Transaction, Setting
 from financial_month import get_financial_month_range
-from aggregate import effective_parts, is_spend_part, spend_contribution
-from adjustments import materialise_standing_adjustments
+from aggregate import is_spend_part, spend_contribution
 
 DEFAULT_START_DAY = 24
 
@@ -18,13 +17,9 @@ def get_start_day(db: Session) -> int:
     return int(setting.value) if setting else DEFAULT_START_DAY
 
 
-def financial_month_bounds(db, year, mo, materialise=False):
-    """(start_date, end_date) for label month year-mo; optionally materialises
-    standing adjustments first (same call sites as today)."""
-    start_day = get_start_day(db)
-    if materialise:
-        materialise_standing_adjustments(year, mo, start_day, db)
-    return get_financial_month_range(year, mo, start_day)
+def financial_month_bounds(db, year, mo):
+    """(start_date, end_date) for label month year-mo."""
+    return get_financial_month_range(year, mo, get_start_day(db))
 
 
 def confirmed_parts_in_range(db, start_date, end_date):
@@ -33,7 +28,10 @@ def confirmed_parts_in_range(db, start_date, end_date):
         Transaction.date <= end_date,
         Transaction.confirmed == True,  # noqa: E712 — historic form
     ).all()
-    return [p for t in txs for p in effective_parts(t)]
+    # A bill paid from a set-aside counts only for the part that had not been set aside yet.
+    import set_asides  # it needs this module's start day
+    start_day = get_start_day(db)
+    return [p for t in txs for p in set_asides.counted_parts(t, start_day)]
 
 
 def spend_totals_by_category(parts, skip_cat_ids=frozenset()):

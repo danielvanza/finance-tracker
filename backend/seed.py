@@ -1,7 +1,6 @@
-from datetime import date
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from models import Category, Budget, CategoryType, Setting, StandingAdjustment
+from models import Category, Budget, CategoryType, Setting
 
 CATEGORIES = [
     ("Taxes & Mortgage",          CategoryType.needs,   1,  Decimal("2000")),
@@ -16,7 +15,7 @@ CATEGORIES = [
     ("Home & DIY",                CategoryType.wants,   10, Decimal("100")),
     ("Clothing",                  CategoryType.wants,   11, Decimal("100")),
     ("Cash Withdrawal",           CategoryType.wants,   12, Decimal("100")),
-    ("Personal Allowance",        CategoryType.wants,   13, Decimal("1200")),
+    ("To personal accounts",      CategoryType.wants,   13, Decimal("0")),
     ("DEGIRO",                    CategoryType.savings, 14, Decimal("300")),
     ("Fun Account",               CategoryType.savings, 15, Decimal("100")),
     ("Savings Transfer",          CategoryType.savings, 16, Decimal("0")),
@@ -24,24 +23,16 @@ CATEGORIES = [
 
 INCOME_CATEGORIES = [
     ("Salary",          CategoryType.income, 17),
-    ("Retained Salary", CategoryType.income, 18),
-    ("Refunds",         CategoryType.income, 19),
-    ("Other Income",    CategoryType.income, 20),
+    ("Other Income",    CategoryType.income, 18),
 ]
 
 EXCLUDE_CATEGORIES = [
-    ("Internal Transfer", CategoryType.exclude, 21),
+    ("Internal Transfer", CategoryType.exclude, 19),
 ]
 
 SETTINGS = [
     ("financial_month_start_day", "24"),
-]
-
-# Salary retained in each partner's personal account: +600 income / -600 wants
-# per month, netting to zero so left_over still matches the shared account.
-STANDING_ADJUSTMENTS = [
-    ("Personal allowance — partner 1", Decimal("600")),
-    ("Personal allowance — partner 2", Decimal("600")),
+    ("target_split", "50/30/20"),
 ]
 
 def run_seed(db: Session) -> None:
@@ -76,20 +67,5 @@ def run_seed(db: Session) -> None:
         existing = db.query(Setting).filter_by(key=key).first()
         if not existing:
             db.add(Setting(key=key, value=value))
-
-    # Standing adjustments (retained personal budget per partner)
-    db.flush()
-    retained = db.query(Category).filter_by(name="Retained Salary").first()
-    allowance = db.query(Category).filter_by(name="Personal Allowance").first()
-    if retained and allowance:
-        for name, amount in STANDING_ADJUSTMENTS:
-            if not db.query(StandingAdjustment).filter_by(name=name).first():
-                db.add(StandingAdjustment(
-                    name=name, amount=amount,
-                    income_category_id=retained.id,
-                    expense_category_id=allowance.id,
-                    active=True,
-                    start_month=date.today().replace(day=1),
-                ))
 
     db.commit()

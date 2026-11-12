@@ -6,9 +6,9 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 from db import get_db
-from models import Transaction, TransactionSplit, TransactionSource, Category, Rule
-from schemas import (TransactionPatch, TransactionCreate, AdjustmentPairCreate,
-                     SplitIn, TransactionOut, SplitOut)
+from models import Transaction, TransactionSplit, TransactionSource, Category
+from schemas import TransactionPatch, TransactionCreate, SplitIn, TransactionOut, SplitOut
+import guesses
 import spend_service
 from importers.base import make_hash
 
@@ -41,7 +41,7 @@ def _to_out(tx: Transaction) -> dict:
         categorised_by=(tx.categorised_by.value if hasattr(tx.categorised_by, "value")
                         else str(tx.categorised_by)) if tx.categorised_by else None,
         ai_confidence=tx.ai_confidence, is_refund=tx.is_refund,
-        standing_adjustment_id=tx.standing_adjustment_id,
+        set_aside_id=tx.set_aside_id, set_aside_name=tx.set_aside.name if tx.set_aside else None,
         splits=[SplitOut(
             id=s.id, category_id=s.category_id,
             category_name=s.category.name if s.category else None,
@@ -117,8 +117,7 @@ def list_transactions(
             year, mo = parsed.year, parsed.month
         except ValueError:
             raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
-        start_date, end_date = spend_service.financial_month_bounds(
-            db, year, mo, materialise=True)
+        start_date, end_date = spend_service.financial_month_bounds(db, year, mo)
         q = q.filter(Transaction.date >= start_date, Transaction.date <= end_date)
     if category_id is not None:
         q = q.filter(or_(
@@ -166,58 +165,39 @@ def create_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
     return _to_out(tx)
 
 
-@router.post("/adjustment-pair", status_code=201)
-def create_adjustment_pair(body: AdjustmentPairCreate, db: Session = Depends(get_db)):
-    """Create a balanced pair of manual transactions. The two legs must net to
-    exactly zero so the pair can never change left_over."""
-    if len(body.legs) != 2:
-        raise HTTPException(status_code=422, detail="An adjustment pair needs exactly two legs")
-    total = sum(leg.amount for leg in body.legs)
-    if total != 0:
-        raise HTTPException(status_code=422,
-                            detail=f"Adjustment legs must net to zero, got {total}")
-    if any(leg.amount == 0 for leg in body.legs):
-        raise HTTPException(status_code=422, detail="Adjustment legs must have a non-zero amount")
-    for leg in body.legs:
-        _require_category(leg.category_id, db)
-    txs = []
-    for leg in body.legs:
-        tx = Transaction(
-            date=body.date, amount=leg.amount,
-            description=leg.description or body.description,
-            source=TransactionSource.manual, category_id=leg.category_id,
-            confirmed=True, categorised_by="manual",
-            import_hash=make_hash("manual", body.date, leg.amount,
-                                  leg.description or body.description, uuid4().hex),
-        )
-        db.add(tx)
-        txs.append(tx)
-    db.commit()
-    for tx in txs:
-        db.refresh(tx)
-    return [_to_out(tx) for tx in txs]
-
-
 @router.patch("/{tx_id}")
 def patch_transaction(tx_id: int, body: TransactionPatchV2, db: Session = Depends(get_db)):
     tx = db.get(Transaction, tx_id)
     if not tx:
         raise HTTPException(404)
+    was_waiting = not tx.confirmed
+    was_guess = tx.categorised_by == "ai"
     if body.category_id is not None:
         _require_category(body.category_id, db)
         tx.category_id = body.category_id
-        if tx.categorised_by == "ai":
+        if tx.categorised_by in ("ai", "rule", None):
             tx.categorised_by = "manual"
     if body.is_refund is not None:
         tx.is_refund = body.is_refund
     if body.confirmed is not None:
+        if body.confirmed and tx.category_id is None and not tx.splits and body.splits is None and tx.set_aside_id is None:
+            raise HTTPException(status_code=422, detail="Pick a category before confirming, or it would count nowhere")
         tx.confirmed = body.confirmed
+        if body.confirmed and was_waiting and tx.categorised_by in ("ai", None):
+            tx.categorised_by = "manual"  # a person looked at it; "ai" on a counted row means sorted automatically
     if body.splits is not None:
         _apply_splits(tx, body.splits, db)
     if tx.is_refund:
         cat_ids = [s.category_id for s in tx.splits] if tx.splits else [tx.category_id]
         categories = [db.get(Category, cid) for cid in cat_ids if cid is not None]
         _validate_refund(tx.amount, [c for c in categories if c])
+    # A person answering for a waiting payment, or putting right one the app sorted by itself, settles
+    # that shop: its other waiting payments follow, and so does every later one.
+    answered = tx.confirmed and (was_waiting or (was_guess and body.category_id is not None))
+    if answered and tx.category_id is not None and not tx.splits and not tx.is_refund:
+        db.flush()
+        db.refresh(tx)
+        guesses.learn(db, tx)
     db.commit()
     db.refresh(tx)
     return _to_out(tx)
@@ -235,44 +215,3 @@ def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
     db.delete(tx)
     db.commit()
     return {"deleted": tx_id}
-
-
-@router.post("/{tx_id}/create-rule")
-def create_rule_from_transaction(tx_id: int, db: Session = Depends(get_db)):
-    """Create a rule from this transaction's description, confirm current tx,
-    and retroactively confirm all matching unconfirmed transactions
-    whose sign is compatible with the rule's target category."""
-    tx = db.get(Transaction, tx_id)
-    if not tx or not tx.category_id:
-        raise HTTPException(400, "Transaction must have a category before creating a rule")
-
-    category = db.get(Category, tx.category_id)
-    cat_type = category.type.value if hasattr(category.type, "value") else str(category.type)
-
-    pattern = tx.description.lower().strip()
-    existing_rule = db.query(Rule).filter_by(pattern=pattern).first()
-    if not existing_rule:
-        rule = Rule(pattern=pattern, category_id=tx.category_id, priority=0)
-        db.add(rule)
-
-    # Retroactively confirm matching unconfirmed transactions (sign-aware)
-    unconfirmed = db.query(Transaction).filter(Transaction.confirmed == False).all()
-    updated = 0
-    for t in unconfirmed:
-        if pattern in t.description.lower():
-            # Refund-marked or split transactions carry user decisions a rule
-            # must not overwrite
-            if t.is_refund or t.splits:
-                continue
-            # Check sign compatibility (exclude is allowed for any sign)
-            if cat_type != "exclude":
-                if t.amount > 0 and cat_type != "income":
-                    continue
-                if t.amount <= 0 and cat_type == "income":
-                    continue
-            t.confirmed = True
-            t.category_id = tx.category_id
-            t.categorised_by = "rule"
-            updated += 1
-    db.commit()
-    return {"rule_created": pattern, "transactions_updated": updated}

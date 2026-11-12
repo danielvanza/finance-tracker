@@ -41,7 +41,7 @@ const gap: Recurring = {
 const none: Recurring = { ...base, status: 'none', items: [] }
 
 const show = (data = normal, onClose = vi.fn()) => {
-  render(<RecurringSheet data={data} onClose={onClose} />)
+  render(<QueryClientProvider client={new QueryClient()}><RecurringSheet data={data} onClose={onClose} /></QueryClientProvider>)
   return onClose
 }
 

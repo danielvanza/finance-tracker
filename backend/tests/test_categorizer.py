@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 import time as time_module
 from categorizer.rules import apply_rules
-from categorizer.ai import categorise_with_ai, _strip_markdown_fences, batch_categorise_with_ai
+from categorizer.ai import _strip_markdown_fences, batch_categorise_with_ai
 import categorizer.ai
 from models import Rule, Category
 from importers.base import ParsedTransaction
@@ -22,7 +22,7 @@ def test_rule_matches_by_substring(db):
     cat = Category(name="Food", type="needs", sort_order=1)
     db.add(cat)
     db.flush()
-    db.add(Rule(pattern="albert heijn", category_id=cat.id, priority=10))
+    db.add(Rule(pattern="albert heijn", category_id=cat.id))
     db.commit()
 
     result = apply_rules(make_tx("Albert Heijn #123"), db)
@@ -33,7 +33,7 @@ def test_rule_match_is_case_insensitive(db):
     cat = Category(name="Food", type="needs", sort_order=1)
     db.add(cat)
     db.flush()
-    db.add(Rule(pattern="ZIGGO", category_id=cat.id, priority=5))
+    db.add(Rule(pattern="ZIGGO", category_id=cat.id))
     db.commit()
     result = apply_rules(make_tx("ziggo internet"), db)
     assert result is not None
@@ -41,45 +41,6 @@ def test_rule_match_is_case_insensitive(db):
 def test_rule_returns_none_when_no_match(db):
     result = apply_rules(make_tx("Unknown Merchant XYZ"), db)
     assert result is None
-
-def test_rule_higher_priority_wins(db):
-    cat1 = Category(name="Food", type="needs", sort_order=1)
-    cat2 = Category(name="Misc", type="wants", sort_order=2)
-    db.add_all([cat1, cat2])
-    db.flush()
-    db.add(Rule(pattern="test", category_id=cat1.id, priority=5))
-    db.add(Rule(pattern="test", category_id=cat2.id, priority=10))
-    db.commit()
-    result = apply_rules(make_tx("test merchant"), db)
-    assert result.id == cat2.id
-
-def test_ai_categoriser_returns_category_and_confidence(db):
-    cat = Category(name="Food - Essential", type="needs", sort_order=1)
-    db.add(cat)
-    db.commit()
-
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text='[{"index": 0, "category": "Food - Essential", "confidence": 0.85}]')]
-
-    with patch("categorizer.ai.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_response
-        result = categorise_with_ai(make_tx("Albert Heijn"), db)
-
-    assert result is not None
-    category, confidence = result
-    assert category.name == "Food - Essential"
-    assert confidence == 0.85
-
-def test_ai_categoriser_returns_none_on_invalid_json(db):
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="I don't know")]
-
-    with patch("categorizer.ai.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_response
-        result = categorise_with_ai(make_tx("Unknown"), db)
-
-    assert result is None
-
 
 def test_strip_markdown_fences_json_block():
     raw = '```json\n{"category": "Food", "confidence": 0.9}\n```'
@@ -93,30 +54,12 @@ def test_strip_markdown_fences_no_fences():
     raw = '{"category": "Food", "confidence": 0.9}'
     assert _strip_markdown_fences(raw) == '{"category": "Food", "confidence": 0.9}'
 
-def test_ai_categoriser_handles_markdown_fenced_json(db):
-    cat = Category(name="Food - Essential", type="needs", sort_order=1)
-    db.add(cat)
-    db.commit()
-
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text='```json\n[{"index": 0, "category": "Food - Essential", "confidence": 0.95}]\n```')]
-
-    with patch("categorizer.ai.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_response
-        result = categorise_with_ai(make_tx("Albert Heijn"), db)
-
-    assert result is not None
-    category, confidence = result
-    assert category.name == "Food - Essential"
-    assert confidence == 0.95
-
-
 def test_rule_skips_income_category_for_expense(db):
     """An expense transaction should NOT match a rule pointing to an income category."""
     income_cat = Category(name="Salary", type="income", sort_order=20)
     db.add(income_cat)
     db.flush()
-    db.add(Rule(pattern="salaris", category_id=income_cat.id, priority=10))
+    db.add(Rule(pattern="salaris", category_id=income_cat.id))
     db.commit()
 
     result = apply_rules(make_tx("Salaris Maart"), db)
@@ -128,7 +71,7 @@ def test_rule_matches_income_category_for_positive_amount(db):
     income_cat = Category(name="Salary", type="income", sort_order=20)
     db.add(income_cat)
     db.flush()
-    db.add(Rule(pattern="salaris", category_id=income_cat.id, priority=10))
+    db.add(Rule(pattern="salaris", category_id=income_cat.id))
     db.commit()
 
     tx = ParsedTransaction(
@@ -145,7 +88,7 @@ def test_rule_skips_expense_category_for_income(db):
     expense_cat = Category(name="Food", type="needs", sort_order=1)
     db.add(expense_cat)
     db.flush()
-    db.add(Rule(pattern="refund", category_id=expense_cat.id, priority=10))
+    db.add(Rule(pattern="refund", category_id=expense_cat.id))
     db.commit()
 
     tx = ParsedTransaction(
@@ -157,15 +100,15 @@ def test_rule_skips_expense_category_for_income(db):
 
 
 def test_rule_falls_through_to_next_on_sign_mismatch(db):
-    """If first matching rule has wrong sign, fall through to next lower-priority rule."""
+    """A rule whose category does not fit the direction of the money is passed over for one that does."""
     income_cat = Category(name="Salary", type="income", sort_order=20)
     expense_cat = Category(name="Misc", type="wants", sort_order=9)
     db.add_all([income_cat, expense_cat])
     db.flush()
-    # Higher priority: income category (wrong for expense)
-    db.add(Rule(pattern="payment", category_id=income_cat.id, priority=10))
-    # Lower priority: expense category (correct for expense)
-    db.add(Rule(pattern="payment", category_id=expense_cat.id, priority=5))
+    # An income category: wrong for money going out
+    db.add(Rule(pattern="payment", category_id=income_cat.id))
+    # A spending category: right for money going out
+    db.add(Rule(pattern="payment", category_id=expense_cat.id))
     db.commit()
 
     tx = make_tx("Monthly payment")  # negative amount
@@ -218,11 +161,11 @@ def test_ai_categoriser_filters_categories_by_sign_income(db):
 
     call_args = MockClient.return_value.messages.create.call_args
     prompt = call_args.kwargs["messages"][0]["content"]
-    assert "Salary" in prompt
-    assert "Food - Essential" not in prompt
+    # The categories it may choose from are the income ones; spending ones are only named as what a refund could be of.
+    assert "Categories: Salary\n" in prompt
 
     assert 0 in result
-    assert result[0][0].name == "Salary"
+    assert result[0].category.name == "Salary"
 
 
 def test_ai_categoriser_includes_sign_in_prompt(db):
@@ -241,8 +184,8 @@ def test_ai_categoriser_includes_sign_in_prompt(db):
 
     call_args = MockClient.return_value.messages.create.call_args
     prompt = call_args.kwargs["messages"][0]["content"]
-    # Verify the prompt includes sign context (e.g. "expense, €10.00")
-    assert "expense" in prompt.lower()
+    # Money going out and money coming in are asked about separately, with the amount.
+    assert prompt.startswith("Sort each payment below")
     assert "€" in prompt
 
 

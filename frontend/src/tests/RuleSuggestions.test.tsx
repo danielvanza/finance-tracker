@@ -7,7 +7,7 @@ import type { Rule, Transaction } from '../types'
 
 const tx = (id: number, description: string, category_id: number | null, over: Partial<Transaction> = {}): Transaction => ({
   id, date: '2026-11-01', description, amount_cents: -1000, source: 'ing', category_id, category_name: null,
-  confirmed: true, categorised_by: 'manual', ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [],
+  confirmed: true, categorised_by: 'manual', ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   ...over,
 })
 const many = (desc: string, cat: number, n: number, start = 1) =>
@@ -34,7 +34,7 @@ describe('findSuggestions', () => {
   it('skips a description chosen for two categories, covered by a rule, or dismissed', () => {
     const mixed = [...many('Amazon', 3, 3), ...many('Amazon', 4, 1, 50)]
     expect(findSuggestions(mixed, [], [], none)).toEqual([])
-    const rule = { id: 1, pattern: 'bakker', category_id: 3, category_name: 'x', priority: 0 } as Rule
+    const rule = { id: 1, pattern: 'bakker', category_id: 3, category_name: 'x' } as Rule
     expect(findSuggestions(many('Bakker Utrecht', 3, 3), [], [rule], none)).toEqual([])
     expect(findSuggestions(many('Bakker', 3, 3), [], [], new Set(['bakker']))).toEqual([])
   })
@@ -75,7 +75,7 @@ describe('RuleSuggestions', () => {
     expect(await screen.findByText('bakker')).toBeTruthy()
     expect(screen.getByText(/Food · chosen 4 times/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Add rule' }))
-    await waitFor(() => expect(mockApi.createRule).toHaveBeenCalledWith({ pattern: 'bakker', category_id: 3, priority: 0 }))
+    await waitFor(() => expect(mockApi.createRule).toHaveBeenCalledWith({ pattern: 'bakker', category_id: 3 }))
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss bakker' }))
     await waitFor(() => expect(screen.queryByText('bakker')).toBeNull())
     expect(localStorage.getItem('finances.dismissed-rule-suggestions')).toBe('["bakker"]')
@@ -92,7 +92,7 @@ describe('RuleSuggestions', () => {
 describe('Rules', () => {
   it('deletes a rule from a named icon button', async () => {
     mockApi.getTransactions.mockImplementation(() => Promise.resolve([]))
-    mockApi.getRules.mockImplementation(() => Promise.resolve([{ id: 7, pattern: 'jumbo', category_id: 3, category_name: 'Food', priority: 0 }] as never))
+    mockApi.getRules.mockImplementation(() => Promise.resolve([{ id: 7, pattern: 'jumbo', category_id: 3, category_name: 'Food' }] as never))
     wrap(<Rules />)
     fireEvent.click(await screen.findByRole('button', { name: 'Delete jumbo' }))
     await waitFor(() => expect(mockApi.deleteRule).toHaveBeenCalledWith(7))

@@ -52,7 +52,7 @@ ENDPOINTS = {e["id"]: e for e in _CONTRACTS["endpoints"]}
 TX_OUT_KEYS = {
     "id", "date", "amount_cents", "description", "source", "category_id",
     "category_name", "confirmed", "categorised_by", "ai_confidence",
-    "is_refund", "standing_adjustment_id", "splits",
+    "is_refund", "set_aside_id", "set_aside_name", "splits",
 }
 SPLIT_OUT_KEYS = {"id", "category_id", "category_name", "amount_cents", "is_refund"}
 SA_OUT_KEYS = {
@@ -91,7 +91,7 @@ def client(db):
     ))
     db.add(Transaction(
         date=date(2026, 3, 2), amount=Decimal("-10.00"),
-        description="Bol.com order", source="revolut",
+        description="Bol.com order", source="ing",
         category_id=food.id, confirmed=False, categorised_by="ai",
         ai_confidence=0.7, import_hash="seam-hash-2",
     ))
@@ -120,7 +120,7 @@ def _salary(db):
 
 ROUTER_PREFIXES = [
     "/import", "/transactions", "/budget", "/rules", "/dashboard",
-    "/categories", "/settings", "/standing-adjustments", "/chat",
+    "/categories", "/settings", "/set-asides", "/recurring", "/chat",
 ]
 
 
@@ -204,7 +204,7 @@ def test_seam_import_preview(client):
 def test_seam_import_confirm(client):
     quintet = {
         "imported", "skipped_duplicates", "categorised_by_rule",
-        "categorised_by_ai", "uncategorised",
+        "categorised_by_ai", "doubtful", "uncategorised",
     }
     r1 = client.post(
         ep("import-confirm")["path"],
@@ -255,94 +255,11 @@ def test_seam_transaction_delete(client, db):
     assert isinstance(r2.json().get("detail"), str)
 
 
-def test_seam_transaction_create_rule(client, db):
-    extra = db.query(Transaction).filter_by(description="ALBERT HEIJN extra").one()
-    r = client.post(ep("transaction-create-rule")["path"].format(tx_id=extra.id))
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body.keys()) == {"rule_created", "transactions_updated"}
-    assert body["rule_created"] == "albert heijn extra"
-    assert isinstance(body["transactions_updated"], int)
-    assert body["transactions_updated"] >= 1
-
-    orphan = Transaction(
-        date=date(2026, 3, 8), amount=Decimal("-1.00"),
-        description="Orphan seam", source="revolut",
-        category_id=None, confirmed=False,
-        import_hash="seam-hash-orphan",
-    )
-    db.add(orphan)
-    db.commit()
-    r2 = client.post(ep("transaction-create-rule")["path"].format(tx_id=orphan.id))
-    assert r2.status_code == 400
-
-
-def test_seam_standing_adjustments_list(client):
-    r = client.get(ep("standing-adjustments-list")["path"])
-    assert r.status_code == 200
-    rows = r.json()
-    assert len(rows) == 2  # seeded partner pair
-    for sa in rows:
-        assert set(sa.keys()) == SA_OUT_KEYS
-        assert isinstance(sa["amount_cents"], int) and sa["amount_cents"] > 0
-        assert isinstance(sa["active"], bool)
-        assert isinstance(sa["start_month"], str) and len(sa["start_month"]) == 10
-
-
-def test_seam_standing_adjustment_create(client, db):
-    r = client.post(
-        ep("standing-adjustment-create")["path"],
-        json={
-            "name": "Seam allowance",
-            "amount_cents": 2500,
-            "income_category_id": _salary(db).id,
-            "expense_category_id": _food(db).id,
-        },
-    )
-    assert r.status_code == 201
-    sa = r.json()
-    assert set(sa.keys()) == SA_OUT_KEYS
-    assert sa["name"] == "Seam allowance"
-    assert sa["amount_cents"] == 2500
-    assert sa["active"] is True
-
-
-def test_seam_standing_adjustment_patch(client, db):
-    sa = db.query(models.StandingAdjustment).first()
-    r = client.patch(
-        ep("standing-adjustment-patch")["path"].format(sa_id=sa.id),
-        json={"active": False, "amount_cents": 30000},
-    )
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body.keys()) == SA_OUT_KEYS
-    assert body["active"] is False
-    assert body["amount_cents"] == 30000
-
-
-def test_seam_standing_adjustment_delete(client, db):
-    r = client.post(
-        ep("standing-adjustment-create")["path"],
-        json={
-            "name": "Doomed adjustment",
-            "amount_cents": 1000,
-            "income_category_id": _salary(db).id,
-            "expense_category_id": _food(db).id,
-        },
-    )
-    assert r.status_code == 201
-    sa_id = r.json()["id"]
-
-    r2 = client.delete(ep("standing-adjustment-delete")["path"].format(sa_id=sa_id))
-    assert r2.status_code == 200
-    assert r2.json() == {"deleted": sa_id}
-
-
 def test_seam_categories_list(client):
     r = client.get(ep("categories-list")["path"])
     assert r.status_code == 200
     rows = r.json()
-    assert len(rows) >= 21  # 16 expense + 4 income + 1 exclude seeded
+    assert len(rows) >= 19  # 16 expense + 2 income + 1 exclude seeded
     orders = [c["sort_order"] for c in rows]
     assert orders == sorted(orders)
     for c in rows:
@@ -443,67 +360,54 @@ def test_seam_category_delete_in_use(client, db):
 
 
 def test_seam_rules_list(client, db):
-    db.add(Rule(pattern="seam list pattern", category_id=_food(db).id, priority=3))
-    db.add(Rule(pattern="seam list pattern 2", category_id=_food(db).id, priority=7))
+    db.add(Rule(pattern="seam list pattern", category_id=_food(db).id))
+    db.add(Rule(pattern="seam list pattern 2", category_id=_food(db).id))
     db.commit()
 
     r = client.get(ep("rules-list")["path"])
     assert r.status_code == 200
     rows = r.json()
-    priorities = [x["priority"] for x in rows]
-    assert priorities == sorted(priorities, reverse=True)
+    ids = [x["id"] for x in rows]
+    assert ids == sorted(ids)
     for x in rows:
-        assert set(x.keys()) == {"id", "pattern", "category_id", "category_name", "priority"}
+        assert set(x.keys()) == {"id", "pattern", "category_id", "category_name"}
 
 
 def test_seam_rule_create(client, db):
     r = client.post(
         ep("rule-create")["path"],
-        json={"pattern": "seam albert", "category_id": _food(db).id, "priority": 5},
+        json={"pattern": "seam albert", "category_id": _food(db).id},
     )
     assert r.status_code == 200
     rule = r.json()
-    assert set(rule.keys()) == {"id", "pattern", "category_id", "category_name", "priority"}
+    assert set(rule.keys()) == {"id", "pattern", "category_id", "category_name"}
     assert rule["pattern"] == "seam albert"
     assert rule["category_name"] == "Food - Essential"
-    assert rule["priority"] == 5
 
 
 def test_seam_rule_update(client, db):
-    rule = Rule(pattern="seam update me", category_id=_food(db).id, priority=1)
+    rule = Rule(pattern="seam update me", category_id=_food(db).id)
     db.add(rule)
     db.commit()
 
     r = client.patch(
         ep("rule-update")["path"].format(rule_id=rule.id),
-        json={"priority": 9},
+        json={"pattern": "seam updated"},
     )
     assert r.status_code == 200
     body = r.json()
-    assert set(body.keys()) == {"id", "pattern", "category_id", "category_name", "priority"}
-    assert body["priority"] == 9
-    assert body["pattern"] == "seam update me"
+    assert set(body.keys()) == {"id", "pattern", "category_id", "category_name"}
+    assert body["pattern"] == "seam updated"
 
 
 def test_seam_rule_delete(client, db):
-    rule = Rule(pattern="seam delete me", category_id=_food(db).id, priority=0)
+    rule = Rule(pattern="seam delete me", category_id=_food(db).id)
     db.add(rule)
     db.commit()
 
     r = client.delete(ep("rule-delete")["path"].format(rule_id=rule.id))
     assert r.status_code == 200
     assert r.json() == {"deleted": rule.id}
-
-
-def test_seam_rule_test(client):
-    r = client.post(ep("rule-test")["path"], json={"pattern": "albert"})
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body.keys()) == {"matches", "examples"}
-    assert body["matches"] >= 1
-    assert isinstance(body["examples"], list)
-    assert all(isinstance(e, str) for e in body["examples"])
-    assert len(body["examples"]) <= 5
 
 
 def test_seam_settings_get(client):
@@ -554,7 +458,7 @@ def test_seam_transactions_list(client):
     for tx in items:
         assert set(tx.keys()) == TX_OUT_KEYS
         assert isinstance(tx["amount_cents"], int)
-        assert tx["source"] in ("ing", "revolut", "degiro", "manual")
+        assert tx["source"] in ("ing", "manual")
         assert isinstance(tx["is_refund"], bool)
         for s in tx["splits"]:
             assert set(s.keys()) == SPLIT_OUT_KEYS
@@ -599,27 +503,6 @@ def test_seam_transaction_create(client, db):
     assert tx["source"] == "manual"
     assert tx["confirmed"] is True
     assert tx["categorised_by"] == "manual"
-
-
-def test_seam_transaction_adjustment_pair(client, db):
-    r = client.post(
-        ep("transaction-adjustment-pair")["path"],
-        json={
-            "date": "2026-03-06",
-            "description": "Seam internal correction",
-            "legs": [
-                {"amount_cents": 2500, "category_id": _salary(db).id},
-                {"amount_cents": -2500, "category_id": _food(db).id},
-            ],
-        },
-    )
-    assert r.status_code == 201
-    pair = r.json()
-    assert isinstance(pair, list) and len(pair) == 2
-    for tx in pair:
-        assert set(tx.keys()) == TX_OUT_KEYS
-        assert isinstance(tx["amount_cents"], int)
-    assert sum(t["amount_cents"] for t in pair) == 0
 
 
 def test_seam_transaction_patch(client, db):
@@ -677,18 +560,6 @@ def test_seam_budget_patch_month(client):
     assert isinstance(body["id"], int)
 
 
-def test_seam_budget_patch_default(client, db):
-    r = client.patch(
-        ep("budget-patch-default")["path"].format(category_id=_food(db).id),
-        json={"planned_amount_cents": 9999},
-    )
-    assert r.status_code == 200
-    body = r.json()
-    assert {"category_id", "planned_amount_cents"} <= set(body.keys())
-    assert "planned_amount" not in body
-    assert body["planned_amount_cents"] == 9999
-
-
 def test_seam_dashboard_summary(client):
     r = client.get(ep("dashboard-summary")["path"], params={"month": LABEL_MONTH})
     assert r.status_code == 200
@@ -697,7 +568,7 @@ def test_seam_dashboard_summary(client):
     assert {
         "month", "total_income_cents", "total_expenses_cents",
         "total_savings_cents", "left_over_cents", "category_breakdown",
-        "income_breakdown", "needs_wants_savings", "monthly_trend",
+        "income_breakdown", "needs_wants_savings",
     } <= keys
     assert not ({"total_income", "total_expenses", "total_savings", "left_over"} & keys)
     for k in ("total_income_cents", "total_expenses_cents",
@@ -707,24 +578,12 @@ def test_seam_dashboard_summary(client):
     nws = d["needs_wants_savings"]
     assert {"needs_cents", "wants_cents", "savings_cents"} <= set(nws.keys())
 
-    trend = d["monthly_trend"]
-    assert len(trend) == 6
-    for entry in trend:
-        assert set(entry.keys()) == {"month", "total_cents"}
-        assert isinstance(entry["total_cents"], int)
-    assert trend[-1]["month"] == LABEL_MONTH
 
 
 TRENDS_ENTRY_KEYS = {
     "month", "total_expenses_cents", "needs_cents", "wants_cents",
-    "savings_cents", "total_income_cents", "net_cents", "savings_rate_bps",
-    "top_categories", "mom_deltas",
+    "savings_cents", "total_income_cents", "net_cents",
 }
-TRENDS_DELTA_KEYS = {
-    "total_expenses_cents", "needs_cents", "wants_cents", "savings_cents",
-    "total_income_cents", "net_cents", "savings_rate_bps",
-}
-TRENDS_TOP_CAT_KEYS = {"category_id", "category_name", "type", "actual_cents"}
 
 
 def test_seam_dashboard_trends(client):
@@ -750,17 +609,4 @@ def test_seam_dashboard_trends(client):
         for k in ("total_expenses_cents", "needs_cents", "wants_cents",
                   "savings_cents", "total_income_cents", "net_cents"):
             assert isinstance(entry[k], int)
-        assert entry["savings_rate_bps"] is None or isinstance(
-            entry["savings_rate_bps"], int)
-        for top in entry["top_categories"]:
-            assert set(top.keys()) == TRENDS_TOP_CAT_KEYS
-            assert isinstance(top["actual_cents"], int)
-        if i == 0:
-            assert entry["mom_deltas"] is None
-        else:
-            deltas = entry["mom_deltas"]
-            assert set(deltas.keys()) == TRENDS_DELTA_KEYS
-            for k in TRENDS_DELTA_KEYS - {"savings_rate_bps"}:
-                assert isinstance(deltas[k], int)
-            assert deltas["savings_rate_bps"] is None or isinstance(
-                deltas["savings_rate_bps"], int)
+

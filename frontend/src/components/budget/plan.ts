@@ -2,12 +2,24 @@ import type { BudgetRow, Category } from '../../types'
 
 export type PlanKind = 'needs' | 'wants' | 'savings'
 
-/** The 50/30/20 aim, as a share of income. */
-export const KINDS: { kind: PlanKind; label: string; aim: number }[] = [
-  { kind: 'needs', label: 'Needs', aim: 50 },
-  { kind: 'wants', label: 'Wants', aim: 30 },
-  { kind: 'savings', label: 'Savings', aim: 20 },
+export const KINDS: { kind: PlanKind; label: string }[] = [
+  { kind: 'needs', label: 'Needs' },
+  { kind: 'wants', label: 'Wants' },
+  { kind: 'savings', label: 'Savings' },
 ]
+
+/** The household's target split ("60/25/15": needs, wants, savings, as shares of income). 50/30/20 until it is set. */
+export function parseSplit(value: string | undefined): [number, number, number] {
+  const parts = (value ?? '').split('/').map(Number)
+  return parts.length === 3 && parts.every(n => Number.isInteger(n) && n >= 0) && parts[0] + parts[1] + parts[2] === 100
+    ? [parts[0], parts[1], parts[2]]
+    : [50, 30, 20]
+}
+
+export function aimsOf(value: string | undefined): Record<PlanKind, number> {
+  const [needs, wants, savings] = parseSplit(value)
+  return { needs, wants, savings }
+}
 
 export function shiftMonth(label: string, by: number) {
   const [y, m] = label.split('-').map(Number)
@@ -54,19 +66,13 @@ export function lastMonthFill(rows: PlanRow[], lastBudget: BudgetRow[]): Map<num
 
 /**
  * What each category really spent per finished month, averaged, to whole euros.
- * Only months with any spending count (an empty month would drag every average down), and
- * categories with a standing adjustment are skipped (early months show 0 for them).
+ * Only months with any spending count (an empty month would drag every average down).
  */
-export function averageSpend(
-  rows: PlanRow[],
-  months: BudgetRow[][],
-  skipCategoryIds: ReadonlySet<number>,
-): Map<number, number> {
+export function averageSpend(rows: PlanRow[], months: BudgetRow[][]): Map<number, number> {
   const withData = months.filter(m => m.some(b => (b.actual_amount_cents ?? 0) !== 0))
   const avg = new Map<number, number>()
   if (withData.length === 0) return avg
   for (const r of rows) {
-    if (skipCategoryIds.has(r.categoryId)) continue
     const sum = withData.reduce((s, m) => {
       const b = m.find(x => x.category_id === r.categoryId)
       return s + Math.max(0, b?.actual_amount_cents ?? 0)

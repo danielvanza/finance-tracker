@@ -4,7 +4,7 @@ Guidance for AI agents working on this codebase.
 
 ## Project Overview
 
-Personal finance tracker: CSV bank import -> auto-categorisation (rules + Claude AI) -> budget tracking with 50/30/20 rule -> "are we on track this month?".
+Household budget for two people: ING export -> sorting (rules, then Claude: sure guesses count, doubtful ones are asked about) -> a plan per category -> "what is free to spend until payday?". Used in the web app and through a Telegram bot in a group the two share.
 
 A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRODUCT.md](PRODUCT.md) for what it is for and [DESIGN.md](DESIGN.md) before any visual change.
 
@@ -16,14 +16,20 @@ A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRO
 backend/
   main.py              App entry point, CORS, startup, router registration
   db.py                SQLAlchemy engine + session config (SQLite)
-  models.py            ORM models: Category, Transaction, Rule, Budget
+  models.py            ORM models: Category, Transaction, Rule, Budget, SetAside, IgnoredBill, chat tables
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
-  importers/           CSV parsers (base.py, ing.py, revolut.py, degiro.py)
-  categorizer/         rules.py (pattern matching), ai.py (Claude Haiku), claude_cli.py (sandboxed login)
+  importers/           ing.py: the one parser, for English and Dutch ING exports (base.py holds the hashing)
+  import_service.py    Parsed rows into transactions; recognising a row that is already in
+  categorizer/         rules.py (longest matching text wins), ai.py (Claude: a category, sure or not, and options), claude_cli.py (sandboxed login, also shown pictures)
+  guesses.py           Which guesses count, the questions about the rest, what an answer teaches, money moved to a personal account
+  set_asides.py        Set-asides: a bill's monthly share and what its payment settles
+  nudges.py            What the bot says unasked, and when
+  voice.py             Voice notes to text, on this machine (faster-whisper)
+  clock.py             Today and now for the household; every date question goes through it
   assistant/           The chat agent: actions.py (what it can change, preview + apply), brain.py (the conversation it is given, running a reply, Stop and the time limit), prompts.py (system prompt), tools.py (the tools Claude can call), figures.py (wording helpers), service.py (queue, live log, Stop, New chat, Yes/No), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results)
-  telegram_bot.py      The private Telegram bot, its own process; a thin front on /chat
-  routers/             API route handlers (imports, transactions, budget, rules, dashboard, categories)
+  telegram_bot.py      The Telegram bot, its own process: one group, two people; a thin front on /chat
+  routers/             API route handlers (imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings, chat)
   tests/               pytest test suite
   data/finance.db      SQLite database (auto-created, gitignored)
 
@@ -34,7 +40,7 @@ frontend/
   src/styles/           Tokens (base.css), shell, shared controls, one stylesheet per page
   src/theme.ts, daylight.tsx, press.ts   Day/night and clay press, as in life-dashboard
   src/pages/            Month (+ month/), Transactions (+ transactions/), Trends, Setup, Rules, Settings, Import
-  src/components/       ReviewCard, CategorySelect, CategoryManager, StandingAdjustments, Split*, AddTransactionModal, ErrorBanner
+  src/components/       ReviewCard, CategorySelect, CategoryManager, SetAsides, TargetSplit, ImportLink, Split*, AddTransactionModal, ErrorBanner
   src/tests/            vitest test suite
 ```
 
@@ -44,13 +50,16 @@ frontend/
 
 - **Framework:** FastAPI with dependency injection (`Depends(get_db)` for sessions).
 - **ORM:** SQLAlchemy 2.0 declarative style. Models in `models.py`, all inherit from `Base` in `db.py`.
-- **Database:** SQLite. Migrations via Alembic (`backend/alembic/`) -- startup runs `alembic upgrade head` programmatically, so fresh DBs are created by the baseline revision. Existing pre-Alembic DBs need a one-time `cd backend && .venv/bin/alembic stamp head` (schema already equals baseline). New migrations go in `backend/alembic/versions/`. Override location with `DATABASE_URL` env var.
+- **Database:** SQLite. Migrations via Alembic (`backend/alembic/`) -- startup runs `alembic upgrade head` programmatically, so fresh DBs are created by the baseline revision. A database from before Alembic needs a one-time `cd backend && .venv/bin/alembic stamp afe0635828ba` (its schema equals that baseline); the next start then runs the later migrations. New migrations go in `backend/alembic/versions/`. Override location with `DATABASE_URL` env var.
 - **Schemas:** Pydantic v2 models in `schemas.py`. All API endpoints use these for request/response typing.
-- **Enums:** `CategoryType` (needs/wants/savings), `TransactionSource` (ing/revolut/degiro), `CategorisedBy` (rule/ai/manual). Defined in `models.py`.
+- **Enums:** `CategoryType` (needs/wants/savings/income/exclude), `TransactionSource` (ing/manual), `CategorisedBy` (rule/ai/manual). Defined in `models.py`. On a confirmed row `ai` means sorted automatically; a person's confirmation makes it `manual`.
 - **Naming:** British spelling for domain terms (`categoriser`, `categorised_by`). Standard Python snake_case everywhere else.
-- **Importers:** Each bank has its own class inheriting from `BaseImporter` in `importers/base.py`. Must implement `parse(file_content: str) -> list[ParsedTransaction]`. Deduplication uses SHA-256 hash of `source|date|amount|description`.
-- **Categorisation:** Two-tier: rules first (priority-ordered substring match), then AI fallback. Rule-matched transactions are auto-confirmed. AI-matched need human review.
-- **Error handling:** AI categoriser catches `anthropic.APIError` and returns `None` on failure (graceful degradation).
+- **Importer:** ING only (`importers/ing.py`, `parse_ing`), English or Dutch column names, semicolons or commas. A row is already in when its hash (`source|date|amount|description|notes|balance`) is, or when a stored ING row has the same date, amount and name (the same payment from an export in the other language); see `import_service.already_here`.
+- **Categorisation:** rules first (the longest matching text wins; a text under six characters only fits as a word of its own, `rules.fits`; a rule only fits money in the right direction), then Claude. Claude says whether it is sure. Sure: confirmed at once, `categorised_by = ai`. Not sure: unconfirmed with `ai_options`, counted nowhere, asked about (`guesses.py`, `assistant/service.ask_questions`). A person's answer makes a rule for the shop (`guesses.learn`), except for a payment service that hides the shop (`guesses.hides_shop`). Money going out to a name in the `own_names` setting goes to "To personal accounts" (`guesses.sort_personal`).
+- **Totals:** only confirmed rows count. A row with `set_aside_id` counts only for the part that had not been set aside yet when it was paid (`set_asides.counted_parts`); every total reads parts through that or through `spend_service`.
+- **Budgets:** a row per category per month; a month takes the newest earlier month's amount (`routers/budget.planned_for`). Changing a row also changes the later rows that still hold the old amount, up to the first month that holds another (`patch_budget`).
+- **Dates:** ask `clock.today()` / `clock.now()`, never `date.today()`.
+- **Error handling:** when Claude cannot be reached or gives no answer for a row (`categorizer/ai.batch_categorise_with_ai` leaves it out of what it returns), the row stays waiting with `ai_options` NULL and is judged again after the next import or start (`guesses.judge_backlog`). An import sent in the chat is refused whole instead.
 
 ### Frontend
 
@@ -71,26 +80,23 @@ frontend/
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | No | (none) | Anthropic API key for Claude AI categorisation. Without it, only rule-based categorisation works. |
+| `ANTHROPIC_API_KEY` | No | (none) | Claude for sorting imports, when the login below is not set up. With neither, only the rules sort. |
 | `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
 | `CLAUDE_CLI_HOME` | For chat | (none) | Private folder for the sandboxed Claude login. The chat only uses this login, never an API key. |
 | `CHAT_MODEL` | No | `sonnet` | Claude model behind both chats. |
+| `SORT_MODEL` | No | `sonnet` | Claude model that sorts imported rows (on the Claude login). |
 | `CHAT_TIME_LIMIT_SECONDS` | No | `540` | How long Claude may work on one reply before it is stopped and writes up what it found (about a minute more). |
 | `TELEGRAM_BOT_TOKEN` | For the bot | (none) | From BotFather. A bot of its own, separate from Hermes. |
-| `TELEGRAM_ALLOWED_USER_ID` | For the bot | (none) | The one numeric Telegram account the bot answers. |
+| `TELEGRAM_ALLOWED_USER_IDS` | For the bot | (none) | The two numeric Telegram accounts, comma-separated. |
+| `TELEGRAM_GROUP_ID` | For the bot | (none) | The household group's numeric id. Without it the bot answers nobody and logs the id of a group one of the two writes in. |
+| `VOICE_MODEL` | No | `small.en` | Speech model for voice notes, fetched on first use. |
+| `FINANCE_TIMEZONE` | No | `Europe/Amsterdam` | The household's time. |
+| `NUDGES` | No | `on` | `off` stops the bot writing unasked. |
 | `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 
 Place these in a `.env` file (gitignored).
 
 ## Key Patterns
-
-### Adding a New Bank Importer
-
-1. Create `backend/importers/<bank>.py`
-2. Subclass `BaseImporter`, implement `parse()` returning `list[ParsedTransaction]`
-3. Add the source to `TransactionSource` enum in `models.py`
-4. Register in `routers/imports.py` `_parse()` function
-5. Add tests in `backend/tests/test_importers.py`
 
 ### Adding a New API Endpoint
 
@@ -106,9 +112,11 @@ Add an `Op` to `OPS` in `backend/assistant/actions.py` that calls the existing r
 
 ### The Chat Agent
 
-Each chat (panel, Telegram) is one ongoing conversation; `brain.build_prompt` gives Claude all of it since the last New chat (a `new_chat` marker row), plus this month's Month page overview. One `claude -p` run per reply works through the tools in `assistant/tools.py`, served by the app over loopback MCP; built-in tools stay off. Its final text is the reply. Every tool call adds a plain-words step to the live log (saved on the person's message, shown in both chats). Stop or the time limit ends the run; Claude then writes up what it found, without tools.
+Each chat (panel, Telegram group) is one ongoing conversation; `brain.build_prompt` gives Claude all of it since the last New chat (a `new_chat` marker row), plus this month's Month page overview. One `claude -p` run per reply works through the tools in `assistant/tools.py`, served by the app over loopback MCP; built-in tools stay off. Its final text is the reply. Every tool call adds a plain-words step to the live log (saved on the person's message, shown in both chats). Stop or the time limit ends the run; Claude then writes up what it found, without tools.
 
-Lookups never change data: `month_overview` rolls back what opening a month writes, and `run_query` only sees a private in-memory copy built per reply by the Month page's own code (`assistant/queries.py`). Cards are made during the run and stay open until applied, rejected or replaced by a card that names them in `replaces`.
+Lookups never change data: `month_overview` rolls back what opening a month writes, and `run_query` only sees a private in-memory copy built per reply by the Month page's own code (`assistant/queries.py`). Cards are made during the run and stay open until applied, rejected or replaced by a card that names them in `replaces`. A card says what will change in the app's own words (`actions.plain`): a line per change, or a summary per category when there are many, with every row on request. Claude's closing words ride on the card it made, so the two arrive as one message.
+
+The app also speaks without Claude: questions about payments Claude was not sure of (`service.ask_questions`, a few open at a time, answered by a button, and only once Claude has judged the payment or gave no answer for it; "Something else" makes the app ask what it is, as a line of the conversation), and what the bot says unasked (`nudges.py`, one message for everything owed; one the chat has not been shown yet is replaced by the next, `service.post_nudge`). Whatever nobody asked for carries `unasked` in its payload and is held back by `service.outbox` between 21:00 and 9:00. In Telegram a voice note is turned into text first (`voice.py`) and a photo is shown to Claude as a picture beside the prompt, with no tool added.
 
 Say what a tool does in its description and keep behaviour and judgement in `assistant/prompts.py`. To let Claude read something new, add a table to `_DDL`, `_TABLES`, `SCHEMA` and `_fill`/`_fill_setup`. Keep the default context in `build_prompt` bounded: history is fetched on demand.
 

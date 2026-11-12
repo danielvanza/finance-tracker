@@ -91,7 +91,7 @@ export default function RuleSuggestions({ rules, categories }: { rules: Rule[]; 
   const add = async (s: Suggestion) => {
     setError('')
     try {
-      await api.createRule({ pattern: s.pattern, category_id: s.categoryId, priority: 0 })
+      await api.createRule({ pattern: s.pattern, category_id: s.categoryId })
     } catch (e) {
       setError(describeApiError(e)); return
     }

@@ -20,7 +20,7 @@ const summary = (month: string, cats: Array<[number, string, number]>): Dashboar
   category_breakdown: cats.map(([category_id, category_name, actual_cents]) => ({
     category_id, category_name, actual_cents, planned_cents: 0, type: 'needs' as const,
   })),
-  needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, monthly_trend: [], income_breakdown: [],
+  needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, income_breakdown: [],
 })
 
 describe('trendFacts', () => {

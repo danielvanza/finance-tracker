@@ -20,7 +20,7 @@ const pace = (over: Partial<Pace> = {}): Pace => ({
   actual_cents: { needs: 237800, wants: 158500, savings: 30000 },
   spendable_plan_cents: 535000, spendable_actual_cents: daily[daily.length - 1].cumulative_cents,
   pace_delta_cents: 120200, daily, data_through: '2026-11-08',
-  last_import_by_bank: [{ source: 'ing', last_date: '2026-11-08' }], behind_months: [], to_review: 0, ...over,
+  last_import_by_bank: [{ source: 'ing', last_date: '2026-11-08' }], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
 })
 
 vi.mock('../api', () => ({
@@ -32,7 +32,7 @@ vi.mock('../api', () => ({
     getDashboard: vi.fn(() => Promise.resolve({
       month: '2026-11', total_income_cents: 0, total_expenses_cents: 0, total_savings_cents: 0,
       left_over_cents: 0, category_breakdown: [], income_breakdown: [],
-      needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, monthly_trend: [],
+      needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 },
     })),
     patchBudget: vi.fn(() => Promise.resolve({})),
   },

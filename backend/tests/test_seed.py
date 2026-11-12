@@ -27,11 +27,9 @@ def test_seed_is_idempotent(db):
     run_seed(db)
     run_seed(db)  # should not raise or duplicate
     cats = db.query(Category).all()
-    assert len(cats) == 21  # 16 expense + 4 income + 1 exclude
+    assert len(cats) == 19  # 16 expense + 2 income + 1 exclude
     defaults = db.query(Budget).filter_by(month=None).all()
     assert len(defaults) == 16  # income/exclude categories have no default budget
-    from models import StandingAdjustment
-    assert db.query(StandingAdjustment).count() == 2
 
 def test_seed_creates_income_categories(db):
     run_seed(db)
@@ -39,9 +37,7 @@ def test_seed_creates_income_categories(db):
     assert salary is not None
     assert salary.type == CategoryType.income
 
-    refunds = db.query(Category).filter_by(name="Refunds").first()
-    assert refunds is not None
-    assert refunds.type == CategoryType.income
+    assert db.query(Category).filter_by(name="Refunds").first() is None
 
     other = db.query(Category).filter_by(name="Other Income").first()
     assert other is not None
@@ -75,4 +71,4 @@ def test_seed_does_not_duplicate_renamed_category(db):
 
     assert db.query(Category).filter_by(name="Dog savings").count() == 1
     assert db.query(Category).filter_by(name="Fun Account").first() is None
-    assert db.query(Category).count() == 21
+    assert db.query(Category).count() == 19

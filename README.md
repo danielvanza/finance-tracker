@@ -2,182 +2,111 @@
 
 [![CI](https://github.com/danielvanza/finance-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/danielvanza/finance-tracker/actions/workflows/ci.yml)
 
-Personal finance tracker for a Dutch household. Import bank transactions from CSV, auto-categorise them with rules and AI, track budgets using the 50/30/20 rule, and visualise spending on a dashboard.
+A private budget for a two-person household. It reads ING exports, sorts the payments with rules and Claude, and answers one question: what is free to spend until payday? Both people use it, in the web app and through a Telegram bot in a group they share.
+
+## What it does
+
+- **Import.** An ING export (CSV, English or Dutch column names) from the Import page or dropped into Telegram. Rows already in are skipped, whichever language the earlier file was in.
+- **Sorting.** Rules first: a description containing a rule's text gets its category, and when several fit the longest text wins. A text shorter than six characters only fits as a word of its own, so "esso" does not sort "Espresso Bar". Then Claude. A guess Claude is sure of counts at once and is marked "auto". A doubtful one waits, counts nowhere, and is put to the household as a question with buttons in Telegram; it is also in the review list on Transactions.
+- **Remembering.** When a person says where a shop belongs, that becomes a rule. The shop's other waiting payments follow at once and later ones are sorted without a question. A payment through a service that hides the shop (Tikkie, PayPal) is asked about each time and never becomes a rule.
+- **Month.** The headline is "free to spend until payday": what is left in the plan, less the fixed bills still to come this month, less what this month sets aside. Underneath: the pace line, needs, wants and savings against the plan and against the household's own target split, and every category.
+- **Set-asides.** A yearly or irregular bill is entered once (name, amount, due month). An equal share is set aside each month until it is due. The payment that settles it is marked and comes out of what was set aside; only the part not set aside yet counts as spending.
+- **Plan.** A planned amount changed in a month stays for the months after it. Earlier months keep theirs.
+- **Chat.** The same assistant in a panel in the app and in Telegram. It answers from the app's own figures and proposes changes as cards; nothing changes without Apply.
+- **Telegram.** Text, voice notes (English), photos of a receipt or a banking screen, and ING files. It also writes first: when the bank data is over a week old, a recap on Sunday evening, and how the month ended on the first day of the next. Never between 21:00 and 9:00, and whatever is owed at one moment arrives as one message.
+
+Money moved from the shared account to one of the household's own names is sorted into "To personal accounts" and counts as spending. The names are entered once in Setup, as the bank shows them.
 
 ## Architecture
 
 ```
-frontend/          React 19 + TypeScript + Vite (port 5173)
-  src/pages/       Month, Transactions, Trends, Setup, Import
-  src/components/  ReviewCard, CategorySelect, CategoryManager, StandingAdjustments
-  src/api.ts       All backend fetch calls via /api proxy
+frontend/              React 19 + TypeScript + Vite
+  src/pages/           Month, Transactions, Trends, Setup, Import
+  src/components/      shared parts: review card, set-asides, target split, recurring payments, reports
+  src/chat/            the chat panel and its cards
+  e2e/                 Playwright specs: the real app, bot and browser
 
-backend/           FastAPI + SQLAlchemy + SQLite (port 8000)
-  routers/         imports, transactions, budget, rules, dashboard, categories
-  importers/       ING, Revolut, DEGIRO CSV parsers
-  categorizer/     Rule engine + Claude AI fallback
-  data/finance.db  SQLite database (auto-created on startup)
+backend/               FastAPI + SQLAlchemy + SQLite
+  routers/             imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings, chat
+  importers/ing.py     the ING parser (English and Dutch)
+  categorizer/         rules, Claude (sure or doubtful), and the sandboxed Claude login
+  guesses.py           which guesses count, the questions about the rest, and what an answer teaches
+  set_asides.py        the sums behind set-asides
+  nudges.py            what the bot says unasked
+  voice.py             voice notes to text, on this machine
+  assistant/           the chat agent: its tools, what it can change, the conversation
+  telegram_bot.py      the Telegram bot, a process of its own
 ```
 
-**Database:** SQLite file at `backend/data/finance.db`. Schema is managed by Alembic (`backend/alembic/`): fresh databases are migrated automatically to head on startup. An EXISTING database must be registered once: `cd backend && .venv/bin/alembic stamp head` (its schema already equals the baseline; the first upgrade after stamping is a no-op). Override the path with the `DATABASE_URL` env var.
+**Database:** SQLite at `backend/data/finance.db` (override with `DATABASE_URL`). Alembic migrations in `backend/alembic/` run on startup. A database from before Alembic must be registered once with `cd backend && .venv/bin/alembic stamp afe0635828ba`; the next start brings it up to date.
 
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com/) (optional, for AI categorisation)
-
-## Quick Start (one command)
+## Quick start
 
 ```bash
-./dev.sh
+./dev.sh          # installs what is missing, then runs backend (8000) and frontend (5173)
+./dev.sh setup    # only install
 ```
 
-This bootstraps the backend virtualenv + dependencies and the frontend
-`node_modules` on first run, then starts **both** servers together. Press
-`Ctrl+C` to stop them both. Open http://localhost:5173.
-
-Run `./dev.sh setup` to only install/refresh dependencies without starting the
-servers. The manual, two-terminal steps below still work if you prefer them.
-
-## Setup
-
-### Backend
+Open http://localhost:5173. Or by hand:
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && uvicorn main:app --reload
+cd frontend && npm install && npm run dev
 ```
 
-Create a `.env` file in the project root (or `backend/`):
+Needs Python 3.11+ and Node 20+.
 
-```
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
+## Claude
 
-The AI categoriser uses Claude Haiku. Without the key, transactions that don't match a rule will remain uncategorised -- the app still works.
+Sorting and the chat use Claude in one of two ways:
 
-### Frontend
+- **The machine's Claude login** (`CLAUDE_CLI_HOME` set): `claude -p` in a bubblewrap sandbox with no built-in tools, no settings and an empty `/home` (`categorizer/claude_cli.py`). The chat only works this way. Needs `bwrap` and the `claude` CLI.
+- **An API key** (`ANTHROPIC_API_KEY`): for sorting imports only.
 
-```bash
-cd frontend
-npm install
-```
+With neither, rules still sort and everything else waits in the review list.
 
-## Running
+## Environment
 
-Start both in separate terminals:
-
-```bash
-# Terminal 1 -- backend
-cd backend
-uvicorn main:app --reload
-
-# Terminal 2 -- frontend
-cd frontend
-npm run dev
-```
-
-Open http://localhost:5173
-
-The Vite dev server proxies `/api` requests to the backend at port 8000.
+| Variable | Default | What it is |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./data/finance.db` | Where the database is. |
+| `ANTHROPIC_API_KEY` | none | Claude for sorting imports, when the login below is not used. |
+| `CLAUDE_CLI_HOME` | none | Private folder for the sandboxed Claude login. Turns the chat on. |
+| `CHAT_MODEL` | `sonnet` | The model behind both chats. |
+| `SORT_MODEL` | `sonnet` | The model that sorts imported rows, on the Claude login. |
+| `CHAT_TIME_LIMIT_SECONDS` | `540` | How long one reply may take. |
+| `AI_TIME_BUDGET_SECONDS` | `60` | How long sorting one import may take; the rest waits for next time. |
+| `VOICE_MODEL` | `small.en` | The speech model for voice notes. Fetched once, on the first voice note. |
+| `FINANCE_TIMEZONE` | `Europe/Amsterdam` | The household's time, for dates and for when the bot may write. |
+| `NUDGES` | `on` | `off` stops the bot writing unasked. |
+| `TELEGRAM_BOT_TOKEN` | none | From BotFather. |
+| `TELEGRAM_ALLOWED_USER_IDS` | none | The two numeric Telegram accounts, comma-separated. |
+| `TELEGRAM_GROUP_ID` | none | The numeric id of the household's group. |
+| `FINANCE_API_URL` | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 
 ## Deployment
 
-The app has no sign-in of its own, so it runs on loopback behind something that signs people in. Here that is the life dashboard, which serves it at `/finances` to anyone with a dashboard session.
+The app has no sign-in of its own, so it runs on loopback behind something that signs people in. Here that is the life dashboard, which serves it at `/finances`.
 
-- `deploy/deploy.sh` builds this checkout's HEAD into `~/apps/household-finance/releases/<sha>` (UI built for `/finances/`) and switches the `household-finance` systemd user unit to it, rolling back if `/api/health` doesn't answer.
-- `deploy/household-finance.service` runs `backend/serve.py` (API under `/api`, built UI at `/`) on `127.0.0.1:18600`. The database is outside the releases, at `~/.local/share/household-finance/finance.db`.
-- `deploy/household-finance-telegram.service` runs the private Telegram bot (`backend/telegram_bot.py`), a separate process that talks to the app over loopback. It needs `~/.config/household-finance/telegram.env` (mode 600) with `TELEGRAM_BOT_TOKEN` from BotFather and `TELEGRAM_ALLOWED_USER_ID`; `deploy.sh` restarts it once it is enabled.
-- **Claude without an API key:** with `CLAUDE_CLI_HOME` set, the categoriser runs `claude -p` on the machine's existing login (`categorizer/claude_cli.py`): no tools, no settings, an allowlisted environment and a bubblewrap sandbox where `/home` is empty. It needs `bwrap` and the `claude` CLI. Without it, `ANTHROPIC_API_KEY` is used as before. `AI_TIME_BUDGET_SECONDS` limits the AI time per import; whatever it doesn't reach waits in the review queue.
+- `deploy/deploy.sh` builds this checkout's HEAD into `~/apps/household-finance/releases/<sha>` and switches the `household-finance` systemd user unit to it, rolling back if `/api/health` does not answer.
+- `deploy/household-finance.service` runs `backend/serve.py` (API under `/api`, built UI at `/`) on `127.0.0.1:18600`. The database lives outside the releases, at `~/.local/share/household-finance/finance.db`.
+- `deploy/household-finance-telegram.service` runs the bot. It reads `~/.config/household-finance/telegram.env` (mode 600).
+
+### Setting up the Telegram group
+
+1. In BotFather, turn the bot's group privacy **off** (`/setprivacy`, Disable). Otherwise Telegram hands a bot in a group only commands.
+2. Make a group with the two of you and add the bot.
+3. Put both numeric account ids in `TELEGRAM_ALLOWED_USER_IDS`, comma-separated, and restart the bot. With no `TELEGRAM_GROUP_ID` it answers nobody.
+4. Write anything in the group. The bot's log (`journalctl --user -u household-finance-telegram`) then names the group's id. Put it in `TELEGRAM_GROUP_ID` and restart.
+
+From then on the bot works in that group only. Any other account or group gets silence, and a private message from one of you gets one line pointing to the group.
 
 ## Testing
 
 ```bash
-# Backend (pytest)
-cd backend
-pytest
-
-# Frontend (vitest)
-cd frontend
-npx vitest
+cd backend && pytest                                   # unit tests, in-memory SQLite
+cd frontend && npx vitest run                          # component tests
+cd frontend && npm run build && npx playwright test    # end to end: real app, bot and browser
 ```
 
-Backend tests use an in-memory SQLite database per test. Frontend tests use vitest with jsdom and @testing-library/react.
-
-## How It Works
-
-### Import Flow
-
-1. Upload a CSV from ING, Revolut, or DEGIRO on the Import page
-2. Preview shows parsed transactions with duplicate detection (SHA-256 hash of source|date|amount|description)
-3. On confirm, each transaction is categorised:
-   - **Rule engine** (first): case-insensitive substring match on description, ordered by priority. Matched transactions are auto-confirmed.
-   - **Claude AI** (fallback): sends the description + category list to Claude Haiku, returns a category with confidence score. AI-categorised transactions need human review.
-   - If neither matches, the transaction is left uncategorised.
-
-### Categories (50/30/20 Rule)
-
-11 default categories seeded on startup:
-
-| Type | Categories |
-|------|-----------|
-| **Needs** (50%) | Taxes & Mortgage, Utilities, Food - Essential, Transportation, Insurance, Medical & Healthcare |
-| **Wants** (30%) | Food - Not Essential, Recreation & Entertainment, Miscellaneous |
-| **Savings** (20%) | DEGIRO, Fun Account |
-
-### Review Workflow
-
-AI-categorised and uncategorised transactions appear in a review queue on the Transactions page. For each transaction you can:
-
-- **Confirm** the suggested category
-- **Skip** to review later
-- **Create a rule** -- saves a pattern-based rule and retroactively applies it to all matching unconfirmed transactions
-
-### Month
-
-- What's left to spend this financial month (needs + wants), and whether that is more or less than planned by now
-- Spending against plan as one line across the month, with today marked
-- Needs, wants and savings against plan, then every category: open one to edit its plan or see its transactions
-- After a gap in the bank files it says it can't tell yet, names the gap, and offers the import
-
-Trends holds the month-by-month history. Setup holds rules, categories, standing adjustments and the month start day.
-
-## Project Structure
-
-```
-backend/
-  main.py              FastAPI app, CORS, startup, router registration
-  db.py                SQLAlchemy engine + session (SQLite)
-  models.py            Category, Transaction, Rule, Budget models
-  schemas.py           Pydantic request/response schemas
-  seed.py              Default categories + budget templates
-  importers/
-    base.py            Abstract base importer + SHA-256 hashing
-    ing.py             ING bank CSV parser
-    revolut.py         Revolut CSV parser
-    degiro.py          DEGIRO CSV parser
-  categorizer/
-    rules.py           Pattern-matching rule engine
-    ai.py              Claude AI categoriser (Haiku 4.5)
-  routers/
-    imports.py         POST /import/preview, /import/confirm
-    transactions.py    GET/PATCH /transactions, /transactions/review
-    budget.py          GET/PATCH /budget
-    rules.py           CRUD /rules, POST /rules/test
-    dashboard.py       GET /dashboard/summary, /dashboard/pace, /dashboard/trends
-    categories.py      GET /categories
-  tests/               pytest suite (35 tests, in-memory SQLite)
-
-frontend/
-  src/
-    App.tsx            Router + QueryClient setup
-    api.ts             Backend API client
-    types.ts           TypeScript interfaces
-    index.css          Dark theme design system
-    pages/             Month, Transactions, Trends, Setup, Import
-    components/        ReviewCard, CategorySelect, CategoryManager, StandingAdjustments
-    tests/             vitest suite (6 tests, jsdom)
-```
+The end-to-end specs start their own app, bot and a stand-in for Telegram on throwaway databases. The `*-controlled` specs script Claude; the `*-real` specs use the machine's Claude login on synthetic data.

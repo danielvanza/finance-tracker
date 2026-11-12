@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { dayLabel } from '../dates'
-import { Repeat, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import type { Transaction, Category, SplitInput } from '../types'
 import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
-import { merchantFor, ruleKeyOk } from './merchants'
 
 export interface ReviewDecision {
   category_id?: number
@@ -20,7 +19,6 @@ interface Props {
   categories: Category[]
   onConfirm: (id: number, decision: ReviewDecision) => void
   onSkip: () => void
-  onCreateRule: (id: number, categoryId: number) => void
 }
 
 const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
@@ -29,7 +27,7 @@ const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
   transfer: { label: 'Transfer', hint: "Between the household's own accounts: left out of totals." },
 }
 
-export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip, onCreateRule }: Props) {
+export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip }: Props) {
   const isPositive = tx.amount_cents > 0
 
   const initialKind: PositiveKind = useMemo(() => {
@@ -90,8 +88,6 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
   }
 
   const isExpense = tx.amount_cents < 0
-  const merchant = merchantFor(tx.description)
-  const ruleOk = ruleKeyOk(merchant.key)
 
   return (
     <div className="panel rev">
@@ -112,8 +108,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
         {tx.categorised_by === 'ai' && tx.category_name && (
           <div className="well rev-guess">
             <Sparkles size={14} aria-hidden="true" />
-            <span className="rev-guess-text">AI suggests <strong>{tx.category_name}</strong></span>
-            {tx.ai_confidence && <span className="lab num">{Math.round(tx.ai_confidence * 100)}%</span>}
+            <span className="rev-guess-text">Claude was not sure. Its guess: <strong>{tx.category_name}</strong></span>
           </div>
         )}
       </div>
@@ -173,15 +168,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           <button type="button" className="btn" onClick={onSkip}>Skip</button>
         </div>
 
-        {/* Rule creation: not for splits or refunds, which carry one-off judgement */}
         {!splitMode && !isRefund && (
-          <>
-            <button type="button" className="btn btn-wide rev-rule" disabled={selectedCategory === null || !ruleOk} onClick={() => selectedCategory !== null && onCreateRule(tx.id, selectedCategory)}>
-              <Repeat size={14} aria-hidden="true" />
-              <span>Always categorise "{merchant.name}" as this</span>
-            </button>
-            {!ruleOk && <p className="tx-hint">That name is too short to match safely.</p>}
-          </>
+          <p className="tx-hint">Your answer is remembered: this shop's other waiting payments, and later ones, follow it.</p>
         )}
       </div>
     </div>

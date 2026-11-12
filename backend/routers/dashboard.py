@@ -3,23 +3,26 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 from decimal import Decimal
 from datetime import date, datetime, timedelta
-from aggregate import effective_parts, is_spend_part, spend_contribution
+from aggregate import is_spend_part, spend_contribution
 from db import get_db
 from financial_month import label_month_for_date
 from models import Budget, Category, Transaction, TransactionSource
 from routers.budget import _auto_populate
+from routers import recurring as recurring_router
+import clock
 import money
+import set_asides
 import spend_service
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 EXPENSE_TYPES = ("needs", "wants", "savings")
 SPENDABLE_TYPES = ("needs", "wants")
-BANK_SOURCES = (TransactionSource.ing, TransactionSource.revolut, TransactionSource.degiro)
+BANK_SOURCES = (TransactionSource.ing,)
 
 
 def _today() -> date:
-    return date.today()
+    return clock.today()
 
 
 def _cat_type(category: Category) -> str:
@@ -34,8 +37,7 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
     except ValueError:
         raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
 
-    start_date, end_date = spend_service.financial_month_bounds(
-        db, year, mo, materialise=True)
+    start_date, end_date = spend_service.financial_month_bounds(db, year, mo)
     parts = spend_service.confirmed_parts_in_range(db, start_date, end_date)
 
     cats = db.query(Category).all()
@@ -81,22 +83,6 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
     wants_total = sum(v for cid, v in expense_breakdown.items()
                       if _cat_type(cat_map[cid]) == "wants")
 
-    # Last 6 months trend using financial month ranges
-    trend = []
-    for i in range(5, -1, -1):
-        m = mo - i
-        y = year
-        while m <= 0:
-            m += 12
-            y -= 1
-        trend_start, trend_end = spend_service.financial_month_bounds(db, y, m)
-        trend_parts = spend_service.confirmed_parts_in_range(db, trend_start, trend_end)
-        trend_totals = spend_service.spend_totals_by_category(trend_parts, exclude_cat_ids)
-        trend.append({
-            "month": f"{y}-{m:02d}",
-            "total_cents": money.to_cents(sum(trend_totals.values())),
-        })
-
     left_over = total_income - total_expenses
     return {
         "month": month,
@@ -111,7 +97,6 @@ def summary(month: str = Query(...), db: Session = Depends(get_db)):
             "wants_cents": money.to_cents(wants_total),
             "savings_cents": money.to_cents(total_savings),
         },
-        "monthly_trend": trend,
     }
 
 
@@ -137,7 +122,7 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
 
     month_date = date(year, mo, 1)
     _auto_populate(month_date, db)
-    start, end = spend_service.financial_month_bounds(db, year, mo, materialise=True)
+    start, end = spend_service.financial_month_bounds(db, year, mo)
     types = {c.id: _cat_type(c) for c in db.query(Category).all()}
 
     plan = {kind: Decimal("0") for kind in EXPENSE_TYPES}
@@ -154,7 +139,7 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
     actual = {kind: Decimal("0") for kind in EXPENSE_TYPES}
     spent_on: dict[date, Decimal] = {}
     for tx in confirmed:
-        for category_id, amount, is_refund in effective_parts(tx):
+        for category_id, amount, is_refund in set_asides.counted_parts(tx, start_day):
             kind = types.get(category_id)
             if kind not in EXPENSE_TYPES or not is_spend_part(amount, is_refund):
                 continue
@@ -199,6 +184,10 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
             y, m = (y + 1, 1) if m == 12 else (y, m + 1)
 
     is_current = (year, mo) == current_label
+    spendable_actual = money.to_cents(sum(actual[k] for k in SPENDABLE_TYPES))
+    free = _free_to_spend(db, f"{year}-{mo:02d}", spendable_plan - spendable_actual, (end - today).days) \
+        if is_current and data_through is not None else None
+    waiting = db.query(Transaction).filter(Transaction.confirmed == False).all()  # noqa: E712
     return {
         "month": f"{year}-{mo:02d}",
         "current_month": f"{current_label[0]}-{current_label[1]:02d}",
@@ -212,7 +201,9 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
         "plan_cents": {k: money.to_cents(v) for k, v in plan.items()},
         "actual_cents": {k: money.to_cents(v) for k, v in actual.items()},
         "spendable_plan_cents": spendable_plan,
-        "spendable_actual_cents": money.to_cents(sum(actual[k] for k in SPENDABLE_TYPES)),
+        "spendable_actual_cents": spendable_actual,
+        "free": free,
+        "newest_bank_date": last_any.isoformat() if last_any else None,
         "pace_delta_cents": pace_delta_cents,
         "daily": daily,
         "data_through": data_through.isoformat() if data_through else None,
@@ -221,27 +212,41 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
             for s in BANK_SOURCES
         ],
         "behind_months": behind_months,
-        "to_review": db.query(func.count(Transaction.id)).filter(
-            Transaction.confirmed == False).scalar(),  # noqa: E712
+        "to_review": len(waiting),
+        "to_review_in_month": sum(1 for t in waiting if start <= t.date <= end),
+    }
+
+
+def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int) -> dict:
+    """What can still be spent freely this month: what is left in the plan, less the fixed bills that
+    have not been debited yet and less what this month sets aside for later bills."""
+    bills = [
+        {"key": i["key"], "name": i["name"], "amount_cents": i["amount_cents"] * i["remaining"],
+         "next_date": i["next_date"], "category_name": i["category_name"]}
+        for i in recurring_router.recurring(label, db)["items"]
+        if i["state"] in ("due", "expected") and i["category_type"] in SPENDABLE_TYPES
+    ]
+    kept = set_asides.month_view(db, label)
+    bills_cents = sum(b["amount_cents"] for b in bills)
+    free = left_cents - bills_cents - kept["set_aside_cents"]
+    return {
+        "free_cents": free,
+        # Today can still be spent, so it counts.
+        "per_day_cents": free // (days_left + 1) if free > 0 else None,
+        "left_in_plan_cents": left_cents,
+        "bills_cents": bills_cents,
+        "bills": bills,
+        "set_aside_cents": kept["set_aside_cents"],
+        "set_asides": [
+            {"id": i["id"], "name": i["name"], "monthly_cents": i["monthly_cents"]}
+            for i in kept["items"] if i["monthly_cents"]
+        ],
     }
 
 
 def _minus_months(y: int, m: int, k: int) -> tuple[int, int]:
     total = y * 12 + (m - 1) - k
     return total // 12, total % 12 + 1
-
-
-def _savings_rate_bps(income_cents: int, expenses_cents: int):
-    """Savings rate as integer basis points, HALF_UP, on cents ints.
-
-    round_half_up((income - expenses) / income * 10000) via divmod integer
-    math only (no floats); None when income <= 0 (undefined/negative-income
-    months carry no meaningful rate).
-    """
-    if income_cents <= 0:
-        return None
-    q, r = divmod((income_cents - expenses_cents) * 10000, income_cents)
-    return q + 1 if 2 * r >= income_cents else q
 
 
 @router.get("/trends")
@@ -259,7 +264,7 @@ def trends(
                                 detail="end_month must be in YYYY-MM format")
     else:
         year, mo = label_month_for_date(
-            date.today(), spend_service.get_start_day(db))
+            clock.today(), spend_service.get_start_day(db))
 
     cats = db.query(Category).all()
     cat_map = {c.id: c for c in cats}
@@ -268,11 +273,9 @@ def trends(
                        if _cat_type(c) == "savings"}
 
     series: list[dict] = []
-    prev: dict | None = None
     for k in range(months - 1, -1, -1):
         y, m = _minus_months(year, mo, k)
-        bounds = spend_service.financial_month_bounds(
-            db, y, m, materialise=True)
+        bounds = spend_service.financial_month_bounds(db, y, m)
         parts = spend_service.confirmed_parts_in_range(db, *bounds)
 
         # Spend contribution is -amount, so refund parts net against expenses
@@ -299,15 +302,6 @@ def trends(
         total_expenses_cents = money.to_cents(total_expenses)
         total_income_cents = money.to_cents(total_income)
         net_cents = money.to_cents(total_income - total_expenses)
-        rate_bps = _savings_rate_bps(total_income_cents, total_expenses_cents)
-
-        top_categories = [
-            {"category_id": cid, "category_name": cat_map[cid].name,
-             "type": _cat_type(cat_map[cid]),
-             "actual_cents": money.to_cents(actual)}
-            for cid, actual in sorted(
-                expense_breakdown.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
-        ]
 
         entry = {
             "month": f"{y}-{m:02d}",
@@ -317,29 +311,8 @@ def trends(
             "savings_cents": savings_cents,
             "total_income_cents": total_income_cents,
             "net_cents": net_cents,
-            "savings_rate_bps": rate_bps,
-            "top_categories": top_categories,
         }
-        if prev is None:
-            entry["mom_deltas"] = None
-        else:
-            entry["mom_deltas"] = {
-                "total_expenses_cents":
-                    total_expenses_cents - prev["total_expenses_cents"],
-                "needs_cents": needs_cents - prev["needs_cents"],
-                "wants_cents": wants_cents - prev["wants_cents"],
-                "savings_cents": savings_cents - prev["savings_cents"],
-                "total_income_cents":
-                    total_income_cents - prev["total_income_cents"],
-                "net_cents": net_cents - prev["net_cents"],
-                "savings_rate_bps":
-                    rate_bps - prev["savings_rate_bps"]
-                    if rate_bps is not None
-                    and prev["savings_rate_bps"] is not None
-                    else None,
-            }
         series.append(entry)
-        prev = entry
 
     return {
         "months_requested": months,

@@ -76,7 +76,7 @@ def test_paid_this_month_and_the_next_date(ctx):
 def test_price_rise_is_flagged_and_the_new_price_is_the_amount(ctx):
     db, client = ctx
     for d, c in [(date(2026, 8, 1), -17.99), (date(2026, 9, 1), -17.99), (date(2026, 10, 1), -17.99), (date(2026, 11, 1), -19.99)]:
-        _add(db, d, c, "Netflix", "Recreation & Entertainment", source="revolut")
+        _add(db, d, c, "Netflix", "Recreation & Entertainment", source="ing")
     _files_to_today(db)
     netflix = _by_key(_get(client))["netflix"]
     assert netflix["state"] == "paid"

@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Daniel and his partner, a Dutch household. Both open the app under the one shared sign-in of the life dashboard; there are no per-person accounts or per-person figures. Wording and flows can't assume which of the two is looking.
+Daniel and his partner, a Dutch household. Both open the app under the one shared sign-in of the life dashboard, and both talk to its bot in one Telegram group; there are no per-person accounts or per-person figures. One of the two is not technical. Wording and flows can't assume which of the two is looking.
 
 ## Product Purpose
 
@@ -20,21 +20,23 @@ A private household ledger that sits beside the life dashboard: the household's 
 
 ## Operating Context
 
-- Budgeting has lapsed for weeks to months and is being picked up again. Coming back after a gap, with stale data and a large review backlog, is a normal state the product has to handle, and there is no settled import rhythm yet.
-- The routine is: export CSVs from the banks, import, review what rules didn't settle, check the month.
+- Budgeting has lapsed for weeks to months and is being picked up again. Coming back after a gap, with stale data, is a normal state the product has to handle.
+- The routine is: export a CSV from ING, send it to the bot or the Import page, answer the few questions about what Claude was not sure of, check the month. The bot says when the bank data is more than a week old.
 - The financial month starts on a configurable day (default the 24th), so "this month" is not the calendar month.
 - Reached from the life dashboard at `/finances`, in its own tab.
 
 ## Capabilities and Constraints
 
 - Sibling app of life-dashboard: separate repository, backend, build and deploy (loopback port 18600, proxied at `/finances`). It has no sign-in of its own; the dashboard's sign-in protects it.
-- CSV importers for ING, Revolut and DEGIRO, plus manually added transactions. Deduplicated by hash of source, date, amount and description.
-- Categorisation: priority-ordered substring rules first (auto-confirmed), then Claude (needs human review), otherwise uncategorised.
+- The shared ING account only: ING exports with English or Dutch columns, plus manually added transactions. A row already in is skipped, whichever language its earlier export was in.
+- Sorting: rules first (the longest matching text wins), then Claude. A guess Claude is sure of counts at once; a doubtful one waits, counts nowhere, and is asked about. A person's answer for a shop becomes a rule.
 - Category types: needs, wants, savings, income, exclude. Categories are user-managed and ordered.
-- Budget per category per month, with drill-down and recategorisation.
-- Transactions can be split across categories and marked as refunds. Standing adjustments are monthly recurring income/expense pairs.
+- A plan per category; a changed amount applies from its month on. The household sets its own target split between needs, wants and savings.
+- The headline is "free to spend until payday": what is left in the plan, less fixed bills still to come and what the month sets aside.
+- Set-asides spread a yearly or irregular bill over the months before it is due.
+- Transactions can be split across categories and marked as refunds. Money moved to one of the household's own accounts counts as spending.
+- A Telegram bot in the household's group: text, voice notes in English, photos and ING files. It writes first when the bank data is old, with a weekly recap and at the month's close.
 - Money is integer cents on the wire. British spelling for domain terms (categorise).
-- Undecided: whether the household wants reminders that an import is due, and in what form.
 
 ## Brand Commitments
 
@@ -47,8 +49,8 @@ A private household ledger that sits beside the life dashboard: the household's 
 
 ## Product Principles
 
-- Answer "are we on track?" before showing anything else.
+- Answer "what is free to spend?" before showing anything else.
 - Make coming back easy: a gap in the data is a state to guide through, not an error or a guilt trip.
-- People confirm, machines sort: keep human review of guesses fast and obvious.
+- Machines sort, people decide the doubtful: what Claude is sure of counts by itself; what it is not sure of is a short question, asked once.
 - Simple over elaborate: fewer places to go, and nothing on screen without a job.
 - Written for two people: neutral about who is looking.

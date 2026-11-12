@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { api } from '../../api'
 import { Check, X } from 'lucide-react'
 import { dayLabel } from '../../dates'
 import { formatCents, formatEuros } from '../../money'
@@ -26,12 +28,14 @@ function dueWhen(item: RecurringItem, today: string) {
   return `${dayLabel(next)} · ${in_}`
 }
 
-function Row({ item, kind, data, open, onToggle }: {
+function Row({ item, kind, data, open, onToggle, onCount }: {
   item: RecurringItem
-  kind: 'due' | 'expected' | 'paid' | 'stopped'
+  kind: 'due' | 'expected' | 'paid' | 'stopped' | 'ignored'
   data: Recurring
   open: boolean
   onToggle: () => void
+  /** Leave this payment out of the fixed bills, or count it again. */
+  onCount: (item: RecurringItem, counted: boolean) => void
 }) {
   const id = `rc-hist-${item.key.replace(/\W+/g, '-')}`
   const more = item.remaining > 1 ? ` · ${item.remaining} to go` : ''
@@ -52,6 +56,7 @@ function Row({ item, kind, data, open, onToggle }: {
           {kind === 'expected' && `Expected ${dayLabel(item.next_date!)} · ${item.cadence}${more}`}
           {kind === 'paid' && <><Check className="rc-tick" size={14} strokeWidth={2.4} aria-hidden="true" />Paid {dayLabel(item.last_date)}</>}
           {kind === 'stopped' && `Last paid ${dayLabel(item.last_date)}`}
+          {kind === 'ignored' && `Last paid ${dayLabel(item.last_date)} · ${item.cadence} · not counted`}
           {rise > 0 && <span className="rc-flag">Up {formatCents(rise)}</span>}
         </span>
       </button>
@@ -62,6 +67,11 @@ function Row({ item, kind, data, open, onToggle }: {
               <div key={h.date}><dt>{dayLabel(h.date)}</dt><dd>{formatCents(h.amount_cents)}</dd></div>
             ))}
           </dl>
+          {kind !== 'stopped' && (
+            <button type="button" className="btn btn-sm rc-count" onClick={() => onCount(item, kind === 'ignored')}>
+              {kind === 'ignored' ? 'Count as a fixed bill again' : 'Not a fixed bill'}
+            </button>
+          )}
         </div>
       )}
     </li>
@@ -120,6 +130,12 @@ export default function RecurringSheet({ data, onClose }: { data: Recurring; onC
   const [openKey, setOpenKey] = useState<string | null>(null)
   const sheet = useRef<HTMLElement>(null)
   const toggle = (key: string) => setOpenKey(k => (k === key ? null : key))
+  const qc = useQueryClient()
+  const count = async (item: RecurringItem, counted: boolean) => {
+    await (counted ? api.countBillAgain(item.key) : api.ignoreBill(item.key))
+    qc.invalidateQueries({ queryKey: ['recurring'] })
+    qc.invalidateQueries({ queryKey: ['pace'] })
+  }
 
   useEffect(() => {
     sheet.current?.querySelector<HTMLElement>('.tx-close')?.focus()
@@ -144,13 +160,13 @@ export default function RecurringSheet({ data, onClose }: { data: Recurring; onC
   const { head, sub } = lead(data, due, expected)
   const later = data.status === 'ok' ? nextMonth(data) : null
 
-  const group = (title: string, items: RecurringItem[], kind: 'due' | 'expected' | 'paid' | 'stopped') =>
+  const group = (title: string, items: RecurringItem[], kind: 'due' | 'expected' | 'paid' | 'stopped' | 'ignored') =>
     items.length > 0 && (
       <div className="rc-group">
         <h3 className="lab">{title}</h3>
         <ul className="rc-list">
           {items.map(item => (
-            <Row key={item.key} item={item} kind={kind} data={data} open={openKey === item.key} onToggle={() => toggle(item.key)} />
+            <Row key={item.key} item={item} kind={kind} data={data} open={openKey === item.key} onToggle={() => toggle(item.key)} onCount={count} />
           ))}
         </ul>
       </div>
@@ -179,6 +195,7 @@ export default function RecurringSheet({ data, onClose }: { data: Recurring; onC
         {group(data.status === 'gap' && data.data_through ? `Paid up to ${dayLabel(data.data_through)}` : 'Paid this month', paid, 'paid')}
         {later && <p className="rc-next">{later}</p>}
         {group('Stopped?', stopped, 'stopped')}
+        {group('Not counted as fixed bills', of('ignored'), 'ignored')}
       </section>
     </div>
   )

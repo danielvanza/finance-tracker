@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass, field
 import os
 import re
 import time
@@ -13,7 +14,7 @@ BATCH_SIZE = 50  # Max transactions per AI call
 AI_TIMEOUT_SECONDS = 30
 AI_MAX_RETRIES = 2
 AI_TIME_BUDGET_SECONDS = int(os.getenv("AI_TIME_BUDGET_SECONDS", "60"))
-CLI_MODEL = "haiku"
+CLI_MODEL = os.getenv("SORT_MODEL", "sonnet")  # the model that sorts imported rows, on the Claude login
 CLI_TIMEOUT_SECONDS = 120
 SYSTEM_PROMPT = "You are a financial transaction categoriser. Respond with JSON only."
 
@@ -27,14 +28,49 @@ def _strip_markdown_fences(text: str) -> str:
     return stripped.strip()
 
 
-def _get_categories_for_sign(categories: list[Category], amount) -> list[Category]:
-    """Filter categories by transaction sign compatibility."""
-    if amount > 0:
-        return [c for c in categories
-                if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("income", "exclude")]
-    else:
-        return [c for c in categories
-                if (c.type.value if hasattr(c.type, "value") else str(c.type)) in ("needs", "wants", "savings", "exclude")]
+def _type(category: Category) -> str:
+    return category.type.value if hasattr(category.type, "value") else str(category.type)
+
+
+@dataclass
+class Guess:
+    """Claude's sorting of one payment. `sure` means it counts without a person looking; when it is not
+    sure, `options` are the categories it could be, most likely first (the guess itself included)."""
+    category: Category
+    sure: bool
+    options: list[Category] = field(default_factory=list)
+
+    @property
+    def confidence(self) -> float:
+        return 0.95 if self.sure else 0.5
+
+
+_HOW_SURE = (
+    'Also say whether you are sure. Be sure ("sure": true) whenever the name tells you what kind of shop, '
+    "restaurant, service or bill it is, at home or abroad. Then pick the closest category, also when two would "
+    "do: a supermarket or convenience store is groceries, a restaurant, café, bar or takeaway is eating out, "
+    "public transport, fuel and parking are transport, and a drugstore, web shop or general store goes where "
+    'everyday shopping goes. Be not sure ("sure": false) only when a person has to say what it was: a '
+    "person's name; a transfer to or from another account, a bank or a savings account; a payment service that "
+    "hides what was bought, such as Tikkie or PayPal; or a name that gives no hint of what it is. When you are "
+    'not sure, give "options": up to three categories it could be, most likely first.'
+)
+_OUTGOING = (
+    "Sort each payment below into one of the categories.\n"
+    "Categories: {categories}\n\n" + _HOW_SURE + "\n\n"
+    "Payments:\n{lines}\n\n"
+    "Respond with a JSON array only. Each element: "
+    '{{"index": <number>, "category": "<name>", "sure": true or false, "options": ["<name>", ...]}}'
+)
+_INCOMING = (
+    "Each line below is money that came in. Sort each into one of the categories.\n"
+    "Categories: {categories}\n\n" + _HOW_SURE + " Money coming in is only sure when it is plainly a salary "
+    "or a benefit. If it looks like a shop paying back a purchase, it is a refund: you are not sure, and the "
+    "options name the kind of purchase it most likely refunds, from: {refund_categories}.\n\n"
+    "Payments:\n{lines}\n\n"
+    "Respond with a JSON array only. Each element: "
+    '{{"index": <number>, "category": "<name>", "sure": true or false, "options": ["<name>", ...]}}'
+)
 
 
 def _completer():
@@ -55,25 +91,13 @@ def _completer():
     return complete
 
 
-def categorise_with_ai(transaction, db: Session) -> tuple[Category, float] | None:
-    """Categorise a single transaction with AI. Kept for backward compatibility."""
-    results = batch_categorise_with_ai([transaction], db)
-    return results.get(0)
-
-
-def batch_categorise_with_ai(
-    transactions: list, db: Session, cli_only: bool = False
-) -> dict[int, tuple[Category, float]]:
-    """Categorise multiple transactions in a single AI call (or batches of BATCH_SIZE).
+def batch_categorise_with_ai(transactions: list, db: Session, cli_only: bool = False) -> dict[int, Guess]:
+    """Sort many payments in a few Claude calls (BATCH_SIZE each), money in and money out separately.
 
     With cli_only (chat imports) only the Claude login is used and a Claude failure is raised as
-    ClaudeCliError instead of leaving the rows uncategorised, so the import can be refused whole.
+    ClaudeCliError instead of leaving the rows unsorted, so the import can be refused whole.
 
-    Transactions are grouped by sign (income vs expense) and each group gets
-    only the relevant categories in the prompt.
-
-    Returns a dict mapping transaction index -> (Category, confidence).
-    Missing indices mean categorisation failed for that transaction.
+    Returns payment index -> Guess. A missing index means that payment could not be sorted.
     """
     if not transactions:
         return {}
@@ -83,6 +107,9 @@ def batch_categorise_with_ai(
 
     all_categories = db.query(Category).all()
     cat_by_name = {c.name: c for c in all_categories}
+    spending = [c for c in all_categories if _type(c) in ("needs", "wants", "savings")]
+    incoming_fits = [c for c in all_categories if _type(c) in ("income", "exclude")]
+    outgoing_fits = [c for c in all_categories if _type(c) in ("needs", "wants", "savings", "exclude")]
 
     try:
         complete = _completer()
@@ -90,62 +117,48 @@ def batch_categorise_with_ai(
         logger.error(f"[AI categoriser] Configuration error: {e}")
         return {}
 
-    results: dict[int, tuple[Category, float]] = {}
+    results: dict[int, Guess] = {}
     deadline = time.monotonic() + AI_TIME_BUDGET_SECONDS
 
-    # Group by sign: positive (income) and negative (expense)
-    income_txs = [(i, tx) for i, tx in enumerate(transactions) if tx.amount > 0]
-    expense_txs = [(i, tx) for i, tx in enumerate(transactions) if tx.amount <= 0]
+    incoming = [(i, tx) for i, tx in enumerate(transactions) if tx.amount > 0]
+    outgoing = [(i, tx) for i, tx in enumerate(transactions) if tx.amount <= 0]
 
-    for group, group_label in [(income_txs, "income"), (expense_txs, "expense")]:
-        if not group:
+    for group, fits, template in ((incoming, incoming_fits, _INCOMING), (outgoing, outgoing_fits, _OUTGOING)):
+        if not group or not fits:
             continue
-
-        # Get categories appropriate for this sign
-        sample_amount = group[0][1].amount
-        filtered_cats = _get_categories_for_sign(all_categories, sample_amount)
-        if not filtered_cats:
-            continue
-        category_names = [c.name for c in filtered_cats]
-
+        # An option for money coming in may also be a spending category: that reads as a refund of it.
+        may_offer = {c.id for c in fits} | ({c.id for c in spending} if template is _INCOMING else set())
         for batch_start in range(0, len(group), BATCH_SIZE):
             if time.monotonic() >= deadline:
                 break
             batch = group[batch_start: batch_start + BATCH_SIZE]
-            tx_lines = []
-            for _, (global_idx, tx) in enumerate(batch):
-                sign_label = "income" if tx.amount > 0 else "expense"
-                tx_lines.append(f'{global_idx}: "{tx.description}" ({sign_label}, €{abs(tx.amount):.2f})')
-
-            prompt = (
-                f"Categorise each {group_label} transaction below into one of the available categories.\n"
-                f"Available categories: {', '.join(category_names)}\n\n"
-                "Transactions:\n" + "\n".join(tx_lines) + "\n\n"
-                "Respond with a JSON array only. Each element: "
-                '{"index": <number>, "category": "<name>", "confidence": <0.0-1.0>}'
+            prompt = template.format(
+                categories=", ".join(c.name for c in fits),
+                refund_categories=", ".join(c.name for c in spending),
+                lines="\n".join(f'{i}: "{tx.description}" (€{abs(tx.amount):.2f})' for i, tx in batch),
             )
             try:
-                cleaned = _strip_markdown_fences(complete(prompt))
-                items = json.loads(cleaned)
+                items = json.loads(_strip_markdown_fences(complete(prompt)))
                 if not isinstance(items, list):
                     logger.warning(f"[AI categoriser] Expected JSON array, got: {type(items).__name__}")
                     continue
+                wanted = {i for i, _ in batch}
                 for item in items:
                     idx = int(item["index"])
                     cat = cat_by_name.get(item["category"])
-                    if cat is None:
+                    if cat is None or idx not in wanted or cat.id not in {c.id for c in fits}:
                         continue
-                    confidence = float(item["confidence"])
-                    if not (0.0 <= confidence <= 1.0):
-                        continue
-                    results[idx] = (cat, confidence)
+                    options = [cat]
+                    for name in item.get("options") or []:
+                        option = cat_by_name.get(name)
+                        if option is not None and option.id in may_offer and option not in options:
+                            options.append(option)
+                    results[idx] = Guess(cat, item.get("sure") is True, options[:3])
             except (anthropic.APIError, claude_cli.ClaudeCliError) as e:
                 if cli_only:
                     raise
                 logger.warning(f"[AI categoriser] Claude error: {e}")
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                logger.warning(f"[AI categoriser] Parse error: {e}")
-            except TypeError as e:
-                logger.error(f"[AI categoriser] Configuration error: {e}")
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError, AttributeError) as e:
+                logger.warning(f"[AI categoriser] Parse error: {type(e).__name__}")
 
     return results

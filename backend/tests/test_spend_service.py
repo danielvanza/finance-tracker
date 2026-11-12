@@ -35,7 +35,7 @@ def _seed_dashboard_trio(db):
     ))
     db.add(Transaction(
         date=date(2026, 3, 23), amount=Decimal("-20.00"),
-        description="Bol.com", source="revolut",
+        description="Bol.com", source="ing",
         category_id=cat.id, confirmed=True, categorised_by="rule",
         import_hash="hash-test-3",
     ))
@@ -52,9 +52,6 @@ def test_parity_with_legacy_fixture(client, db):
     assert body["total_income_cents"] == 346026
     assert body["total_expenses_cents"] == 6740
     assert body["left_over_cents"] == 339286
-    last = body["monthly_trend"][-1]
-    assert isinstance(last["total_cents"], int)
-    assert last["month"] == "2026-04"
 
     # Budget actuals flow through the same service seam.
     food = db.query(Category).filter_by(name="Food - Essential").one()

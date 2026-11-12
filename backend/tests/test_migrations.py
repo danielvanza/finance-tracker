@@ -23,7 +23,8 @@ BASELINE_TABLES = {
     "categories",
     "transactions",
     "transaction_splits",
-    "standing_adjustments",
+    "set_asides",
+    "ignored_bills",
     "rules",
     "budgets",
     "settings",
@@ -108,20 +109,20 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     tx = _table_info(scratch_db, "transactions")
     assert tx["is_refund"][1:4] == ("is_refund", "BOOLEAN", 1)  # NOT NULL
     assert tx["is_refund"][4] == "'0'"  # server default 0
-    assert "standing_adjustment_id" in tx
-    assert tx["standing_adjustment_id"][3] == 0  # nullable
+    assert "standing_adjustment_id" not in tx
+    assert tx["set_aside_id"][3] == 0  # nullable
 
     splits = _table_info(scratch_db, "transaction_splits")
     assert splits["is_refund"][1:4] == ("is_refund", "BOOLEAN", 0)  # nullable
 
-    standing = _table_info(scratch_db, "standing_adjustments")
-    assert standing["start_month"][3] == 1  # NOT NULL
-    assert standing["active"][4] == "'1'"  # server default 1
+    bills = _table_info(scratch_db, "set_asides")
+    assert bills["start_month"][3] == 1  # NOT NULL
+    assert bills["yearly"][4] == "'1'"  # server default 1
 
     # FK ondelete semantics.
     tx_fks = _foreign_keys(scratch_db, "transactions")
-    assert tx_fks["standing_adjustment_id"][2:3] == ("standing_adjustments",)
-    assert tx_fks["standing_adjustment_id"][6] == "SET NULL"
+    assert tx_fks["set_aside_id"][2:3] == ("set_asides",)
+    assert tx_fks["set_aside_id"][6] == "SET NULL"
     split_fks = _foreign_keys(scratch_db, "transaction_splits")
     assert split_fks["transaction_id"][6] == "CASCADE"
     assert split_fks["category_id"][6] == "SET NULL"
@@ -154,7 +155,6 @@ def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):
         Category,
         Rule,
         Setting,
-        StandingAdjustment,
         Transaction,
         TransactionSplit,
         CategoryType,
@@ -173,16 +173,6 @@ def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):
     session.add(category)
     session.flush()
     session.add(
-        StandingAdjustment(
-            name="Salary swap",
-            amount=Decimal("600.00"),
-            income_category_id=category.id,
-            expense_category_id=category.id,
-            active=True,
-            start_month=date(2026, 8, 1),
-        )
-    )
-    session.add(
         Transaction(
             date=date(2026, 8, 1),
             amount=Decimal("-250.00"),
@@ -196,7 +186,7 @@ def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):
     session.add(
         TransactionSplit(transaction_id=1, category_id=category.id, amount=Decimal("-125.00"))
     )
-    session.add(Rule(pattern="legacy", category_id=category.id, priority=0))
+    session.add(Rule(pattern="legacy", category_id=category.id))
     session.add(Budget(category_id=category.id, month=None, planned_amount=Decimal("300.00")))
     session.add(Setting(key="theme", value="dark"))
     session.commit()
@@ -207,7 +197,8 @@ def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):
         "categories": 1,
         "rules": 1,
         "settings": 1,
-        "standing_adjustments": 1,
+        "set_asides": 0,
+        "ignored_bills": 0,
         "transaction_splits": 1,
         "transactions": 1,
     }
@@ -227,6 +218,6 @@ def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):
     tx = session.get(Transaction, 1)
     assert tx.description == "legacy shop"
     assert tx.is_refund is False
-    assert tx.standing_adjustment_id is None
+    assert tx.set_aside_id is None
     session.close()
     engine.dispose()

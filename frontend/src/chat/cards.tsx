@@ -1,22 +1,15 @@
-import { useState } from 'react'
-import { formatCents } from '../money'
-import type { ChatCard, ChatChange, ChatEffect, ChatImportCounts, ChatTransactionRef } from '../types'
+import type { ChatCard, ChatChange, ChatImportCounts, ChatTransactionRef } from '../types'
 
 export type CardAction = 'apply' | 'reject'
 export type CardError = { unknown: boolean; action: CardAction }
 
-const COMPACT_AFTER = 5 // more rows than this: one line each
-const FIRST_ROWS = 8 // shown before "Show all"
-
-/** A long batch, one line per row, the rest behind Show all. */
-function BatchRows({ changes }: { changes: ChatChange[] }) {
-  const [all, setAll] = useState(false)
-  const shown = all ? changes : changes.slice(0, FIRST_ROWS)
+/** Every row of a card that was summed up, for when someone wants to see them. */
+function AllRows({ changes }: { changes: ChatChange[] }) {
   return (
-    <div className="chat-change">
-      <p className="lab">{changes.length} rows</p>
+    <details className="chat-all">
+      <summary>Show all {changes.length} rows</summary>
       <ul className="chat-batch">
-        {shown.map((change, i) => (
+        {changes.map((change, i) => (
           <li key={i}>
             <span>{change.title}</span>
             <span className="chat-batch-fields">
@@ -25,35 +18,11 @@ function BatchRows({ changes }: { changes: ChatChange[] }) {
           </li>
         ))}
       </ul>
-      {changes.length > FIRST_ROWS && (
-        <button type="button" className="chat-quiet-btn" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? 'Show fewer' : `Show all ${changes.length}`}
-        </button>
-      )}
-    </div>
+    </details>
   )
 }
 
-const plan = (cents: number | null) => (cents === null ? '' : ` of ${formatCents(cents)}`)
-
-function EffectRow({ effect }: { effect: ChatEffect }) {
-  const planChanged = effect.planned_before_cents !== effect.planned_cents
-  return (
-    <div className="chat-row">
-      <dt>{effect.category} {effect.when}</dt>
-      <dd>
-        {effect.before_cents !== effect.after_cents && (
-          <><s>{formatCents(effect.before_cents)}</s> → </>
-        )}
-        {formatCents(effect.after_cents)}
-        {planChanged && effect.planned_before_cents !== null ? <> of <s>{formatCents(effect.planned_before_cents)}</s> → </> : effect.planned_cents === null ? '' : ' of '}
-        {effect.planned_cents === null ? '' : formatCents(effect.planned_cents)}
-      </dd>
-    </div>
-  )
-}
-
-/** The proposed change, field by field, then what became of it. */
+/** The proposed change in the app's own plain words, then what became of it. */
 export function ProposalCard({ card, localError, busy, onApply, onReject }: {
   card: ChatCard
   localError: CardError | null
@@ -64,10 +33,9 @@ export function ProposalCard({ card, localError, busy, onApply, onReject }: {
   if (card.status === 'applied') {
     return (
       <div className="chat-reply" data-state="applied">
-        <p><span className="chat-done">Done.</span> {card.result?.text}</p>
-        {card.result?.effect.map(e => (
-          <p key={e.category + e.when}>{e.category} {e.when}: {formatCents(e.after_cents)}{plan(e.planned_cents)}</p>
-        ))}
+        <p><span className="chat-done">Done.</span> {card.lines.length === 1 && card.lines[0]}</p>
+        {card.lines.length > 1 && card.lines.map((line, i) => <p key={i}>{line}</p>)}
+        {card.effect_lines.map((line, i) => <p key={`e${i}`}>{line}</p>)}
       </div>
     )
   }
@@ -97,34 +65,25 @@ export function ProposalCard({ card, localError, busy, onApply, onReject }: {
     )
   }
   return (
-    <div className="chat-card" data-state="pending">
-      <p className="lab">{card.heading}</p>
-      <p className="chat-summary">{card.summary}</p>
-      {card.note && <p className="chat-note">{card.note}</p>}
-      {card.changes.length > COMPACT_AFTER ? <BatchRows changes={card.changes} /> : card.changes.map(change => (
-        <div key={change.title} className="chat-change">
-          <p className="lab">{change.title}</p>
-          <dl>
-            {change.fields.map(field => (
-              <div className="chat-row" key={field.label}>
-                <dt>{field.label}</dt>
-                <dd><s>{field.before}</s> → {field.after}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ))}
-      {(card.purchase || card.effect.length > 0) && (
-        <dl className="chat-change">
-          {card.purchase && (
-            <div className="chat-row">
-              <dt>Refund for</dt>
-              <dd>{card.purchase.description}, {card.purchase.date_label}</dd>
-            </div>
-          )}
-          {card.effect.map(effect => <EffectRow key={effect.category + effect.when} effect={effect} />)}
-        </dl>
+    <div className="chat-card" data-state="pending" data-summary={card.summary}>
+      {card.says && <p className="chat-says">{card.says}</p>}
+      {card.apply_label === 'Merge' && (
+        <>
+          <p className="lab">{card.heading}</p>
+          <p className="chat-summary">{card.summary}</p>
+        </>
       )}
+      <ul className="chat-lines">
+        {card.lines.map((line, i) => <li key={i}>{line}</li>)}
+      </ul>
+      {card.note && <p className="chat-note">{card.note}</p>}
+      {card.purchase && <p className="chat-note">Refund for: {card.purchase.description}, {card.purchase.date_label}</p>}
+      {card.effect_lines.length > 0 && (
+        <ul className="chat-lines chat-effect">
+          {card.effect_lines.map((line, i) => <li key={i}>{line}</li>)}
+        </ul>
+      )}
+      {card.summed_up && <AllRows changes={card.changes} />}
       <div className="chat-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={onApply}>{card.apply_label}</button>
         <button type="button" className="btn" disabled={busy} onClick={onReject}>{card.reject_label}</button>
@@ -137,9 +96,8 @@ export function ImportCard({ counts }: { counts: ChatImportCounts }) {
   const rows: [string, number][] = [
     ['New', counts.imported],
     ['Already here, skipped', counts.skipped],
-    ['Sorted by rules', counts.by_rule],
-    ['Guesses to review', counts.by_ai],
-    ["Couldn't be sorted", counts.uncategorised],
+    ['Sorted and counted', counts.by_rule + counts.by_ai],
+    ['Waiting for your answer', (counts.doubtful ?? 0) + counts.uncategorised],
   ]
   return (
     <div className="chat-card">

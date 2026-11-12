@@ -14,7 +14,6 @@ function said(added: Transaction[]) {
     const [tx] = added
     return ['Added', tx.description, formatCents(tx.amount_cents), tx.category_name].filter(Boolean).join(' · ')
   }
-  if (added.length === 2) return `Added adjustment pair · ${added[0].description}`
   return 'Added'
 }
 

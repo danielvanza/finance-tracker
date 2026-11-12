@@ -10,7 +10,7 @@ export interface RuleResult {
 }
 
 /**
- * One always-categorise rule for a merchant, by its cleaned key (POST /rules, priority 0), then the
+ * One always-categorise rule for a merchant, by its cleaned key (POST /rules), then the
  * purchases of that merchant still waiting for review are settled (PATCH /transactions/{id}).
  * Not POST /transactions/{id}/create-rule: that pins the whole description, order number and all.
  * Past, already confirmed purchases stay as they are. The caller invalidates the query caches.
@@ -21,7 +21,7 @@ export async function createMerchantRule(
   transactions: Transaction[],
 ): Promise<RuleResult> {
   if (!ruleKeyOk(key)) throw new Error(`"${key}" is too short for a rule`)
-  await api.createRule({ pattern: key, category_id: categoryId, priority: 0 })
+  await api.createRule({ pattern: key, category_id: categoryId })
   let settled = 0
   let failed = 0
   for (const tx of waitingFor(key, transactions)) {

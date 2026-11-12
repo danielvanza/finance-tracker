@@ -27,6 +27,8 @@ const SEED = [
   ingRow(d.inMonth(6), 'Coolblue Webshop', -8000),
 ]
 
+const isCard = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply')
+
 test.describe.serial('chat with the real Claude', () => {
   test.beforeAll(async ({ browser }) => {
     await app.start()
@@ -59,14 +61,14 @@ test.describe.serial('chat with the real Claude', () => {
     const rule = txs.filter(t => t.categorised_by === 'rule')
     expect(rule.every(t => t.confirmed)).toBe(true)
     expect(rule.map(t => t.description).sort()).toEqual(['Albert Heijn 1234', 'Salaris Voorbeeld BV', SHOP])
+    // Claude's guesses: the ones it was sure of count at once, the rest wait (just-works-for-two R-011).
     const guesses = txs.filter(t => t.categorised_by === 'ai')
-    expect(guesses.every(t => !t.confirmed)).toBe(true)
     expect(guesses.length).toBeGreaterThanOrEqual(4)
+    const counted = txs.filter(t => t.confirmed).length
+    expect(txs.filter(t => !t.confirmed).every(t => t.categorised_by !== 'rule')).toBe(true)
 
     const rows = await card.locator('.chat-row').allTextContents()
-    expect(rows).toEqual([
-      'New8', 'Already here, skipped0', 'Sorted by rules3', `Guesses to review${guesses.length}`, `Couldn't be sorted${8 - 3 - guesses.length}`,
-    ])
+    expect(rows).toEqual(['New8', 'Already here, skipped0', `Sorted and counted${counted}`, `Waiting for your answer${8 - counted}`])
     await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
     await shot(page, 'import-summary-desktop')
   })
@@ -75,8 +77,7 @@ test.describe.serial('chat with the real Claude', () => {
     const count = stub.sent.length
     stub.document(DANIEL, 'ing-export.csv', ingCsv(SEED))
     const summary = await stub.reply_after(count, m => m.text.startsWith('ING import'))
-    expect(summary.text).toContain('New: 0')
-    expect(summary.text).toContain('Already here, skipped: 8')
+    expect(summary.text).toBe('ING import: nothing new. All 8 payments were here already.')
     expect(await bankRows()).toHaveLength(8)
   })
 
@@ -87,7 +88,8 @@ test.describe.serial('chat with the real Claude', () => {
     const reply = page.locator('.chat-reply').last()
     await expect(page.getByTestId('chat-pending')).toHaveCount(0)
     await expect(reply).not.toContainText('Thinking')
-    const left = pace.spendable_plan_cents - pace.spendable_actual_cents
+    // The headline figure is what is free to spend until payday (just-works-for-two R-017).
+    const left = pace.free ? pace.free.free_cents : pace.spendable_plan_cents - pace.spendable_actual_cents
     const euros = Math.floor(Math.abs(left) / 100).toString().replace(/\B(?=(\d{3})+$)/g, '.')
     await expect(reply).toContainText(euros)
     // The fixed layout is retired (finance agent R-002); the figures still equal the Month page's (agent R-004).
@@ -130,9 +132,8 @@ test.describe.serial('chat with the real Claude', () => {
     await expect(card).toBeVisible()
     await expect(card).toContainText('Refund for')
     await expect(card).toContainText(SHOP)
-    await expect(card.locator('.chat-row', { hasText: 'Counts as' })).toContainText('Income')
-    await expect(card.locator('.chat-row', { hasText: 'Counts as' })).toContainText('Refund')
-    await expect(card.locator('.chat-row', { hasText: 'Category' })).toContainText('Clothing')
+    await expect(card.locator('.chat-lines').first()).toContainText('counts as a refund')
+    await expect(card.locator('.chat-lines').first()).toContainText('Clothing')
     await expect(card).toContainText('Clothing this month')
     await expect(card.getByRole('button', { name: 'Apply' })).toBeVisible()
     await expect(card.getByRole('button', { name: 'Not this' })).toBeVisible()
@@ -164,8 +165,8 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, 'We paid 25,00 at Sample Cinema today for tickets. Put it in Recreation & Entertainment.')
     const card = lastPending(page)
     await expect(card).toBeVisible()
-    await expect(card).toContainText('New manual entry')
-    await expect(card.locator('.chat-note')).toContainText(NOT_FOUND)
+    await expect(card.locator('.chat-lines').first()).toContainText('Add: ')
+    await expect(card.locator('.chat-note').first()).toContainText(NOT_FOUND)
     await expect(await decide(page, card, 'Apply')).toContainText('Done.')
     const manual = (await app.transactions()).find(t => t.source === 'manual' && t.description.toLowerCase().includes('cinema'))
     expect(manual).toMatchObject({ amount_cents: -2500, confirmed: true, is_refund: false })
@@ -177,9 +178,9 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, 'Sample Cafe Centrum gave us the 12,50 back today')
     const card = lastPending(page)
     await expect(card).toBeVisible()
-    await expect(card).toContainText('New manual entry')
-    await expect(card.locator('.chat-note')).toContainText(NOT_FOUND)
-    await expect(card.locator('.chat-row', { hasText: 'Counts as' })).toContainText('Refund')
+    await expect(card.locator('.chat-lines').first()).toContainText('Add: ')
+    await expect(card.locator('.chat-note').first()).toContainText(NOT_FOUND)
+    await expect(card.locator('.chat-lines').first()).toContainText('a refund in')
     await expect(card).toContainText('Refund for')
     await decide(page, card, 'Not this', 'rejected')
     expect(await app.transactions()).toEqual(before)
@@ -215,9 +216,12 @@ test.describe.serial('chat with the real Claude', () => {
     ['category', 'Create a new wants category called Sample Hobbies', async () => {
       expect(await app.category('Sample Hobbies')).toMatchObject({ type: 'wants' })
     }],
-    ['standing adjustment', 'Add a standing adjustment called Sample Pocket Money of 50 euro a month, income Retained Salary, expense Personal Allowance', async () => {
-      const list = await app.json<any[]>('/standing-adjustments')
-      expect(list.find(s => s.name === 'Sample Pocket Money')).toMatchObject({ amount_cents: 5000 })
+    ['set-aside', 'Set aside for the road tax: 240 euro, due in the month twelve months from now, every year. Call it Sample Road Tax.', async () => {
+      const list = (await app.json<any>('/set-asides')).items
+      expect(list.find((s: any) => s.name === 'Sample Road Tax')).toMatchObject({ amount_cents: 24000, yearly: true })
+    }],
+    ['target split', 'Change our target split to 60 percent needs, 25 wants and 15 savings', async () => {
+      expect((await app.json('/settings')).target_split).toBe('60/25/15')
     }],
     ['setting', 'Change the financial month start day to 25', async () => {
       expect((await app.json('/settings')).financial_month_start_day).toBe('25')
@@ -294,12 +298,12 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, message)
     const bubble = lastPending(page)
     await expect(bubble).toBeVisible()
-    const fields = await bubble.locator('.chat-change .chat-row').allTextContents()
+    const fields = await bubble.locator('.chat-lines li').allTextContents()
     const count = stub.sent.length
     stub.text(DANIEL, message)
-    const telegram = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
-    expect(fields.join()).toContain('Planned')
-    expect(telegram.text).toContain('Planned:')
+    const telegram = await stub.reply_after(count, isCard)
+    expect(fields.join()).toContain('planned')
+    expect(telegram.text).toContain('planned')
     expect(telegram.text).toContain('€222,00')
     await expect(bubble).toContainText('€222,00')
 
@@ -315,9 +319,8 @@ test.describe.serial('chat with the real Claude', () => {
   test('R-001 R-022 R-023: Telegram shows the same detail as text and replaces the card with the result', async () => {
     const count = stub.sent.length
     stub.text(DANIEL, 'Add a manual payment of 11,11 today at Sample Kiosk in Miscellaneous')
-    const proposal = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
-    expect(proposal.text).toContain('Amount: — → -€11,11')
-    expect(proposal.text).toContain('Category: — → Miscellaneous')
+    const proposal = await stub.reply_after(count, isCard)
+    expect(proposal.text).toContain('-\u2060€11,11, in Miscellaneous')
     expect(proposal.text).toContain('Miscellaneous this month:')
     expect(stub.button(proposal, 'Apply')).toBeTruthy()
     expect(stub.button(proposal, 'Not this')).toBeTruthy()
@@ -332,7 +335,7 @@ test.describe.serial('chat with the real Claude', () => {
 
     const second = stub.sent.length
     stub.text(DANIEL, 'Add a manual payment of 11,11 today at Sample Kiosk in Miscellaneous')
-    const again = await stub.reply_after(second, m => m.text.startsWith('Proposed change'))
+    const again = await stub.reply_after(second, isCard)
     await app.cardShown()
     stub.text(DANIEL, 'yes')
     await expect.poll(() => again.text, { timeout: 20_000 }).toContain('Applied.')

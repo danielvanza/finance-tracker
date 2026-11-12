@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { Category } from '../types'
+import { ApiError } from '../api'
 import ErrorBanner, { describeApiError } from './ErrorBanner'
 import { TYPE_META, GROUP_ORDER } from './CategorySelect'
 
@@ -27,7 +28,6 @@ export default function CategoryManager() {
     qc.invalidateQueries({ queryKey: ['dashboard'] })
     qc.invalidateQueries({ queryKey: ['transactions'] })
     qc.invalidateQueries({ queryKey: ['rules'] })
-    qc.invalidateQueries({ queryKey: ['standing-adjustments'] })
   }
 
   const groups = GROUP_ORDER
@@ -53,6 +53,28 @@ export default function CategoryManager() {
     }
     setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
     invalidate()
+  }
+
+  /** What a category counts as. One that is in use is only changed after a second look, as its payments move with it. */
+  const changeType = async (cat: Category, type: string) => {
+    if (type === cat.type) return
+    setError('')
+    try {
+      await api.patchCategory(cat.id, { type })
+    } catch (e) {
+      const inUse = e instanceof ApiError && e.status === 422 && (e.detail ?? '').includes('in use')
+      if (!inUse) { setError(describeApiError(e)); return }
+      const label = TYPE_META[type as keyof typeof TYPE_META].label
+      if (!window.confirm(`"${cat.name}" already has payments or rules. Count it as ${label} from now on? Everything in it, in past months too, then counts as ${label}.`)) return
+      try {
+        await api.patchCategory(cat.id, { type, force: true })
+      } catch (again) {
+        setError(describeApiError(again))
+        return
+      }
+    }
+    invalidate()
+    qc.invalidateQueries({ queryKey: ['pace'] })
   }
 
   const remove = async (cat: Category) => {
@@ -130,6 +152,16 @@ export default function CategoryManager() {
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                     aria-label={`${cat.name} name`}
                   />
+                  <select
+                    className="field setup-type"
+                    value={cat.type}
+                    onChange={e => changeType(cat, e.target.value)}
+                    aria-label={`${cat.name} counts as`}
+                  >
+                    {GROUP_ORDER.map(type => (
+                      <option key={type} value={type}>{TYPE_META[type].label}</option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     className="btn btn-sm btn-danger setup-icon"

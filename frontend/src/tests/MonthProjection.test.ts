@@ -18,7 +18,7 @@ const pace = (over: Partial<Pace> = {}): Pace => {
     actual_cents: { needs: 0, wants: 0, savings: 0 },
     spendable_plan_cents: 535000, spendable_actual_cents: daily[daily.length - 1].cumulative_cents,
     pace_delta_cents: 0, daily, data_through: '2026-11-08',
-    last_import_by_bank: [], behind_months: [], to_review: 0, ...over,
+    last_import_by_bank: [], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
   }
 }
 
@@ -59,7 +59,7 @@ describe('elapsedShare', () => {
 describe('paymentsByCategory', () => {
   const tx = (over: Partial<Transaction>): Transaction => ({
     id: 1, date: '2026-11-01', description: 'x', amount_cents: -1000, source: 'ing', category_id: 5, category_name: 'A',
-    confirmed: true, categorised_by: 'rule', ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [], ...over,
+    confirmed: true, categorised_by: 'rule', ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [], ...over,
   })
 
   it('counts payments, parts of a split by their own category, and not refunds or income', () => {

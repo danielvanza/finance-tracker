@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from db import get_db
 from main import app
 from seed import run_seed
-from models import Category, Budget, Transaction, TransactionSplit, Rule, StandingAdjustment
+from models import Category, Budget, Transaction, TransactionSplit, Rule
 
 
 @pytest.fixture
@@ -124,25 +124,11 @@ def test_delete_blocked_by_split(client, db):
 
 def test_delete_blocked_by_rule(client, db):
     cat = _cat(db, "Fun Account")
-    db.add(Rule(pattern="petshop", category_id=cat.id, priority=0))
+    db.add(Rule(pattern="petshop", category_id=cat.id))
     db.commit()
     r = client.delete(f"/categories/{cat.id}")
     assert r.status_code == 422
     assert db.get(Category, cat.id) is not None
-
-
-def test_delete_blocked_by_standing_adjustment(client, db):
-    retained = _cat(db, "Retained Salary")
-    allowance = _cat(db, "Personal Allowance")
-    db.add(StandingAdjustment(
-        name="Test allowance", amount=600,
-        income_category_id=retained.id, expense_category_id=allowance.id,
-        active=True, start_month=date(2026, 1, 1),
-    ))
-    db.commit()
-    r = client.delete(f"/categories/{allowance.id}")
-    assert r.status_code == 422
-    assert db.get(Category, allowance.id) is not None
 
 
 def test_delete_nonexistent_category_404(client):

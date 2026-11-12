@@ -31,7 +31,7 @@ def test_rule_creation(db):
     cat = Category(name="Food", type="needs", sort_order=1)
     db.add(cat)
     db.commit()
-    rule = Rule(pattern="albert heijn", category_id=cat.id, priority=10)
+    rule = Rule(pattern="albert heijn", category_id=cat.id)
     db.add(rule)
     db.commit()
     assert rule.id is not None

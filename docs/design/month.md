@@ -4,3 +4,5 @@
 - **The end-of-month sentence** ("About €92 a day keeps you in plan…") shows only for status `ok`, the current month, after day 5, and replaces "Spent €X more than planned by now"; the fallback keeps that wording. It extrapolates from finished days only and never from a day with a payment of 10% or more of the plan.
 - **"Paid"** on a row needs only status `ok`. **"Ahead"** follows the projection rules.
 - **A month change keeps the last month dimmed** (`aria-busy`) under a stable month bar; never swap the page for a skeleton.
+- **The headline** on the current month is free to spend (`pace.free`): the figure, "until payday", the per-day sentence, a caveat when payments in the month still wait, and a fold that lists the fixed bills still to come and this month's set-asides. A past month keeps "left" or "over". The Import link sits in the month bar at all times.
+- **Needs, wants, savings** each add their share of the month's income and the household's aim from the target split.

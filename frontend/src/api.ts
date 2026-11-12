@@ -50,16 +50,14 @@ export const api = {
   getTrends: (months: number, endMonth: string): Promise<import('./types').DashboardTrends> =>
     apiFetch(`${BASE}/dashboard/trends?months=${months}&end_month=${endMonth}`, { method: 'GET' }),
 
-  previewImport: (source: string, file: File): Promise<import('./types').ImportPreviewResponse> => {
+  previewImport: (file: File): Promise<import('./types').ImportPreviewResponse> => {
     const fd = new FormData()
-    fd.append('source', source)
     fd.append('file', file)
     return apiFetch(`${BASE}/import/preview`, { method: 'POST', body: fd })
   },
 
-  confirmImport: (source: string, file: File): Promise<import('./types').ImportConfirmResponse> => {
+  confirmImport: (file: File): Promise<import('./types').ImportConfirmResponse> => {
     const fd = new FormData()
-    fd.append('source', source)
     fd.append('file', file)
     return apiFetch(`${BASE}/import/confirm`, { method: 'POST', body: fd })
   },
@@ -86,35 +84,32 @@ export const api = {
       body,
     }),
 
-  createAdjustmentPair: (body: { date: string; description: string; legs: Array<{ amount_cents: number; category_id: number; description?: string }> }) =>
-    apiFetch(`${BASE}/transactions/adjustment-pair`, {
-      method: 'POST',
-      body,
-    }),
-
   deleteTransaction: (id: number) =>
     apiFetch(`${BASE}/transactions/${id}`, { method: 'DELETE' }),
 
-  getStandingAdjustments: (): Promise<import('./types').StandingAdjustment[]> =>
-    apiFetch(`${BASE}/standing-adjustments`, { method: 'GET' }),
+  getSetAsides: (month?: string): Promise<import('./types').SetAsides> => {
+    const q = month ? `month=${month}` : ''
+    return apiFetch(`${BASE}/set-asides${q ? '?' + q : ''}`, { method: 'GET' })
+  },
 
-  createStandingAdjustment: (body: Partial<Omit<import('./types').StandingAdjustment, 'id'>>) =>
-    apiFetch(`${BASE}/standing-adjustments`, {
-      method: 'POST',
-      body,
-    }),
+  createSetAside: (body: { name: string; amount_cents: number; due_month: string; yearly: boolean }): Promise<import('./types').SetAsides> =>
+    apiFetch(`${BASE}/set-asides`, { method: 'POST', body }),
 
-  patchStandingAdjustment: (id: number, body: Partial<Omit<import('./types').StandingAdjustment, 'id'>>) =>
-    apiFetch(`${BASE}/standing-adjustments/${id}`, {
-      method: 'PATCH',
-      body,
-    }),
+  deleteSetAside: (id: number): Promise<import('./types').SetAsides> =>
+    apiFetch(`${BASE}/set-asides/${id}`, { method: 'DELETE' }),
 
-  deleteStandingAdjustment: (id: number) =>
-    apiFetch(`${BASE}/standing-adjustments/${id}`, { method: 'DELETE' }),
+  /** Say that a payment is this bill: it then comes out of what was set aside. */
+  paySetAside: (id: number, transactionId: number): Promise<import('./types').SetAsides> =>
+    apiFetch(`${BASE}/set-asides/${id}/payments`, { method: 'POST', body: { transaction_id: transactionId } }),
 
-  createRuleFromTransaction: (id: number) =>
-    apiFetch(`${BASE}/transactions/${id}/create-rule`, { method: 'POST' }),
+  unpaySetAside: (id: number, transactionId: number): Promise<import('./types').SetAsides> =>
+    apiFetch(`${BASE}/set-asides/${id}/payments/${transactionId}`, { method: 'DELETE' }),
+
+  ignoreBill: (key: string) =>
+    apiFetch(`${BASE}/recurring/ignored`, { method: 'POST', body: { key } }),
+
+  countBillAgain: (key: string) =>
+    apiFetch(`${BASE}/recurring/ignored/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 
   getCategories: (): Promise<import('./types').Category[]> =>
     apiFetch(`${BASE}/categories`, { method: 'GET' }),
@@ -128,7 +123,7 @@ export const api = {
       body: { planned_amount_cents },
     }),
 
-  patchCategory: (id: number, body: { type?: string; name?: string }) =>
+  patchCategory: (id: number, body: { type?: string; name?: string; force?: boolean }) =>
     apiFetch(`${BASE}/categories/${id}`, {
       method: 'PATCH',
       body,
@@ -152,7 +147,7 @@ export const api = {
   getRules: (): Promise<import('./types').Rule[]> =>
     apiFetch(`${BASE}/rules`, { method: 'GET' }),
 
-  createRule: (body: { pattern: string; category_id: number; priority: number }) =>
+  createRule: (body: { pattern: string; category_id: number }) =>
     apiFetch(`${BASE}/rules`, {
       method: 'POST',
       body,
@@ -189,7 +184,6 @@ export const api = {
   rejectChatProposal: (id: number): Promise<import('./types').ChatCard> =>
     apiFetch(`${BASE}/chat/proposals/${id}/reject`, { method: 'POST' }),
 
-  // The time keeps a browser from reusing an older picture under the same id.
   chatChartUrl: (messageId: number, createdAt: string, theme: 'day' | 'night') =>
     `${BASE}/chat/messages/${messageId}/chart?theme=${theme}&v=${encodeURIComponent(createdAt)}`,
 

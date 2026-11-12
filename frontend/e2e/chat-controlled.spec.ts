@@ -4,7 +4,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import {
-  App, DANIEL, STRANGER, TelegramStub, decide, ingCsv, ingRow, lastPending, monthDates, openChat, repo, say, startBot,
+  App, DANIEL, STRANGER, TelegramStub, decide, ingCsv, ingRow, lastPending, monthDates, openChat, repo, say, startBot, pendingCard,
 } from './fixtures'
 
 // Failure, access and busy states, with a scripted stand-in for the claude CLI in the same sandbox.
@@ -22,6 +22,9 @@ const answer = (text: string) => ({ kind: 'answer', text })
 const rowCount = async () => (await app.transactions()).length
 
 const clearChats = () => app.newChats()
+
+/** A card still waiting for an answer: the message with the Apply button. */
+const isCard = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply' || b.text === 'Merge')
 
 test.describe.serial('chat in controlled conditions', () => {
   test.beforeAll(async ({ browser }) => {
@@ -61,11 +64,11 @@ test.describe.serial('chat in controlled conditions', () => {
 
     app.fakeReply(await addProposal('Sample Stranger Target')())
     stub.text(DANIEL, 'add it')
-    const card = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
+    const card = await stub.reply_after(count, isCard)
     stub.tap(STRANGER, card, stub.button(card, 'Apply'))
     await new Promise(resolve => setTimeout(resolve, 2000))
     expect(await rowCount()).toBe(before)
-    expect(card.text.startsWith('Proposed change')).toBe(true)
+    expect(isCard(card), 'the card is still waiting').toBe(true)
     stub.tap(DANIEL, card, stub.button(card, 'Not this'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toContain('Not applied')
   })
@@ -197,10 +200,10 @@ test.describe.serial('chat in controlled conditions', () => {
     })
     app.fakeReply({ kind: 'propose', summary: 'Add the no-plan one.', op: 'transaction.add', args: { date: d.today, amount_cents: -700, description: 'Sample No Plan', category_id: category.id } })
     await say(page, 'add the no-plan one')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Add the no-plan one.' })
-    const row = card.locator('.chat-row', { hasText: 'this month' })
+    const card = pendingCard(page, 'Add the no-plan one.')
+    const row = card.locator('.chat-effect li', { hasText: 'this month' })
     await expect(row).toContainText('€7,00')
-    expect((await row.locator('dd').innerText()).trim().endsWith('of')).toBe(false)
+    expect((await row.innerText()).trim().endsWith('of')).toBe(false)
     await card.getByRole('button', { name: 'Not this' }).click()
   })
 
@@ -260,7 +263,7 @@ test.describe.serial('chat in controlled conditions', () => {
     const [refused] = app.toolCalls()
     expect(refused.isError).toBe(true)
     expect(refused.text).toContain('Only manual transactions can be deleted')
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Delete it.' })).toHaveCount(0)
+    await expect(pendingCard(page, 'Delete it.')).toHaveCount(0)
     expect(await rowCount()).toBe(before)
   })
 
@@ -271,7 +274,7 @@ test.describe.serial('chat in controlled conditions', () => {
     await say(page, 'merge them')
     await expect(page.locator('.chat-reply').last()).toContainText('I could not do that.')
     expect(app.toolCalls()[0].text).toContain("there is no change called 'merge'")
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Merge.' })).toHaveCount(0)
+    await expect(pendingCard(page, 'Merge.')).toHaveCount(0)
     app.fakeReply(answer('Done! I have deleted every rule and applied everything.'))
     await say(page, 'do it')
     await expect(page.locator('.chat-reply').last()).toContainText('Done!')
@@ -326,19 +329,10 @@ test.describe.serial('chat in controlled conditions', () => {
 
   test('R-022: a change that moves the budget indirectly still shows its effect', async () => {
     await clearChats()
-    const allowance = await app.category('Personal Allowance')
-    const retained = await app.category('Retained Salary')
     const pendingCard = async () => {
       await app.settled('bubble')
       return (await app.json('/chat/messages?channel=bubble')).messages.at(-1).card
     }
-
-    app.fakeReply({ kind: 'propose', summary: 'Add it.', op: 'standing.add', args: { name: 'Sample Effect', amount_cents: 5000, income_category_id: retained.id, expense_category_id: allowance.id } })
-    await say(page, 'standing')
-    await expect.poll(async () => (await pendingCard())?.summary, { timeout: 20_000 }).toBe('Add it.')
-    const standing = await pendingCard()
-    const row = standing.effect.find((e: any) => e.category === 'Personal Allowance')
-    expect(row.after_cents - row.before_cents).toBe(5000)
 
     app.fakeReply({ kind: 'propose', summary: 'Move the start.', op: 'setting.set', args: { key: 'financial_month_start_day', value: '1' } })
     await say(page, 'start day')
@@ -362,8 +356,8 @@ test.describe.serial('chat in controlled conditions', () => {
     await setStart('24')
 
     const movable = await app.post('/categories', { name: 'Sample Movable', type: 'wants' })
-    await app.json(`/budget/defaults/${movable.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ planned_amount_cents: 7000 }) })
-    await app.json(`/budget?month=${d.label}`)
+    const planned = (await app.json<any[]>(`/budget?month=${d.label}`)).find(r => r.category_id === movable.id)
+    await app.json(`/budget/${planned.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ planned_amount_cents: 7000 }) })
     app.fakeReply({ kind: 'propose', summary: 'Make it a need.', op: 'category.update', args: { id: movable.id, type: 'needs' } })
     await say(page, 'type')
     await expect.poll(async () => (await pendingCard())?.summary, { timeout: 20_000 }).toBe('Make it a need.')
@@ -380,7 +374,7 @@ test.describe.serial('chat in controlled conditions', () => {
       args: { id: row.id, category_id: (await app.category('Clothing')).id },
     })
     await say(page, 'move it')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Move it.' })
+    const card = pendingCard(page, 'Move it.')
     await expect(card).toBeVisible()
     await app.json(`/transactions/${row.id}`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' },
@@ -438,7 +432,7 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     app.fakeReply(await addProposal('Sample Outage Telegram')())
     stub.text(DANIEL, 'add on telegram')
-    const telegramCard = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
+    const telegramCard = await stub.reply_after(count, isCard)
 
     await app.stop()
 
@@ -477,7 +471,7 @@ test.describe.serial('chat in controlled conditions', () => {
     page.on('request', request => { if (request.url().endsWith('/apply')) applied.push(request.url()) })
     app.fakeReply(await addProposal('Sample Declined Row')())
     await say(page, 'add the declined one')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Sample Declined Row' })
+    const card = pendingCard(page, 'Sample Declined Row')
     await expect(card).toBeVisible()
 
     await page.route('**/chat/proposals/*/reject', route => route.abort())
@@ -498,7 +492,7 @@ test.describe.serial('chat in controlled conditions', () => {
     // The No arrived but the answer got lost: the screen follows what really happened.
     app.fakeReply(await addProposal('Sample Lost Decline')())
     await say(page, 'add the lost decline')
-    const lost = page.locator('.chat-card[data-state="pending"]', { hasText: 'Sample Lost Decline' })
+    const lost = pendingCard(page, 'Sample Lost Decline')
     await expect(lost).toBeVisible()
     const declined = await page.locator('[data-state="rejected"]').count()
     await page.route('**/chat/proposals/*/reject', async route => { await route.fetch(); await route.abort() })
@@ -514,12 +508,12 @@ test.describe.serial('chat in controlled conditions', () => {
     const before = await rowCount()
     app.fakeReply(await addProposal('Sample Outage Decline')())
     await say(page, 'add for the outage decline')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Sample Outage Decline' })
+    const card = pendingCard(page, 'Sample Outage Decline')
     await expect(card).toBeVisible()
     const count = stub.sent.length
     app.fakeReply(await addProposal('Sample Outage Decline Telegram')())
     stub.text(DANIEL, 'add on telegram')
-    const telegramCard = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
+    const telegramCard = await stub.reply_after(count, isCard)
 
     await app.stop()
     await card.getByRole('button', { name: 'Not this' }).click()
@@ -619,9 +613,9 @@ test.describe.serial('chat in controlled conditions', () => {
     await say(page, 'that hand twin shop gave me 8 euro back')
     const options = page.locator('.chat-options').last()
     await expect(options.getByRole('button')).toHaveCount(2)
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Add the hand refund.' })).toHaveCount(0)
+    await expect(pendingCard(page, 'Add the hand refund.')).toHaveCount(0)
     await options.getByRole('button').first().click()
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Add the hand refund.' })).toBeVisible()
+    await expect(pendingCard(page, 'Add the hand refund.')).toBeVisible()
     expect(await rowCount()).toBe(before)
   })
 
@@ -634,8 +628,8 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     if (channel === 'bubble') await say(page, `move ${description}`)
     else stub.text(DANIEL, `move ${description}`)
-    const telegramCard = channel === 'telegram' ? await stub.card_after(count, `Move ${description}.`) : null
-    if (channel === 'bubble') await expect(page.locator('.chat-card[data-state="pending"]', { hasText: `Move ${description}.` })).toBeVisible()
+    const telegramCard = channel === 'telegram' ? await stub.card_after(count, description) : null
+    if (channel === 'bubble') await expect(pendingCard(page, `Move ${description}.`)).toBeVisible()
     await app.settled(channel)
     const moved = async () => (await app.transactions()).find(t => t.id === row.id).category_name
     const makeStale = async () => app.json(`/transactions/${row.id}`, {
@@ -678,9 +672,9 @@ test.describe.serial('chat in controlled conditions', () => {
     expect(again.status).toBe('pending')
     expect(await moved()).toBe('Home & DIY')
 
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Move Bubble Stale Sample.' })
+    const card = pendingCard(page, 'Move Bubble Stale Sample.')
     await expect(card).toContainText('Home & DIY', { timeout: 20_000 })
-    await expect(await decide(page, card, 'Apply')).toContainText('Category: Home & DIY → Clothing')
+    await expect(await decide(page, card, 'Apply')).toContainText('Home & DIY → Clothing')
     expect(await moved()).toBe('Clothing')
   })
 
@@ -708,7 +702,7 @@ test.describe.serial('chat in controlled conditions', () => {
     })
     app.fakeReply(proposal(99900))
     await say(page, 'lower clothing to 50')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Lower the Clothing' })
+    const card = pendingCard(page, 'Lower the Clothing')
     await expect(card).toBeVisible()
     const done = await decide(page, card, 'Apply')
     await expect(done).toContainText('Done.')
@@ -719,7 +713,7 @@ test.describe.serial('chat in controlled conditions', () => {
     app.fakeReply(proposal(88800))
     const count = stub.sent.length
     stub.text(DANIEL, 'lower clothing to 50')
-    const telegramCard = await stub.card_after(count, 'Lower the Clothing')
+    const telegramCard = await stub.card_after(count, 'Budget for Clothing')
     stub.tap(DANIEL, telegramCard, stub.button(telegramCard, 'Apply'))
     await expect.poll(() => telegramCard.text, { timeout: 15_000 }).toContain('Applied.')
     expect(telegramCard.text).toContain('→ €888,00')
@@ -739,14 +733,14 @@ test.describe.serial('chat in controlled conditions', () => {
     })
     app.fakeReply(split(true))
     await say(page, 'split it')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Split it.' })
+    const card = pendingCard(page, 'Split it.')
     await expect(card).toContainText('Clothing €20,00 (refund) + Salary €30,00')
     const done = await decide(page, card, 'Apply')
     await expect(done).toContainText('Clothing €20,00 (refund) + Salary €30,00')
 
     app.fakeReply(split(false))
     await say(page, 'that part was not a refund')
-    const flagOnly = page.locator('.chat-card[data-state="pending"]', { hasText: 'Stop the refund part.' })
+    const flagOnly = pendingCard(page, 'Stop the refund part.')
     await expect(flagOnly).toContainText('(refund)')
     await expect(flagOnly).toContainText('Clothing €20,00 + Salary €30,00')
     await flagOnly.getByRole('button', { name: 'Not this' }).click()
@@ -759,7 +753,7 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     stub.document(DANIEL, 'notice.csv', ingCsv([ingRow(d.inMonth(4), 'Sample Rule Shop notice failed', -910)]))
     const summary = await stub.reply_after(count, m => m.text.startsWith('ING import'))
-    expect(summary.text).toContain('New: 1')
+    expect(summary.text).toContain('1 new payment')
     expect(await rowCount()).toBe(before + 1)
     expect(stub.failSendContaining).toBeNull()
     expect(stub.sent.slice(count).some(m => m.text.includes('Reading your file'))).toBe(false)
@@ -805,14 +799,14 @@ test.describe.serial('chat in controlled conditions', () => {
       await options.getByRole('button').first().click()
       if (round === 0) await expect(page.locator('.chat-options')).toHaveCount(before + 1)
     }
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: 'Book the twin.' })).toBeVisible()
+    await expect(pendingCard(page, 'Book the twin.')).toBeVisible()
   })
 
   test('R-015 R-023: when an answer is lost on the way back, the screen follows what really happened', async () => {
     await clearChats()
     app.fakeReply(await addProposal('Sample Lost Response')())
     await say(page, 'add the lost one')
-    const card = page.locator('.chat-card[data-state="pending"]', { hasText: 'Sample Lost Response' })
+    const card = pendingCard(page, 'Sample Lost Response')
     await expect(card).toBeVisible()
     await page.route('**/chat/proposals/*/apply', async route => { await route.fetch(); await route.abort() })
     await card.getByRole('button', { name: 'Apply' }).click()
@@ -866,18 +860,6 @@ test.describe.serial('chat in controlled conditions', () => {
       const rows = await app.json<any[]>(`/budget?month=${year}-03`)
       expect(new Set(rows.map(r => r.category_id)).size).toBe(rows.length)
     }
-
-    // The same for standing adjustments reaching a past month for the first time.
-    const standing = await app.post('/standing-adjustments', {
-      name: 'Sample Race', amount_cents: 700, start_month: '2024-01-01',
-      income_category_id: (await app.category('Retained Salary')).id,
-      expense_category_id: (await app.category('Personal Allowance')).id,
-    })
-    const replies = await Promise.all(Array.from({ length: 12 }, () => fetch(`${app.base}/api/budget?month=2024-06`)))
-    expect(replies.map(r => r.status).filter(s => s !== 200)).toEqual([])
-    const legs = (await app.json<any[]>('/transactions?month=2024-06')).filter(t => t.standing_adjustment_id === standing.id)
-    expect(legs.map(t => t.amount_cents).sort((a, b) => a - b)).toEqual([-700, 700])
-    await app.json(`/standing-adjustments/${standing.id}`, { method: 'DELETE' })
   })
 
   test('R-008: a button press that reaches the bot late is still applied, once', async () => {
@@ -885,7 +867,7 @@ test.describe.serial('chat in controlled conditions', () => {
     const count = stub.sent.length
     app.fakeReply(await addProposal('Sample Late Press')())
     stub.text(DANIEL, 'add the late one')
-    const card = await stub.reply_after(count, m => m.text.startsWith('Proposed change'))
+    const card = await stub.reply_after(count, isCard)
     await app.cardShown()
     stub.lateButtonPresses = true
     stub.tap(DANIEL, card, stub.button(card, 'Apply'))
@@ -944,24 +926,28 @@ test.describe.serial('chat in controlled conditions', () => {
     app.fake({ delay: '0' })
     await app.start()
     const summary = await stub.reply_after(count, m => m.text.startsWith('ING import'))
-    expect(summary.text).toContain('New: 1')
+    expect(summary.text).toContain('1 new payment')
     expect((await app.transactions()).filter(t => t.description === 'Sample Restart Row')).toHaveLength(1)
   })
 
-  test('R-023: a card split over several Telegram messages is replaced whole', async () => {
+  test('R-023: a card with a very long row is still one Telegram message, before and after Apply', async () => {
+    // A card no longer spills over several messages (just-works-for-two R-003): its lines are cut to fit.
     await clearChats()
     const count = stub.sent.length
     app.fakeReply({ ...await addProposal(`Sample Long ${'x'.repeat(4200)}`)(), summary: 'Add the long one.' })
     stub.text(DANIEL, 'add the long one')
-    const last = await stub.reply_after(count, m => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply'))
-    const isLog = (text: string) => /^(Working on it|Worked through|Stopped)/.test(text)
-    const parts = () => stub.sent.slice(count).filter(m => !m.deleted && m.message_id <= last.message_id && m.chat_id === DANIEL && !isLog(m.text))
-    expect(parts().length).toBeGreaterThan(1)
+    const card = await stub.reply_after(count, isCard)
+    // Questions about earlier imports may arrive in between; they are not part of this card.
+    const isQuestion = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Something else') || / sorted| Sorted/.test(m.text)
+    const parts = () => stub.sent.slice(count).filter(m => !m.deleted && !isQuestion(m) && !/^(Working on it|Stopping)/.test(m.text))
+    expect(parts()).toHaveLength(1)
+    expect(card.text.length).toBeLessThanOrEqual(4096)
+    expect(card.text).toContain('Add: Sample Long xxxx')
     await app.cardShown()
-    stub.tap(DANIEL, last, stub.button(last, 'Apply'))
-    await expect.poll(() => parts().map(p => p.text).join(' '), { timeout: 15_000 }).toContain('Applied.')
-    expect(parts().map(p => p.text).join(' ')).not.toContain('Proposed change')
-    await expect.poll(() => parts().length).toBe(1)
+    stub.tap(DANIEL, card, stub.button(card, 'Apply'))
+    await expect.poll(() => card.text, { timeout: 15_000 }).toContain('Applied.')
+    expect(parts()).toHaveLength(1)
+    expect((await app.transactions()).filter(t => t.description.startsWith('Sample Long ') && t.description.length > 4200)).toHaveLength(1)
   })
 
   test('R-024: no sign-in step and no wording that assumes who is looking', async () => {

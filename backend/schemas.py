@@ -55,7 +55,8 @@ class ImportConfirmResponse(BaseModel):
     imported: int
     skipped_duplicates: int
     categorised_by_rule: int
-    categorised_by_ai: int
+    categorised_by_ai: int  # Claude was sure: these count already
+    doubtful: int  # Claude was not sure: these wait for an answer
     uncategorised: int
 
 class SplitIn(BaseModel):
@@ -108,7 +109,8 @@ class TransactionOut(BaseModel):
     categorised_by: Optional[str]
     ai_confidence: Optional[float]
     is_refund: bool = False
-    standing_adjustment_id: Optional[int] = None
+    set_aside_id: Optional[int] = None
+    set_aside_name: Optional[str] = None
     splits: list[SplitOut] = []
 
     @field_validator("amount_cents", mode="before")
@@ -133,69 +135,6 @@ class TransactionCreate(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def _maybe_cents(cls, v):
-        return _as_euros(v)
-
-class AdjustmentLeg(BaseModel):
-    amount: Decimal = Field(validation_alias=AliasChoices("amount", "amount_cents"))
-    category_id: int
-    description: Optional[str] = None
-
-    @field_validator("amount", mode="before")
-    @classmethod
-    def _maybe_cents(cls, v):
-        return _as_euros(v)
-
-class AdjustmentPairCreate(BaseModel):
-    date: date
-    description: str
-    legs: list[AdjustmentLeg]
-
-class StandingAdjustmentOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
-    id: int
-    name: str
-    amount_cents: int = Field(
-        validation_alias=AliasChoices("amount", "amount_cents"),
-        serialization_alias="amount_cents",
-    )
-    income_category_id: int
-    expense_category_id: int
-    active: bool
-    start_month: date
-
-    @field_validator("amount_cents", mode="before")
-    @classmethod
-    def _amount_to_cents(cls, v):
-        return _as_cents(v)
-
-class StandingAdjustmentCreate(BaseModel):
-    name: str
-    amount: Decimal = Field(validation_alias=AliasChoices("amount", "amount_cents"))
-    income_category_id: int
-    expense_category_id: int
-    active: bool = True
-    start_month: Optional[date] = None  # defaults to the current month
-
-    @field_validator("amount", mode="before")
-    @classmethod
-    def _maybe_cents(cls, v):
-        return _as_euros(v)
-
-class StandingAdjustmentPatch(BaseModel):
-    name: Optional[str] = None
-    amount: Optional[Decimal] = Field(
-        default=None, validation_alias=AliasChoices("amount", "amount_cents")
-    )
-    income_category_id: Optional[int] = None
-    expense_category_id: Optional[int] = None
-    active: Optional[bool] = None
-    start_month: Optional[date] = None
-
-    @field_validator("amount", mode="before")
-    @classmethod
-    def _maybe_cents(cls, v):
-        # None = field absent/untouched; let it through for the Optional type
         return _as_euros(v)
 
 class CategoryOut(BaseModel):
@@ -258,51 +197,18 @@ class RuleOut(BaseModel):
     pattern: str
     category_id: int
     category_name: str
-    priority: int
 
 class RuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     pattern: str
     category_id: int
-    priority: int = 0
 
 class RuleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     pattern: Optional[str] = None
     category_id: Optional[int] = None
-    priority: Optional[int] = None
-
-class RuleTestRequest(BaseModel):
-    pattern: str
-
-class DashboardSummary(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    month: str
-    total_income_cents: int = Field(
-        validation_alias=AliasChoices("total_income", "total_income_cents"),
-        serialization_alias="total_income_cents",
-    )
-    total_expenses_cents: int = Field(
-        validation_alias=AliasChoices("total_expenses", "total_expenses_cents"),
-        serialization_alias="total_expenses_cents",
-    )
-    total_savings_cents: int = Field(
-        validation_alias=AliasChoices("total_savings", "total_savings_cents"),
-        serialization_alias="total_savings_cents",
-    )
-    left_over_cents: int = Field(
-        validation_alias=AliasChoices("left_over", "left_over_cents"),
-        serialization_alias="left_over_cents",
-    )
-    category_breakdown: list[dict]
-    income_breakdown: list[dict]
-    needs_wants_savings: dict
-    monthly_trend: list[dict]
-
-    @field_validator("total_income_cents", "total_expenses_cents",
-                     "total_savings_cents", "left_over_cents", mode="before")
-    @classmethod
-    def _totals_to_cents(cls, v):
-        return _as_cents(v)
 
 class SettingOut(BaseModel):
     key: str

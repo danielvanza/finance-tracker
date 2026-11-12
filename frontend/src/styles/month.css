@@ -455,3 +455,53 @@
     height: 11rem;
   }
 }
+
+/* Free to spend: the line under the headline, how it is worked out, and the bills it allows for. */
+.verdict-sub {
+  color: var(--muted);
+  margin-top: -0.25rem;
+}
+
+.verdict-caveat {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.free-how {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.free-how > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.free-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.free-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.free-list small {
+  display: block;
+  color: var(--muted);
+}
+
+.kind-share {
+  white-space: nowrap;
+}
+
+.import-link small {
+  color: var(--muted);
+  font-weight: 400;
+}

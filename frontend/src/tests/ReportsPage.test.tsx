@@ -23,7 +23,7 @@ const pace = (month: string, over: Partial<Pace> = {}): Pace => ({
   actual_cents: { needs: 247800, wants: 65300, savings: 30000 },
   spendable_plan_cents: 535000, spendable_actual_cents: 313100,
   pace_delta_cents: null, daily: [], data_through: '2026-10-23',
-  last_import_by_bank: [], behind_months: [], to_review: 5, ...over,
+  last_import_by_bank: [], behind_months: [], to_review: 5, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
 })
 
 const row = (id: number, name: string, type: 'needs' | 'wants' | 'savings', planned: number, actual: number): BudgetRow => ({
@@ -42,7 +42,7 @@ const summary = (over: Partial<DashboardSummary> = {}, breakdown: DashboardSumma
   month: '2026-10', total_income_cents: 420000, total_expenses_cents: 343103, total_savings_cents: 30000, left_over_cents: 76897,
   category_breakdown: breakdown,
   income_breakdown: [{ category_id: 9, category_name: 'Salary', amount_cents: 420000 }],
-  needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, monthly_trend: [], ...over,
+  needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, ...over,
 })
 
 const bd = (id: number, name: string, type: 'needs' | 'wants' | 'savings', actual: number) =>
@@ -51,7 +51,7 @@ const bd = (id: number, name: string, type: 'needs' | 'wants' | 'savings', actua
 const txs = (confirmed: number, unconfirmed: number): Transaction[] =>
   Array.from({ length: confirmed + unconfirmed }, (_, i) => ({
     id: i, date: '2026-10-05', description: `T${i}`, amount_cents: -100, source: 'ing', category_id: 1, category_name: 'Utilities',
-    confirmed: i < confirmed, categorised_by: null, ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [],
+    confirmed: i < confirmed, categorised_by: null, ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   } as Transaction))
 
 function Where() {
@@ -227,13 +227,12 @@ describe('ReportLink', () => {
 })
 
 describe('YourData', () => {
-  it('links the backup and downloads every transaction', async () => {
+  it('downloads every transaction', async () => {
     URL.createObjectURL = vi.fn(() => 'blob:x')
     URL.revokeObjectURL = vi.fn()
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     vi.mocked(api.getTransactions).mockResolvedValue(txs(2, 0))
     render(<YourData />)
-    expect(screen.getByRole('link', { name: /Back up everything/ })).toHaveAttribute('href', '/api/reports/backup')
     fireEvent.click(screen.getByRole('button', { name: /All transactions/ }))
     await waitFor(() => expect(click).toHaveBeenCalled())
     expect(api.getTransactions).toHaveBeenCalledWith()

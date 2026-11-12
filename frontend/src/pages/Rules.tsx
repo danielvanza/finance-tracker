@@ -20,7 +20,7 @@ export default function Rules() {
   const handleCreate = async () => {
     if (!newPattern || !newCategory) return
     try {
-      await api.createRule({ pattern: newPattern, category_id: newCategory, priority: 0 })
+      await api.createRule({ pattern: newPattern, category_id: newCategory })
     } catch (e) {
       setError(describeApiError(e)); return
     }
@@ -43,7 +43,7 @@ export default function Rules() {
     try {
       const res = await fetch(`${BASE}/rules/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern: e.pattern, category_id: e.category_id, priority: 0 }),
+        body: JSON.stringify({ pattern: e.pattern, category_id: e.category_id }),
       })
       if (!res.ok) {
         let detail: string | null = null

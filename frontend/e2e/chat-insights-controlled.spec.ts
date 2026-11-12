@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- API responses in the test harness */
 import { test, expect, type Page } from '@playwright/test'
 import {
-  App, DANIEL, ING_HEADER, TelegramStub, ingRow, monthDates, openChat, say, seedHistory, shot, startBot,
+  App, DANIEL, ING_HEADER, TelegramStub, ingRow, monthDates, openChat, say, seedHistory, shot, startBot, GROUP,
 } from './fixtures'
 
 // The tools, limits, refusals and failure paths of looking further back: a scripted Claude in the real
@@ -75,7 +75,7 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     const contextOf = (prompt: string) => JSON.parse(/<context>\n([\s\S]*?)\n<\/context>/.exec(prompt)![1])
     const before = contextOf(app.calls()[0].prompt)
     expect(before.this_month.month).toBe(d.label)
-    expect(before.this_month.left_to_spend_cents).toBe((await app.json('/dashboard/pace')).spendable_plan_cents - (await app.json('/dashboard/pace')).spendable_actual_cents)
+    expect(before.this_month.left_in_plan_cents).toBe((await app.json('/dashboard/pace')).spendable_plan_cents - (await app.json('/dashboard/pace')).spendable_actual_cents)
 
     await app.importCsv(ING_LINES(Array.from({ length: 20 }, (_, i) => rowLine(d.backDay(12 + i, 2), `Sample Older ${i}`, '12,00'))))
     await clear()
@@ -156,15 +156,13 @@ test.describe.serial('looking further back, in controlled conditions', () => {
       { reply: query(`SELECT * FROM category_months WHERE spent_cents <> 0 AND ${range}`, `SELECT * FROM month_totals WHERE ${range}`, `SELECT month, category, SUM(spend_cents) AS s FROM spending WHERE ${range} AND category_type IN ('needs','wants','savings') AND counts_as IN ('spend','refund') GROUP BY month, category`) },
       { reply: plain('Compared.') },
     ])
-    // Only the rows the default prompt has always added for the last four months may appear.
-    const bankRows = async () => (await ledger()).filter(t => t.standing_adjustment_id === null)
-    const before = await bankRows()
+    const before = await ledger()
+    const budgetsBefore = app.dump().budgets
     await replyTo('compare')
-    expect(await bankRows(), 'looking changed the ledger').toEqual(before)
-    if (unopened) expect((await ledger()).filter(t => t.description === 'Sample Pocket' && t.date === `${unopened}-01`), 'an unvisited month was saved by looking').toHaveLength(0)
+    expect(await ledger(), 'looking changed the ledger').toEqual(before)
+    if (unopened) expect(app.dump().budgets, 'an unvisited month got a plan by looking').toEqual(budgetsBefore)
     const [byCategory, totals, spending] = app.queryResults()
     expect(byCategory.cut_off).toBe(false)
-    expect(byCategory.rows.some((r: any) => r[0] === d.back(7)), 'a month with only a standing adjustment').toBe(true)
     for (const month of [...Array.from({ length: 11 }, (_, back) => d.back(back)), d.back(14)]) {
       for (const row of await app.json<any[]>(`/budget?month=${month}`)) {
         const mine = byCategory.rows.find((r: any) => r[0] === month && r[1] === row.category_name)
@@ -180,7 +178,7 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     }
   }
 
-  test('R-004: the views equal the Month page with a split, a refund, an excluded row, a standing adjustment and a moved month start', async () => {
+  test('R-004: the views equal the Month page with a split, a refund, an excluded row and a moved month start', async () => {
     const ah = (await ledger()).filter(t => t.description === 'Albert Heijn 1234' && t.date === d.backDay(2, 1))[0]
     const food = await app.category('Food - Essential')
     const clothing = await app.category('Clothing')
@@ -191,12 +189,6 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     await app.addManual(d.backDay(2, 9), 1500, 'Sample Refund Row', 'Food - Essential', true)
     await app.addManual(d.backDay(4, 9), 700, 'Sample Older Refund', 'Clothing', true)
     await app.importCsv(ING_LINES([rowLine(d.backDay(2, 11), 'Sample Transfer', '444,00')]))
-    await app.post('/standing-adjustments', {
-      name: 'Sample Pocket', amount_cents: 5000, start_month: `${d.back(20)}-01`,
-      income_category_id: (await app.category('Retained Salary')).id,
-      expense_category_id: (await app.category('Personal Allowance')).id,
-    })
-    expect((await ledger()).some(t => t.description === 'Sample Pocket' && t.date === `${d.back(14)}-01`)).toBe(false)
     await expectViewsEqualMonthPage(d.back(14))
     expect(await budgetCents(d.back(2), 'Clothing')).toBe(3000)
 
@@ -204,38 +196,6 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     await clear()
     await expectViewsEqualMonthPage()
     await setStart('24')
-  })
-
-  test('R-004: a standing adjustment from before the first import is counted like the Month page, whatever ran before', async () => {
-    const own = new App({ port: 28744, fakeClaude: true })
-    await own.start()
-    try {
-      await own.addRule('sample shop', 'Miscellaneous')
-      await own.importCsv(ING_LINES([rowLine(d.backDay(2, 3), 'Sample Shop', '10,00')]))
-      await own.post('/standing-adjustments', {
-        name: 'Sample Early Pocket', amount_cents: 5000, start_month: `${d.back(10)}-01`,
-        income_category_id: (await own.category('Retained Salary')).id,
-        expense_category_id: (await own.category('Personal Allowance')).id,
-      })
-      own.script([
-        { reply: query(`SELECT month, category, spent_cents FROM category_months WHERE spent_cents <> 0`, 'SELECT * FROM month_totals') },
-        { reply: plain('Compared.') },
-      ])
-      await own.post('/chat/messages', { channel: 'bubble', text: 'compare' })
-      await expect.poll(async () => (await own.json('/chat/messages?channel=bubble')).messages.at(-1).role, { timeout: 30_000 }).toBe('assistant')
-      const [byCategory, totals] = own.queryResults()
-      for (let back = 10; back >= 3; back--) {
-        const month = d.back(back)
-        const allowance = (await own.budgetRow(month, 'Personal Allowance')).actual_amount_cents
-        expect(allowance, month).toBe(5000)
-        expect(byCategory.rows.find((r: any) => r[0] === month && r[1] === 'Personal Allowance')?.[2], month).toBe(allowance)
-        const summary = await own.json(`/dashboard/summary?month=${month}`)
-        expect(totals.rows.find((r: any) => r[0] === month)?.[2], month).toBe(summary.total_expenses_cents)
-      }
-    } finally {
-      await own.stop()
-      own.destroy()
-    }
   })
 
   test('R-005: a query for the whole ledger is capped and marked cut off, so the agent is told', async () => {
@@ -273,24 +233,20 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     expect(coverage.first_month).toBe(d.back(31)) // the oldest row, imported by the first test
   })
 
-  test('R-009 (agent R-004): the agent is told when one bank stops early or leaves a hole, even while another carries on', async () => {
+  test('R-009 (agent R-004): the agent is told when the bank files stop early or leave a hole', async () => {
     const other = new App({ port: 28743, fakeClaude: true })
     await other.start()
     try {
       await other.addRule('sample card', 'Miscellaneous')
-      await other.addRule('sample wallet', 'Miscellaneous')
       const ingRows: string[] = []
-      const revolut = ['Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance']
       for (let back = 3; back >= 1; back--) {
         for (let day = 0; day <= 28; day += 3) {
           const stopped = back === 2 && day > 6
           const hole = back === 3 && day > 3 && day < 24
           if (!stopped && !hole) ingRows.push(ingRow(d.backDay(back, day), 'Sample Card', -500, `c${back}-${day}`))
-          revolut.push(`CARD_PAYMENT,Current,${d.backDay(back, day)} 10:00:00,${d.backDay(back, day)} 10:00:00,Sample Wallet,-5.00,0.00,EUR,COMPLETED,10.00`)
         }
       }
       await other.importCsv(ING_LINES(ingRows))
-      await other.importCsv(revolut.join('\n') + '\n', 'revolut')
       other.script([
         { reply: query(`SELECT SUM(spent_cents) AS spent_cents FROM category_months WHERE category = 'Miscellaneous' AND month = '${d.back(1)}'`) },
         { reply: answer('Steady.') },
@@ -338,7 +294,7 @@ test.describe.serial('looking further back, in controlled conditions', () => {
     stub.text(DANIEL, 'show spend per category over 5 months')
     await stub.reply_after(count, m => m.text === 'Food and Miscellaneous over five months.')
     await expect.poll(() => stub.photos.length, { timeout: 20_000 }).toBe(photos + 1)
-    expect(stub.photos.at(-1)!.chat_id).toBe(String(DANIEL))
+    expect(stub.photos.at(-1)!.chat_id).toBe(String(GROUP))
     const telegramReply = (await app.json('/chat/messages?channel=telegram')).messages.at(-1)
     const telegramPng = Buffer.from(await (await fetch(`${app.base}/api/chat/messages/${telegramReply.id}/chart`)).arrayBuffer())
     expect(stub.photos.at(-1)!.body.includes(telegramPng)).toBe(true)

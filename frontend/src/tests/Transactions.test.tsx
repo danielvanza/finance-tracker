@@ -23,7 +23,7 @@ vi.mock('../api', () => ({
 const tx = (id: number, over: Partial<Transaction> = {}): Transaction => ({
   id, date: '2026-11-05', amount_cents: -2500, description: `Shop ${id}`, source: 'ing',
   category_id: 1, category_name: 'Food - Essential', confirmed: true, categorised_by: 'rule',
-  ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [], ...over,
+  ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [], ...over,
 })
 
 const categories: Category[] = [
@@ -37,7 +37,7 @@ const pace = {
 
 // 4 rows on screen; the review queue holds 115 (most of it not in the list a filter leaves).
 const list = [
-  tx(1, { description: 'Albert Heijn Amsterdam', source: 'revolut', amount_cents: -2903 }),
+  tx(1, { description: 'Albert Heijn Amsterdam', amount_cents: -2903 }),
   tx(2, { description: 'Jumbo Utrecht', amount_cents: -15000, date: '2026-09-01' }),
   tx(3, { description: 'Lunch with Sam', source: 'manual', category_id: 2, category_name: 'Utilities', amount_cents: -1200 }),
   tx(4, { description: 'Etsy.com', confirmed: false, category_id: null, category_name: null, categorised_by: 'ai', ai_confidence: 0.7 }),
@@ -183,18 +183,6 @@ describe('Transactions', () => {
     expect(await screen.findByRole('button', { name: 'Albert Heijn: spend and history' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Jumbo: spend and history' })).toBeInTheDocument()
     expect(screen.getAllByText('Albert Heijn Amsterdam').length).toBeGreaterThan(0)
-  })
-
-  it('makes the review rule for the shop, not the bank text with its order number', async () => {
-    const review = tx(9, {
-      description: 'Coolblue 20551 Rotterdam NLD', confirmed: false, category_id: 1, category_name: 'Food - Essential',
-      categorised_by: 'ai', ai_confidence: 0.7,
-    })
-    vi.mocked(api.getNextReview).mockResolvedValue(review)
-    show('/transactions', [review])
-    await userEvent.click(await screen.findByRole('button', { name: 'Always categorise "Coolblue" as this' }))
-    await waitFor(() => expect(api.createRule).toHaveBeenCalledWith({ pattern: 'coolblue', category_id: 1, priority: 0 }))
-    expect(api.patchTransaction).toHaveBeenCalledWith(9, { category_id: 1 })
   })
 
   it('offers the CSV chip, with the filtered list as its rows', async () => {

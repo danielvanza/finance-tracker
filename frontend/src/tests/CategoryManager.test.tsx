@@ -35,8 +35,8 @@ describe('CategoryManager', () => {
 
   it('renders categories grouped by type with correct labels', async () => {
     renderWithClient(<CategoryManager />)
-    expect(await screen.findByText('Needs')).toBeTruthy()
-    expect(screen.getByText('Wants')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Needs' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Wants' })).toBeTruthy()
     expect(screen.getByDisplayValue('Food - Essential')).toBeTruthy()
     expect(screen.getByDisplayValue('Utilities')).toBeTruthy()
     expect(screen.getByDisplayValue('Recreation & Entertainment')).toBeTruthy()
@@ -45,7 +45,7 @@ describe('CategoryManager', () => {
   it('adds a category: fills form, submits, calls api and resets', async () => {
     const { api } = await import('../api')
     renderWithClient(<CategoryManager />)
-    await screen.findByText('Needs')
+    await screen.findByRole('heading', { name: 'Needs' })
 
     fireEvent.click(screen.getByText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('e.g. Pet Care'), { target: { value: 'Pet Care' } })
@@ -62,7 +62,7 @@ describe('CategoryManager', () => {
   it('shows an inline error and does not call the API when name is blank', async () => {
     const { api } = await import('../api')
     renderWithClient(<CategoryManager />)
-    await screen.findByText('Needs')
+    await screen.findByRole('heading', { name: 'Needs' })
 
     fireEvent.click(screen.getByText('Add category'))
     fireEvent.click(screen.getByText('Add category'))
@@ -98,7 +98,7 @@ describe('CategoryManager', () => {
     const { api } = await import('../api')
     vi.mocked(api.createCategory).mockRejectedValueOnce(new ApiError(409, "'Utilities' already exists", "'Utilities' already exists"))
     renderWithClient(<CategoryManager />)
-    await screen.findByText('Needs')
+    await screen.findByRole('heading', { name: 'Needs' })
 
     fireEvent.click(screen.getByText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('e.g. Pet Care'), { target: { value: 'Utilities' } })

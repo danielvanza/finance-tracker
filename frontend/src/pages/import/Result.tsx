@@ -15,20 +15,21 @@ interface Props {
 
 /** What was added, what needs a look, then the next step. The full count folds away. */
 export default function Result({ data, bank, catchup, headingRef, onAgain }: Props) {
-  // Rule matches are confirmed on import; guesses and anything left over need a person.
-  const review = data.categorised_by_ai + data.uncategorised
+  // Rule matches and guesses Claude was sure of count at once; the doubtful ones need a person.
+  const review = data.doubtful + data.uncategorised
+  const sorted = data.categorised_by_rule + data.categorised_by_ai
   const added = `${plural(data.imported, 'transaction')}${data.skipped_duplicates ? `, ${data.skipped_duplicates} already in` : ''}`
 
   const line =
     review > 0 ? (
       <>
-        {data.categorised_by_rule > 0 && (
-          <><strong>{plural(data.categorised_by_rule, 'row')}</strong> sorted by your rules, </>
+        {sorted > 0 && (
+          <><strong>{plural(sorted, 'row')}</strong> sorted and counted, </>
         )}
-        <strong>{review}</strong> {review === 1 ? 'needs' : 'need'} a look.
+        <strong>{review}</strong> {review === 1 ? 'needs' : 'need'} your answer.
       </>
     ) : (
-      <>All <strong>{data.imported}</strong> sorted by your rules. Nothing to review.</>
+      <>All <strong>{data.imported}</strong> sorted and counted. Nothing to review.</>
     )
 
   const backlog = catchup && catchup.toReview > 0 ? catchup.toReview : review
@@ -61,9 +62,10 @@ export default function Result({ data, bank, catchup, headingRef, onAgain }: Pro
         <dl className="import-tally num">
           <div><dt>Imported</dt><dd>{data.imported}</dd></div>
           <div><dt>Skipped duplicates</dt><dd>{data.skipped_duplicates}</dd></div>
-          <div><dt>Categorised by rule</dt><dd>{data.categorised_by_rule}</dd></div>
-          <div><dt>Categorised by AI</dt><dd>{data.categorised_by_ai}</dd></div>
-          <div><dt>Uncategorised</dt><dd>{data.uncategorised}</dd></div>
+          <div><dt>Sorted by your rules</dt><dd>{data.categorised_by_rule}</dd></div>
+          <div><dt>Sorted automatically (Claude was sure)</dt><dd>{data.categorised_by_ai}</dd></div>
+          <div><dt>Waiting for your answer</dt><dd>{data.doubtful}</dd></div>
+          <div><dt>Could not be sorted</dt><dd>{data.uncategorised}</dd></div>
         </dl>
       </details>
     </section>

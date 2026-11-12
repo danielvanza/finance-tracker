@@ -2,8 +2,8 @@
 
 Read-only and derived on every call, nothing is stored. A payment counts as repeating once the same
 description has come in at least three times on a regular day (weekly to yearly), always for a similar
-amount. Only confirmed expenses count; refunds, splits, standing adjustments and exclude-type categories
-are left out.
+amount. Only confirmed expenses count; refunds, splits, bills paid from a set-aside and exclude-type
+categories are left out. A payment a person marked as not a fixed bill is listed apart and not counted.
 
 A row never claims more than the bank files can show: when the files stop short of a date, a payment
 due by then is "expected", not missing, and a payment is only "stopped" once the files reach well past
@@ -15,13 +15,15 @@ from datetime import date, datetime, timedelta
 from statistics import median_low
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
+import clock
 import money
 import spend_service
 from db import get_db
 from financial_month import label_month_for_date
-from models import Category, Transaction, TransactionSource
+from models import IgnoredBill, Transaction, TransactionSource
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -38,12 +40,12 @@ AMOUNT_SPREAD = 0.25  # every payment within 25% of the median (energy may vary)
 STEADY_SPREAD = 0.01  # payments this close are "the same price"
 STOP_AFTER = 1.6  # cadences of silence, with bank files reaching past it, before "stopped"
 BEHIND_DAYS = 7  # bank files further behind than this can't say what has been paid
-BANK_SOURCES = (TransactionSource.ing, TransactionSource.revolut, TransactionSource.degiro)
-ORDER = {"due": 0, "expected": 1, "paid": 2, "later": 3, "stopped": 4}
+BANK_SOURCES = (TransactionSource.ing,)
+ORDER = {"due": 0, "expected": 1, "paid": 2, "later": 3, "stopped": 4, "ignored": 5}
 
 
 def _today() -> date:
-    return date.today()
+    return clock.today()
 
 
 def _key(description: str) -> str:
@@ -154,7 +156,7 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
             bank_reach[tx.source] = tx.date  # rows run oldest first
         category = tx.category
         if (
-            tx.amount >= 0 or tx.is_refund or tx.splits or tx.standing_adjustment_id is not None
+            tx.amount >= 0 or tx.is_refund or tx.splits or tx.set_aside_id is not None
             or category is None or category.type.value not in ("needs", "wants", "savings")
         ):
             continue
@@ -165,6 +167,7 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
     latest = max(bank_reach.values(), default=None)
     behind = latest is None or (asof - latest).days > BEHIND_DAYS
 
+    ignored = {row.key for row in db.query(IgnoredBill).all()}
     items = []
     for key, txs in groups.items():
         found = _regular_run(txs)
@@ -192,6 +195,11 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
             ],
         }
         nxt = _step(last.date, cadence)
+        if key in ignored:
+            item["state"] = "ignored"
+            item["price_change"] = None
+            items.append(item)
+            continue
         if reach is not None and (reach - last.date).days > STOP_AFTER * cadence[1]:
             if (asof - last.date).days > 4 * cadence[1]:
                 continue  # long gone: not worth a row
@@ -231,3 +239,28 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
         "expected_cents": unsettled("expected"),
         "items": items,
     }
+
+
+class BillKey(BaseModel):
+    key: str
+
+
+@router.post("/ignored")
+def ignore_bill(body: BillKey, db: Session = Depends(get_db)):
+    """A person says this repeating payment is not a fixed bill: it is no longer counted as still to pay."""
+    key = body.key.strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="Which payment?")
+    if db.get(IgnoredBill, key) is None:
+        db.add(IgnoredBill(key=key))
+        db.commit()
+    return {"ignored": key}
+
+
+@router.delete("/ignored/{key}")
+def count_bill_again(key: str, db: Session = Depends(get_db)):
+    row = db.get(IgnoredBill, key)
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return {"counted": key}

@@ -110,8 +110,10 @@ export default function TransactionsTable({ transactions, setSplitTx, handleDele
               <td className={`tx-desc${tx.confirmed ? ' strong' : ''}`}>
                 <DescriptionCell
                   text={tx.description}
-                  tag={tx.standing_adjustment_id != null && (
-                    <span className="tx-tag" title="Created automatically by a standing adjustment">auto</span>
+                  tag={tx.set_aside_name != null ? (
+                    <span className="tx-tag" title={`Paid from the set-aside "${tx.set_aside_name}": counts in no month's spending`}>set aside</span>
+                  ) : tx.confirmed && tx.categorised_by === 'ai' && (
+                    <span className="tx-tag" title="Sorted automatically: Claude was sure. Change the category if it is wrong.">auto</span>
                   )}
                 />
               </td>

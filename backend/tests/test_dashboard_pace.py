@@ -60,7 +60,7 @@ def test_empty_when_no_bank_file_was_ever_imported(client):
     assert body["daily"] == []
     assert body["pace_delta_cents"] is None
     assert body["behind_months"] == []
-    assert [b["source"] for b in body["last_import_by_bank"]] == ["ing", "revolut", "degiro"]
+    assert [b["source"] for b in body["last_import_by_bank"]] == ["ing"]
 
 
 def test_gap_names_the_months_since_the_last_bank_file(db, client):
@@ -70,7 +70,7 @@ def test_gap_names_the_months_since_the_last_bank_file(db, client):
     assert body["data_through"] is None
     assert body["behind_months"] == ["2026-02", "2026-03", "2026-04"]
     bank = {b["source"]: b["last_date"] for b in body["last_import_by_bank"]}
-    assert bank == {"ing": "2026-02-10", "revolut": None, "degiro": None}
+    assert bank == {"ing": "2026-02-10"}
 
 
 def test_manual_entries_alone_do_not_answer_the_month(db, client):

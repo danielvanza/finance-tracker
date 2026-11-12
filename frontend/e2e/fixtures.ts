@@ -19,9 +19,17 @@ export const artifacts = process.env.E2E_ARTIFACTS ?? path.join(tmpdir(), 'hf-ch
 const FAKE_CLAUDE = `#!/usr/bin/python3 -I
 import json, os, sys, time
 prompt = sys.stdin.read()
+# A picture comes as one JSON message on stdin, and the answer goes back as a stream of JSON lines.
+streamed = "--input-format" in sys.argv
+picture = None
+if streamed:
+    parts = json.loads(prompt)["message"]["content"]
+    prompt = next(p["text"] for p in parts if p["type"] == "text")
+    image = next(p["source"] for p in parts if p["type"] == "image")
+    picture = {"media_type": image["media_type"], "base64_chars": len(image["data"])}
 with open("/sandbox/work/last-call.json", "w") as f:
     json.dump({"argv": sys.argv, "env": sorted(os.environ), "home": os.listdir("/home"),
-               "real_login_visible": os.path.exists("/home/daniel/.claude"), "prompt": prompt}, f)
+               "real_login_visible": os.path.exists("/home/daniel/.claude"), "prompt": prompt, "picture": picture}, f)
 with open("/sandbox/work/calls.jsonl", "a") as f:
     f.write(json.dumps({"argv": sys.argv, "prompt": prompt}) + chr(10))
 def read(name, default=""):
@@ -30,7 +38,9 @@ def read(name, default=""):
     except OSError:
         return default
 def done(text):
-    print(json.dumps({"result": text, "is_error": False}))
+    if streamed:
+        print(json.dumps({"type": "system", "subtype": "init"}))
+    print(json.dumps({"type": "result", "result": text, "is_error": False}))
     sys.exit(0)
 mode = read("mode", "reply")
 delay = float(read("delay", "0"))
@@ -113,6 +123,9 @@ export class App {
       CLAUDE_CLI_HOME: this.home,
       CLAUDE_BIN: `${process.env.HOME}/.local/bin/claude`,
       AI_TIME_BUDGET_SECONDS: '240',
+      // What the bot says unasked is switched on by the spec that checks it, with a clock it controls.
+      NUDGES: 'off',
+      FINANCE_CLOCK_FILE: path.join(this.dir, 'clock'),
       ...this.options.env,
     }
     if (this.options.fakeClaude) {
@@ -143,6 +156,19 @@ export class App {
     rmSync(this.dir, { recursive: true, force: true })
   }
 
+  /** Set the app's clock (local time, such as 2026-11-15T18:30), or let it follow the real one again. */
+  clock(at: string | null) {
+    const file = path.join(this.dir, 'clock')
+    if (at === null) rmSync(file, { force: true })
+    else writeFileSync(file, at)
+  }
+
+  /** One value read from the throwaway database. */
+  value(query: string): unknown {
+    const out = execFileSync(python, ['-c', 'import json, sqlite3, sys; print(json.dumps(sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall()))', path.join(this.dir, 'finance.db'), query])
+    return JSON.parse(out.toString())
+  }
+
   /** Change the throwaway database directly, to force a failure the app can't be talked into. */
   sql(statement: string) {
     execFileSync(python, ['-c', 'import sqlite3, sys; db = sqlite3.connect(sys.argv[1]); db.execute(sys.argv[2]); db.commit()', path.join(this.dir, 'finance.db'), statement])
@@ -153,7 +179,7 @@ export class App {
     const script = [
       'import json, sqlite3, sys',
       'db = sqlite3.connect(sys.argv[1])',
-      'tables = ["transactions", "transaction_splits", "categories", "rules", "budgets", "standing_adjustments", "settings"]',
+      'tables = ["transactions", "transaction_splits", "categories", "rules", "budgets", "set_asides", "ignored_bills", "settings"]',
       'print(json.dumps({t: db.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall() for t in tables}, default=str))',
     ].join('\n')
     return JSON.parse(execFileSync(python, ['-c', script, path.join(this.dir, 'finance.db')]).toString())
@@ -226,7 +252,7 @@ export class App {
   }
 
   async addRule(pattern: string, categoryName: string) {
-    return this.post('/rules', { pattern, category_id: (await this.category(categoryName)).id, priority: 0 })
+    return this.post('/rules', { pattern, category_id: (await this.category(categoryName)).id })
   }
 
   async addManual(date: string, amountCents: number, description: string, categoryName: string, isRefund = false) {
@@ -236,9 +262,8 @@ export class App {
     })
   }
 
-  async importCsv(csv: string, source = 'ing') {
+  async importCsv(csv: string) {
     const form = new FormData()
-    form.append('source', source)
     form.append('file', new Blob([csv]), 'seed.csv')
     return this.json('/import/confirm', { method: 'POST', body: form })
   }
@@ -269,7 +294,9 @@ export class App {
 // ---- Telegram's API, as far as the bot uses it ------------------------------------------------
 
 export const DANIEL = 424242
+export const PARTNER = 424243
 export const STRANGER = 777001
+export const GROUP = -1004242420000
 export const TOKEN = '999:e2e-finance-bot-token'
 
 type StubMessage = { message_id: number; chat_id: number; text: string; reply_markup?: any; edits: string[]; deleted?: boolean }
@@ -328,7 +355,7 @@ export class TelegramStub {
         return
       }
       const raw = Buffer.concat(chunks)
-      this.photos.push({ chat_id: /name="chat_id"\r\n\r\n(\d+)/.exec(raw.toString('latin1'))?.[1] ?? '', body: raw })
+      this.photos.push({ chat_id: /name="chat_id"\r\n\r\n(-?\d+)/.exec(raw.toString('latin1'))?.[1] ?? '', body: raw })
       this.reply(res, { message_id: this.nextMessage++ })
       return
     }
@@ -391,18 +418,52 @@ export class TelegramStub {
     }
   }
 
-  text(from: number, text: string, chatId = from, chatType = 'private') {
+  /** Someone writes in the household's group, unless another chat is named. */
+  text(from: number, text: string, chatId = GROUP, chatType = 'supergroup') {
     this.push({ message: { message_id: this.nextMessage++, from: { id: from }, chat: { id: chatId, type: chatType }, text } })
+  }
+
+  /** A private message to the bot. */
+  private(from: number, text: string) {
+    this.text(from, text, from, 'private')
   }
 
   document(from: number, name: string, content: string | Buffer) {
     const fileId = `f${this.nextMessage}`
     this.files.set(fileId, Buffer.from(content))
-    this.push({ message: { message_id: this.nextMessage++, from: { id: from }, chat: { id: from, type: 'private' }, document: { file_id: fileId, file_name: name } } })
+    this.push({ message: { message_id: this.nextMessage++, from: { id: from }, chat: { id: GROUP, type: 'supergroup' }, document: { file_id: fileId, file_name: name } } })
   }
 
-  tap(from: number, message: StubMessage, data: string) {
-    this.push({ callback_query: { id: `cb${this.nextUpdate}`, from: { id: from }, data, message: { message_id: message.message_id, chat: { id: from, type: 'private' }, text: message.text } } })
+  voice(from: number, recording: Buffer) {
+    const fileId = `v${this.nextMessage}`
+    this.files.set(fileId, recording)
+    this.push({ message: { message_id: this.nextMessage++, from: { id: from }, chat: { id: GROUP, type: 'supergroup' }, voice: { file_id: fileId, duration: 4 } } })
+  }
+
+  /** A photo, as Telegram sends it: several sizes of one picture, with whatever was written under it. */
+  photo(from: number, picture: Buffer, caption?: string) {
+    const fileId = `p${this.nextMessage}`
+    this.files.set(fileId, picture)
+    this.files.set(`${fileId}small`, Buffer.from('thumbnail'))
+    this.push({ message: {
+      message_id: this.nextMessage++, from: { id: from }, chat: { id: GROUP, type: 'supergroup' },
+      photo: [{ file_id: `${fileId}small`, width: 90, file_size: 9 }, { file_id: fileId, width: 1280, file_size: picture.length }],
+      ...(caption ? { caption } : {}),
+    } })
+  }
+
+  /** Something the bot cannot read, such as a sticker. */
+  other(from: number, field: string) {
+    this.push({ message: { message_id: this.nextMessage++, from: { id: from }, chat: { id: GROUP, type: 'supergroup' }, [field]: { file_id: 'x' } } })
+  }
+
+  tap(from: number, message: StubMessage, data: string, chatId = GROUP, chatType = 'supergroup') {
+    this.push({ callback_query: { id: `cb${this.nextUpdate}`, from: { id: from }, data, message: { message_id: message.message_id, chat: { id: chatId, type: chatType }, text: message.text } } })
+  }
+
+  /** What the group shows right now: every message not deleted, as it currently reads. */
+  showing() {
+    return this.sent.filter(m => !m.deleted && m.chat_id === GROUP)
   }
 
   async reply_after(count: number, match: (m: StubMessage) => boolean = () => true) {
@@ -433,7 +494,8 @@ export function startBot(stub: TelegramStub, apiUrl: string) {
     env: {
       PATH: '/usr/bin:/bin', HOME: process.env.HOME, LANG: 'C.UTF-8',
       TELEGRAM_BOT_TOKEN: TOKEN,
-      TELEGRAM_ALLOWED_USER_ID: String(DANIEL),
+      TELEGRAM_ALLOWED_USER_IDS: `${DANIEL},${PARTNER}`,
+      TELEGRAM_GROUP_ID: String(GROUP),
       TELEGRAM_API_BASE: stub.base,
       FINANCE_API_URL: apiUrl,
     },
@@ -518,6 +580,11 @@ export async function seedHistory(app: App, d: ReturnType<typeof monthDates>) {
 
 export const thread = (page: Page) => page.locator('.chat-thread')
 export const lastPending = (page: Page): Locator => page.locator('.chat-card[data-state="pending"]').last()
+
+/** The waiting card for a change, found by Claude's one-sentence summary of it or by words the card shows. */
+export const pendingCard = (page: Page, text: string): Locator =>
+  page.locator(`.chat-card[data-state="pending"][data-summary*="${text.replaceAll('"', '\\"')}"]`)
+    .or(page.locator('.chat-card[data-state="pending"]', { hasText: text }))
 
 /** Presses a card's button and waits for that card, not an earlier one, to reach its result. */
 export async function decide(page: Page, card: Locator, button: string, state = 'applied') {

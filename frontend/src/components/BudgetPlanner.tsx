@@ -4,14 +4,14 @@ import { api } from '../api'
 import { centsToInputString, formatEuros, parseToCents } from '../money'
 import { dayLabel } from '../dates'
 import ErrorBanner, { describeApiError } from './ErrorBanner'
-import { KINDS, averageSpend, lastMonthFill, planRows, shiftMonth } from './budget/plan'
+import { KINDS, aimsOf, averageSpend, lastMonthFill, planRows, shiftMonth } from './budget/plan'
 
 type Fill = 'last' | 'avg'
 
 const monthWord = (label: string) =>
   new Date(`${label}-15T12:00:00`).toLocaleDateString('en-GB', { month: 'long' })
 
-/** Setup > Budget: plan the whole month in one list, with the 50/30/20 balance live as you type. */
+/** Setup > Budget: plan the whole month in one list, with the balance against the target split live as you type. */
 export default function BudgetPlanner() {
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState<Record<number, string>>({})
@@ -30,7 +30,8 @@ export default function BudgetPlanner() {
   const lastFinished = finished.includes(last)
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.getCategories })
-  const { data: adjustments = [] } = useQuery({ queryKey: ['standing-adjustments'], queryFn: api.getStandingAdjustments })
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings })
+  const aims = aimsOf(settings?.target_split)
   const budgets = useQueries({
     queries: (month ? [month, ...history] : []).map(m => ({
       queryKey: ['budget', m], queryFn: () => api.getBudget(m),
@@ -52,9 +53,8 @@ export default function BudgetPlanner() {
   const rows = planRows(thisBudget, categories)
   const lastBudget = past[0]
   const finishedBudgets = past.filter((_, i) => finished.includes(history[i]))
-  const skip = new Set(adjustments.map(a => a.expense_category_id))
   const lastFill = lastMonthFill(rows, lastBudget)
-  const averages = averageSpend(rows, finishedBudgets, skip)
+  const averages = averageSpend(rows, finishedBudgets)
   const income = lastFinished ? incomeQuery.data?.total_income_cents ?? null : null
 
   const valueOf = (id: number, savedCents: number) => {
@@ -112,6 +112,7 @@ export default function BudgetPlanner() {
     <Shell>
       <p className="setup-note">
         {monthWord(month)} plan, {dayLabel(pace.start_date)} to {dayLabel(pace.end_date)}. Fill from history, then change what you like.
+        A changed amount stays for the months after {monthWord(month)} too; earlier months keep theirs.
       </p>
 
       <div className="bud-balance">
@@ -140,16 +141,16 @@ export default function BudgetPlanner() {
                 return (
                   <li key={k.kind}>
                     <span className="lab">{k.label}</span>
-                    <span className="num">{pct}%<small> of income, aim {k.aim}%</small></span>
+                    <span className="num">{pct}%<small> of income, aim {aims[k.kind]}%</small></span>
                     <span className="meter" aria-hidden="true">
                       <i style={{ width: `${Math.min(100, pct)}%` }} />
-                      <b style={{ left: `${k.aim}%` }} />
+                      <b style={{ left: `${aims[k.kind]}%` }} />
                     </span>
                   </li>
                 )
               })}
             </ul>
-            <p className="bud-key">The tick marks the 50/30/20 aim.</p>
+            <p className="bud-key">The tick marks your target split, {aims.needs}/{aims.wants}/{aims.savings}.</p>
           </>
         )}
       </div>
@@ -180,9 +181,7 @@ export default function BudgetPlanner() {
               {group.map(({ r, v }) => {
                 const avg = averages.get(r.id)
                 const was = v !== null && v !== r.savedCents ? `was ${formatEuros(r.savedCents)}` : ''
-                const note = skip.has(r.categoryId) && avgMonths > 0
-                  ? 'standing adjustment, not averaged'
-                  : avg !== undefined ? `averages ${formatEuros(avg)}` : ''
+                const note = avg !== undefined ? `averages ${formatEuros(avg)}` : ''
                 return (
                   <li className="bud-row" key={r.id}>
                     <label className="bud-name" htmlFor={`plan-${r.id}`}>

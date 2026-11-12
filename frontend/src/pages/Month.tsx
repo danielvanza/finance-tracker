@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '../api'
 import { dayLabel } from '../dates'
 import { formatCents, formatEuros } from '../money'
-import type { Pace } from '../types'
+import type { FreeToSpend, Pace } from '../types'
+import ImportLink from '../components/ImportLink'
+import { aimsOf } from '../components/budget/plan'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import RecurringLink from '../components/recurring/RecurringLink'
 import ReportLink from '../components/reports/ReportLink'
@@ -22,25 +24,25 @@ function shiftMonth(label: string, by: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const BANKS: Record<string, string> = { ing: 'ING', revolut: 'Revolut', degiro: 'DEGIRO' }
-
 /** What can be spent a day, and how the month is going: where it ends when we can say, how far from plan it is otherwise. */
 function paceSentence(p: Pace, left: number) {
   const parts: string[] = []
   const projection = projectMonthEnd(p)
-  // Today can still be spent, so it counts.
-  const perDay = p.days_left !== null && left > 0 ? formatEuros(Math.floor(left / (p.days_left + 1))) : null
+  // Today can still be spent, so it counts. With fixed bills and set-asides allowed for, it is the free amount a day.
+  const perDay = p.free
+    ? (p.free.per_day_cents !== null ? formatEuros(p.free.per_day_cents) : null)
+    : p.days_left !== null && left > 0 ? formatEuros(Math.floor(left / (p.days_left + 1))) : null
   if (projection) {
     const { ordinaryDayCents, gapCents } = projection
     const ordinary = formatEuros(ordinaryDayCents)
     parts.push(perDay
-      ? `About ${perDay} a day keeps you in plan; ordinary days have cost about ${ordinary}.`
+      ? `About ${perDay} a day ${p.free ? 'until payday' : 'keeps you in plan'}; ordinary days have cost about ${ordinary}.`
       : `Ordinary days have cost about ${ordinary}.`)
     parts.push(gapCents === 0
       ? 'At this pace you will finish right on plan.'
       : `At this pace you will finish about ${formatEuros(Math.abs(gapCents))} ${gapCents > 0 ? 'over' : 'under'}.`)
   } else {
-    if (perDay) parts.push(`About ${perDay} a day.`)
+    if (perDay) parts.push(p.free ? `About ${perDay} a day until payday.` : `About ${perDay} a day.`)
     const delta = p.pace_delta_cents ?? 0
     if (p.days_left === null) {
       parts.push(`${formatEuros(p.spendable_actual_cents)} spent of ${formatEuros(p.spendable_plan_cents)} planned.`)
@@ -54,6 +56,51 @@ function paceSentence(p: Pace, left: number) {
     parts.push(`Bank files run to ${dayLabel(p.data_through!)}.`)
   }
   return parts.join(' ')
+}
+
+/** How the headline is worked out: what is left in the plan, the fixed bills still to come, and what is set aside. */
+function FreeHow({ free, end }: { free: FreeToSpend; end: string }) {
+  const qc = useQueryClient()
+  const leaveOut = async (key: string) => {
+    await api.ignoreBill(key)
+    qc.invalidateQueries({ queryKey: ['pace'] })
+    qc.invalidateQueries({ queryKey: ['recurring'] })
+  }
+  return (
+    <details className="free-how">
+      <summary>
+        {formatEuros(free.left_in_plan_cents)} left in the plan
+        {free.bills_cents > 0 && <>, less {formatEuros(free.bills_cents)} of fixed bills still to come</>}
+        {free.set_aside_cents > 0 && <>, less {formatEuros(free.set_aside_cents)} set aside</>}
+      </summary>
+      {free.bills.length === 0 && free.set_asides.length === 0 && (
+        <p className="muted">No fixed bills are still to come before {dayLabel(end)}, and nothing is set aside this month.</p>
+      )}
+      {free.bills.length > 0 && (
+        <ul className="free-list" aria-label="Fixed bills still to come">
+          {free.bills.map(bill => (
+            <li key={bill.key}>
+              <span>{bill.name}<small>{bill.next_date ? `due ${dayLabel(bill.next_date)}` : ''} · {bill.category_name}</small></span>
+              <span className="num">{formatEuros(bill.amount_cents)}</span>
+              <button type="button" className="btn btn-sm" onClick={() => leaveOut(bill.key)} aria-label={`${bill.name} is not a fixed bill`}>
+                Not a fixed bill
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {free.set_asides.length > 0 && (
+        <ul className="free-list" aria-label="Set aside this month">
+          {free.set_asides.map(bill => (
+            <li key={bill.id}>
+              <span>{bill.name}<small>set aside this month</small></span>
+              <span className="num">{formatEuros(bill.monthly_cents)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  )
 }
 
 function Verdict({ p }: { p: Pace }) {
@@ -85,6 +132,22 @@ function Verdict({ p }: { p: Pace }) {
     )
   }
   const left = p.spendable_plan_cents - p.spendable_actual_cents
+  if (p.free) {
+    const free = p.free.free_cents
+    return (
+      <div className="verdict">
+        <h1>{free >= 0 ? `${formatEuros(free)} free to spend` : `${formatEuros(-free)} over`}</h1>
+        <p className="verdict-sub">{free >= 0 ? `until payday, ${dayLabel(p.end_date)}` : 'what was free to spend this month'}</p>
+        <p>{paceSentence(p, left)}</p>
+        {p.to_review_in_month > 0 && (
+          <p className="verdict-caveat">
+            {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.
+          </p>
+        )}
+        <FreeHow free={p.free} end={p.end_date} />
+      </div>
+    )
+  }
   return (
     <div className="verdict">
       <h1>{left >= 0 ? `${formatEuros(left)} left` : `${formatEuros(-left)} over`}</h1>
@@ -104,7 +167,7 @@ function GapToFill({ p }: { p: Pace }) {
       {range && <div><span>{range}</span><small>{behind.length} month{behind.length === 1 ? '' : 's'}</small></div>}
       {p.last_import_by_bank.map(b => (
         <div key={b.source}>
-          <span>{BANKS[b.source] ?? b.source}</span>
+          <span>{b.source.toUpperCase()}</span>
           <small>{b.last_date ? dayLabel(b.last_date) : 'no file yet'}</small>
         </div>
       ))}
@@ -129,6 +192,8 @@ export default function Month() {
   })
   const rows = budgetQuery.data ?? []
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.getCategories })
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings })
+  const aims = aimsOf(settings?.target_split)
   const summaryQuery = useQuery({
     queryKey: ['dashboard', month], queryFn: () => api.getDashboard(month!), enabled: !!month, placeholderData: keepPreviousData,
   })
@@ -171,6 +236,7 @@ export default function Month() {
       <div className="month-bar">
         <span className="lab">{period}{p.day_number !== null && <span className="month-day"> · day {p.day_number} of {p.days_total}</span>}</span>
         <div className="month-nav">
+          <ImportLink />
           <button type="button" className="btn" aria-label="Previous month" onClick={() => setPicked(shiftMonth(shownMonth, -1))}>
             <ChevronLeft size={16} aria-hidden="true" />
           </button>
@@ -199,7 +265,12 @@ export default function Month() {
                 {kinds.map(k => (
                   <div className="kind" key={k.key}>
                     <span>{KIND_LABELS[k.key]}</span>
-                    <small>{formatEuros(k.actual)} of {formatEuros(k.plan)}</small>
+                    <small>
+                      {formatEuros(k.actual)} of {formatEuros(k.plan)}
+                      {summary && summary.total_income_cents > 0 && (
+                        <span className="kind-share"> · {Math.round((k.actual / summary.total_income_cents) * 100)}% of income, aim {aims[k.key]}%</span>
+                      )}
+                    </small>
                     <span className="meter" aria-hidden="true">
                       <i style={{ width: `${k.plan > 0 ? Math.max(0, Math.min(100, (k.actual / k.plan) * 100)) : 0}%` }} />
                       {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}

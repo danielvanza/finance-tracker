@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { api } from '../../api'
 import { describeApiError } from '../ErrorBanner'
-import { backupUrl } from './api'
 import { csvFilename, downloadCsv } from './csv'
 import '../../styles/reports.css'
 
 /**
- * The "Your data" section at the end of Setup: the JSON backup and every transaction as a CSV. It takes no props and
+ * The "Your data" section at the end of Setup: every transaction as a CSV. It takes no props and
  * is a `section` for `.setup-sections`: `<YourData />` after `<Settings />`.
  */
 export default function YourData() {
@@ -31,14 +30,9 @@ export default function YourData() {
       <h2>Your data</h2>
       <div className="panel setup-panel">
         <p className="setup-note">
-          These files are for a spreadsheet or for safe keeping. There is no restore button here: the database file on
-          the server is the real backup.
+          This file is for a spreadsheet. The database file on the server is the real backup.
         </p>
         <div className="rep-data-rows">
-          <a className="link-row rep-data-row" href={backupUrl} download>
-            <span>Back up everything<small>One JSON file: transactions, categories, budgets, rules, settings</small></span>
-            <Download size={16} aria-hidden="true" />
-          </a>
           <button type="button" className="link-row rep-data-row" disabled={busy} onClick={allTransactions}>
             <span>All transactions<small>{busy ? 'Getting them…' : 'A CSV file with every month'}</small></span>
             <Download size={16} aria-hidden="true" />

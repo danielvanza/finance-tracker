@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from db import get_db
 from main import app
 from seed import run_seed
-from models import Category, CategoryType, Transaction, TransactionSplit, Rule, StandingAdjustment
+from models import Category, CategoryType, Transaction, TransactionSplit, Rule
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def _fresh_cat(client, db, name="Guard Target", type_="wants"):
 
 def test_type_change_blocked_by_rule(client, db):
     cat = _fresh_cat(client, db)
-    db.add(Rule(pattern="guard-target", category_id=cat.id, priority=0))
+    db.add(Rule(pattern="guard-target", category_id=cat.id))
     db.commit()
 
     r = client.patch(f"/categories/{cat.id}", json={"type": "needs"})
@@ -79,27 +79,9 @@ def test_type_change_blocked_by_split(client, db):
     assert cat.type == CategoryType.wants
 
 
-def test_type_change_blocked_by_standing_adjustment(client, db):
-    cat = _fresh_cat(client, db)
-    salary = _cat(db, "Salary")
-    db.add(StandingAdjustment(
-        name="Guard allowance", amount=600,
-        income_category_id=salary.id, expense_category_id=cat.id,
-        active=True, start_month=date(2026, 1, 1),
-    ))
-    db.commit()
-
-    r = client.patch(f"/categories/{cat.id}", json={"type": "needs"})
-
-    assert r.status_code == 422
-    assert "1 standing adjustment(s)" in r.json()["detail"]
-    db.refresh(cat)
-    assert cat.type == CategoryType.wants
-
-
 def test_type_change_force_overrides_and_keeps_dependents(client, db):
     cat = _fresh_cat(client, db)
-    db.add(Rule(pattern="guard-target", category_id=cat.id, priority=0))
+    db.add(Rule(pattern="guard-target", category_id=cat.id))
     db.commit()
 
     r = client.patch(f"/categories/{cat.id}", json={"type": "needs", "force": True})
@@ -129,7 +111,7 @@ def test_rename_only_bypasses_guard_on_used_category(client, db):
         date=date(2026, 1, 1), amount=-10, description="x", source="manual",
         category_id=cat.id, confirmed=True, import_hash="guard-t3",
     ))
-    db.add(Rule(pattern="albert heijn", category_id=cat.id, priority=0))
+    db.add(Rule(pattern="albert heijn", category_id=cat.id))
     db.commit()
 
     r = client.patch(f"/categories/{cat.id}", json={"name": "Groceries"})
@@ -144,7 +126,7 @@ def test_rename_only_bypasses_guard_on_used_category(client, db):
 
 def test_invalid_type_on_used_category_is_parse_error_not_census(client, db):
     cat = _fresh_cat(client, db)
-    db.add(Rule(pattern="guard-target", category_id=cat.id, priority=0))
+    db.add(Rule(pattern="guard-target", category_id=cat.id))
     db.commit()
 
     r = client.patch(f"/categories/{cat.id}", json={"type": "bogus"})

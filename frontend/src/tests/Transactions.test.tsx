@@ -16,6 +16,7 @@ vi.mock('../api', () => ({
     patchTransaction: vi.fn(() => Promise.resolve({})),
     deleteTransaction: vi.fn(() => Promise.resolve({})),
     createRule: vi.fn(() => Promise.resolve({})),
+    alwaysAsk: vi.fn(() => Promise.resolve({ pattern: 'albert heijn amsterdam', removed_rules: ['albert heijn'] })),
   },
   ApiError: class extends Error {},
 }))
@@ -23,7 +24,7 @@ vi.mock('../api', () => ({
 const tx = (id: number, over: Partial<Transaction> = {}): Transaction => ({
   id, date: '2026-11-05', amount_cents: -2500, description: `Shop ${id}`, source: 'ing',
   category_id: 1, category_name: 'Food - Essential', confirmed: true, categorised_by: 'rule',
-  ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [], ...over,
+  ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [], ...over,
 })
 
 const categories: Category[] = [
@@ -37,7 +38,7 @@ const pace = {
 
 // 4 rows on screen; the review queue holds 115 (most of it not in the list a filter leaves).
 const list = [
-  tx(1, { description: 'Albert Heijn Amsterdam', source: 'revolut', amount_cents: -2903 }),
+  tx(1, { description: 'Albert Heijn Amsterdam', amount_cents: -2903 }),
   tx(2, { description: 'Jumbo Utrecht', amount_cents: -15000, date: '2026-09-01' }),
   tx(3, { description: 'Lunch with Sam', source: 'manual', category_id: 2, category_name: 'Utilities', amount_cents: -1200 }),
   tx(4, { description: 'Etsy.com', confirmed: false, category_id: null, category_name: null, categorised_by: 'ai', ai_confidence: 0.7 }),
@@ -151,6 +152,18 @@ describe('Transactions', () => {
     expect(screen.getByText('1 of 4')).toBeInTheDocument()
   })
 
+  it('changes a category on its row, then offers to always ask about a shop it sorted by itself', async () => {
+    show()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Change the category of Albert Heijn Amsterdam/ }))
+    await user.click(await screen.findByRole('option', { name: 'Utilities' }))
+    await waitFor(() => expect(api.patchTransaction).toHaveBeenCalledWith(1, { category_id: 2, is_refund: false, confirmed: true }))
+    const offer = (await screen.findByText(/Moved to Utilities/)).closest('.tx-offer') as HTMLElement
+    await user.click(within(offer).getByRole('button', { name: 'Always ask about this shop' }))
+    expect(api.alwaysAsk).toHaveBeenCalledWith(1)
+    expect(await screen.findByText(/each payment there\. The rule “albert heijn” is gone/)).toBeInTheDocument()
+  })
+
   it('confirms several ticked rows and leaves the failed one ticked', async () => {
     const pending = [tx(5, { description: 'Bol.com', confirmed: false }), tx(6, { description: 'Etsy shop', confirmed: false })]
     show('/transactions', [...list, ...pending])
@@ -183,18 +196,6 @@ describe('Transactions', () => {
     expect(await screen.findByRole('button', { name: 'Albert Heijn: spend and history' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Jumbo: spend and history' })).toBeInTheDocument()
     expect(screen.getAllByText('Albert Heijn Amsterdam').length).toBeGreaterThan(0)
-  })
-
-  it('makes the review rule for the shop, not the bank text with its order number', async () => {
-    const review = tx(9, {
-      description: 'Coolblue 20551 Rotterdam NLD', confirmed: false, category_id: 1, category_name: 'Food - Essential',
-      categorised_by: 'ai', ai_confidence: 0.7,
-    })
-    vi.mocked(api.getNextReview).mockResolvedValue(review)
-    show('/transactions', [review])
-    await userEvent.click(await screen.findByRole('button', { name: 'Always categorise "Coolblue" as this' }))
-    await waitFor(() => expect(api.createRule).toHaveBeenCalledWith({ pattern: 'coolblue', category_id: 1, priority: 0 }))
-    expect(api.patchTransaction).toHaveBeenCalledWith(9, { category_id: 1 })
   })
 
   it('offers the CSV chip, with the filtered list as its rows', async () => {

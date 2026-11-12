@@ -65,7 +65,7 @@ def test_categoriser_uses_the_login_when_set_up(cli_env, db):
     with patch("categorizer.claude_cli._run", return_value=SimpleNamespace(returncode=0, stdout=answer, stderr="")) as run, \
             patch("categorizer.ai.anthropic.Anthropic") as api:
         results = ai.batch_categorise_with_ai([tx], db)
-    assert results[0][0].name == "Groceries"
+    assert results[0].category.name == "Groceries"
     api.assert_not_called()
     assert "ALBERT HEIJN" in run.call_args.args[1]
     assert "ALBERT HEIJN" not in " ".join(run.call_args.args[0])

@@ -37,9 +37,6 @@ vi.mock('../api', async importOriginal => {
         behind_months: ['2026-11'],
       })),
       getCategories: vi.fn(() => Promise.resolve(categories)),
-      getStandingAdjustments: vi.fn(() => Promise.resolve([
-        { id: 1, name: 'Allowance', amount_cents: 60000, income_category_id: 5, expense_category_id: 4, active: true, start_month: '2026-11-01' },
-      ])),
       getBudget: vi.fn((m: string) => Promise.resolve(budgets[m])),
       getDashboard: vi.fn(() => Promise.resolve({ total_income_cents: 400000 })),
       patchBudget: vi.fn(() => Promise.resolve({})),
@@ -63,18 +60,17 @@ describe('plan helpers', () => {
     expect(rows.map(r => r.name)).toEqual(['Rent', 'Food', 'Fun', 'Allowance'])
   })
 
-  it('averages only months with spending and skips standing adjustments', () => {
+  it('averages only months with spending', () => {
     const rows = planRows(budgets['2026-11'], categories)
-    const avg = averageSpend(rows, [budgets['2026-10'], budgets['2026-09'], budgets['2026-08']], new Set([4]))
+    const avg = averageSpend(rows, [budgets['2026-10'], budgets['2026-09'], budgets['2026-08']])
     expect(avg.get(10)).toBe(190000)
     expect(avg.get(11)).toBe(35000)
     expect(avg.get(12)).toBe(15000)
-    expect(avg.has(13)).toBe(false)
   })
 
   it('has no average when no month has spending', () => {
     const rows = planRows(budgets['2026-11'], categories)
-    expect(averageSpend(rows, [budgets['2026-08']], new Set()).size).toBe(0)
+    expect(averageSpend(rows, [budgets['2026-08']]).size).toBe(0)
   })
 
   it('fills from last month only for categories it plans', () => {
@@ -97,12 +93,9 @@ describe('BudgetPlanner', () => {
     fireEvent.click(screen.getByRole('button', { name: '2-month average' }))
     expect((screen.getByLabelText('Food planned amount') as HTMLInputElement).value).toBe('350.00')
     expect(api.patchBudget).not.toHaveBeenCalled()
-    // Allowance has a standing adjustment: kept, and said so.
-    expect((screen.getByLabelText('Allowance planned amount') as HTMLInputElement).value).toBe('600.00')
-    expect(screen.getByText('standing adjustment, not averaged')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save plan' }))
-    await waitFor(() => expect(api.patchBudget).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(api.patchBudget).toHaveBeenCalledTimes(4))
     expect(api.patchBudget).toHaveBeenCalledWith(10, 190000)
     expect(api.patchBudget).toHaveBeenCalledWith(11, 35000)
     expect(api.patchBudget).toHaveBeenCalledWith(12, 15000)

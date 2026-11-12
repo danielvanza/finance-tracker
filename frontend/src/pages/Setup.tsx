@@ -2,7 +2,9 @@ import BudgetPlanner from '../components/BudgetPlanner'
 import Rules from './Rules'
 import Settings from './Settings'
 import CategoryManager from '../components/CategoryManager'
-import StandingAdjustments from '../components/StandingAdjustments'
+import SetAsides from '../components/SetAsides'
+import TargetSplit from '../components/TargetSplit'
+import OwnNames from '../components/OwnNames'
 import YourData from '../components/reports/YourData'
 
 export default function Setup() {
@@ -15,7 +17,9 @@ export default function Setup() {
         <BudgetPlanner />
         <Rules />
         <CategoryManager />
-        <StandingAdjustments />
+        <SetAsides />
+        <TargetSplit />
+        <OwnNames />
         <Settings />
         <YourData />
       </div>

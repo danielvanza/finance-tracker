@@ -4,16 +4,16 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import clock
 from assistant import queries
 from assistant.prompts import STOPPED_AT_LIMIT, STOPPED_BY_PERSON, SYSTEM_PROMPT, WRAP_UP
 from assistant.tools import ProposeChange, Toolbox
 from categorizer import claude_cli
-from models import CategorisedBy, ChatMessage, Transaction
+from models import ChatMessage, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,15 @@ def history_of(db: Session, channel: str, before_id: int) -> list[ChatMessage]:
 
 
 def _entry(message: ChatMessage) -> dict | None:
+    payload = message.payload or {}
     if message.role == "user":
         if message.kind == "file":
             return {"from": "person", "sent_a_bank_file": message.text}
         entry = {"from": "person", "text": message.text}
+        if message.kind == "photo":
+            entry["sent_a_photo"] = True
+        if message.kind == "voice":
+            entry["heard_from_a_voice_note"] = True
         if (message.payload or {}).get("ended") == "stopped":
             entry["note"] = "they pressed Stop while you worked on this"
         return entry
@@ -65,12 +70,25 @@ def _entry(message: ChatMessage) -> dict | None:
             shown["args"] = card.args
         if card.error:
             shown["error"] = card.error
-        return {"from": "app", "card": shown}
+        entry = {"from": "app", "card": shown}
+        if payload.get("says"):
+            entry["you_said_with_it"] = payload["says"]
+        return entry
+    if message.kind == "question":
+        asked = {"asked": message.text, "transaction_ids": payload.get("transaction_ids", []),
+                 "buttons": [o["label"] for o in payload.get("options", [])]}
+        if payload.get("status") == "answered":
+            asked["outcome"] = payload.get("result")
+        return {"from": "app", **asked}
+    if message.kind == "nudge":
+        return {"from": "app", "sent_unasked": message.text}
     if message.kind == "import":
         return {"from": "app", "import_summary": message.text}
     if message.kind == "error":
         return {"from": "app", "error": message.text}
     entry = {"from": "you", "text": message.text}
+    if payload.get("about_question"):  # they pressed "Something else" on a question, and the app asked this
+        entry = {"from": "app", "asked_after_something_else": message.text, "transaction_ids": payload.get("transaction_ids", [])}
     options = (message.payload or {}).get("options")
     if options:
         entry["choices_shown"] = [f"{o['description']}, {o['date_label']}, {o['amount_label']} (id {o['id']})" for o in options]
@@ -85,20 +103,23 @@ def build_prompt(db: Session, channel: str, message: ChatMessage) -> str:
     while len(text) > MAX_CONVERSATION_CHARS and len(entries) > 1:
         entries = [{"from": "app", "note": "The start of this conversation was too long to include."}, *entries[len(entries) // 4 + 1:]]
         text = json.dumps(entries, ensure_ascii=False)
-    guesses = db.query(func.count(Transaction.id)).filter(
-        Transaction.confirmed == False, Transaction.categorised_by == CategorisedBy.ai,  # noqa: E712
-    ).scalar()
+    waiting = db.query(func.count(Transaction.id)).filter(Transaction.confirmed == False).scalar()  # noqa: E712
     try:
         this_month = queries.month_overview()
     except Exception:
         logger.exception("[chat] reading this month for the prompt failed")
         this_month = {"error": "This month could not be read just now."}
     # Bounded: one month, whatever the history holds. Everything else is looked up when a reply needs it.
-    context = {"today": date.today().isoformat(), "guesses_waiting_for_review": guesses, "this_month": this_month}
+    context = {"today": clock.today().isoformat(), "payments_waiting_for_an_answer": waiting, "this_month": this_month}
+    said = message.text
+    if message.kind == "photo":
+        said = {"sent_a_photo": True, "caption": message.text or None}
+    elif message.kind == "voice":
+        said = {"heard_from_a_voice_note": message.text}
     return (
         f"<context>\n{json.dumps(context)}\n</context>\n\n"
         f"<conversation>\n{text}\n</conversation>\n\n"
-        f"<new_message>\n{json.dumps(message.text, ensure_ascii=False)}\n</new_message>"
+        f"<new_message>\n{json.dumps(said, ensure_ascii=False)}\n</new_message>"
     )
 
 
@@ -152,7 +173,9 @@ def _wrap_up(prompt: str, work: list[dict], ended: str) -> str:
     return text
 
 
-def converse(prompt: str, on_wait, on_step, propose, should_stop, abandoned=lambda: False) -> Reply:
+def converse(
+    prompt: str, on_wait, on_step, propose, should_stop, abandoned=lambda: False, picture: bytes | None = None,
+) -> Reply:
     """Let Claude work the reply out with its tools, for up to the time limit or until stopped.
 
     propose(ProposeChange) makes a card and returns None, or why the app would not take it. abandoned() says
@@ -170,6 +193,7 @@ def converse(prompt: str, on_wait, on_step, propose, should_stop, abandoned=lamb
             said = claude_cli.complete(
                 SYSTEM_PROMPT, prompt, MODEL, max(clock.left(), MIN_CALL_SECONDS), waited,
                 tools=toolbox.config, allowed_tools=toolbox.allowed_tools(), should_stop=should_stop,
+                picture=picture,
             ).strip()
         except claude_cli.Stopped:
             ended = "stopped"

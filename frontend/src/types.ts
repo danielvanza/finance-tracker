@@ -1,5 +1,5 @@
 export type CategoryType = 'needs' | 'wants' | 'savings' | 'income' | 'exclude'
-export type TransactionSource = 'ing' | 'revolut' | 'degiro' | 'manual'
+export type TransactionSource = 'ing' | 'manual'
 export type CategorisedBy = 'rule' | 'ai' | 'manual'
 
 export interface TransactionSplit {
@@ -22,7 +22,8 @@ export interface Transaction {
   categorised_by: CategorisedBy | null
   ai_confidence: number | null
   is_refund: boolean
-  standing_adjustment_id: number | null
+  set_aside_id: number | null
+  set_aside_name: string | null
   splits: TransactionSplit[]
 }
 
@@ -32,14 +33,31 @@ export interface SplitInput {
   amount_cents: number
 }
 
-export interface StandingAdjustment {
+/** A bill that does not come monthly, spread over the months before it is due, as one month sees it. */
+export interface SetAside {
   id: number
   name: string
-  amount_cents: number     // renamed from `amount`; positive cents
-  income_category_id: number
-  expense_category_id: number
-  active: boolean
-  start_month: string
+  amount_cents: number
+  start_month: string        // YYYY-MM
+  due_month: string          // YYYY-MM
+  every_months: number | null // how often it comes back (3: quarterly, 12: yearly); null: once
+  monthly_cents: number      // this month's share, which lowers what is free to spend
+  saved_cents: number        // set aside so far for the bill that is coming
+  /** The payment that settled the bill; `counted_cents` of it had not been set aside yet and counts as spending. */
+  payment: { transaction_id: number; date: string; description: string; amount_cents: number; counted_cents: number } | null
+  over: boolean              // a one-off whose due month has passed
+}
+export interface SetAsides { month: string; items: SetAside[]; set_aside_cents: number }
+
+/** What can still be spent freely this month: the Month page's headline. */
+export interface FreeToSpend {
+  free_cents: number
+  per_day_cents: number | null
+  left_in_plan_cents: number
+  bills_cents: number
+  bills: Array<{ key: string; name: string; amount_cents: number; next_date: string | null; category_name: string }>
+  set_aside_cents: number
+  set_asides: Array<{ id: number; name: string; monthly_cents: number }>
 }
 
 export interface Category {
@@ -59,7 +77,9 @@ export interface BudgetRow {
   actual_amount_cents: number | null // renamed from actual_amount
 }
 
-export interface Rule { id: number; pattern: string; category_id: number; category_name: string; priority: number }
+export interface Rule { id: number; pattern: string; category_id: number; category_name: string }
+/** A shop that sells a bit of everything: its payments are always asked about. */
+export interface AskShop { pattern: string }
 
 // NOTE: nested keys keep their LEGACY names by wire contract; the VALUES are
 // integer cents since B1 (see contracts api-contracts money_wire_format_v2).
@@ -77,7 +97,6 @@ export interface DashboardSummary {
     type: CategoryType
   }>
   needs_wants_savings: { needs_cents: number; wants_cents: number; savings_cents: number } // integer cents
-  monthly_trend: Array<{ month: string; total_cents: number }> // total = integer cents
   income_breakdown: Array<{
     category_id: number
     category_name: string
@@ -99,12 +118,15 @@ export interface Pace {
   actual_cents: { needs: number; wants: number; savings: number }
   spendable_plan_cents: number
   spendable_actual_cents: number
+  free: FreeToSpend | null            // the current month with bank data only
+  newest_bank_date: string | null
   pace_delta_cents: number | null
   daily: Array<{ date: string; cumulative_cents: number }>
   data_through: string | null
   last_import_by_bank: Array<{ source: string; last_date: string | null }>
   behind_months: string[]
   to_review: number
+  to_review_in_month: number
 }
 
 export interface TrendMonth {
@@ -144,8 +166,10 @@ export interface ImportConfirmResponse {
   imported: number
   skipped_duplicates: number
   categorised_by_rule: number
-  categorised_by_ai: number
+  categorised_by_ai: number   // Claude was sure: counted already
+  doubtful: number            // Claude was not sure: waiting for an answer
   uncategorised: number
+  notes_added?: number        // rows already in that got the bank's note they were imported without
 }
 
 export interface ChatFieldChange { label: string; before: string; after: string }
@@ -179,8 +203,15 @@ export interface ChatCard {
   heading: string
   apply_label: string
   reject_label: string
+  lines: string[]          // what the card says, in the app's words
+  summed_up: boolean       // many rows, shown as a summary; the rows themselves on request
+  rows: number
+  effect_lines: string[]
+  says: string | null      // Claude's words that came with the card
+  offer: string | null     // once applied: the button that remembers the shops it sorted
+  remembered: string | null  // what was remembered, once that button was pressed
 }
-export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; uncategorised: number }
+export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number; noted?: number }
 export interface ChatChart {
   type: 'line' | 'bars'
   title: string
@@ -191,7 +222,7 @@ export interface ChatChart {
 export interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
-  kind: 'text' | 'file' | 'answer' | 'clarify' | 'proposal' | 'import' | 'error'
+  kind: 'text' | 'file' | 'voice' | 'photo' | 'answer' | 'clarify' | 'proposal' | 'import' | 'error' | 'question' | 'nudge'
   text: string
   status: 'queued' | 'running' | 'waiting' | 'stopping' | 'done'
   reply_to: number | null

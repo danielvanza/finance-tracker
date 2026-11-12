@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { dayLabel } from '../dates'
-import { Repeat, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import type { Transaction, Category, SplitInput } from '../types'
 import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
 import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
-import { merchantFor, ruleKeyOk } from './merchants'
 
 export interface ReviewDecision {
   category_id?: number
   is_refund: boolean
   splits?: SplitInput[]
+  remember?: boolean
 }
 
 type PositiveKind = 'income' | 'refund' | 'transfer'
@@ -20,7 +20,6 @@ interface Props {
   categories: Category[]
   onConfirm: (id: number, decision: ReviewDecision) => void
   onSkip: () => void
-  onCreateRule: (id: number, categoryId: number) => void
 }
 
 const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
@@ -29,7 +28,7 @@ const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
   transfer: { label: 'Transfer', hint: "Between the household's own accounts: left out of totals." },
 }
 
-export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip, onCreateRule }: Props) {
+export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip }: Props) {
   const isPositive = tx.amount_cents > 0
 
   const initialKind: PositiveKind = useMemo(() => {
@@ -53,6 +52,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
 
   const [selectedCategory, setSelectedCategory] = useState<number | null>(tx.category_id ?? (isPositive ? filteredCategories[0]?.id ?? null : null))
   const [splitMode, setSplitMode] = useState(tx.splits.length > 0)
+  const [remember, setRemember] = useState(false)
   const [splitRows, setSplitRows] = useState<SplitRow[]>(() =>
     tx.splits.length > 0
       ? tx.splits.map(s => ({ category_id: s.category_id, amount: centsToInputString(Math.abs(s.amount_cents)) }))
@@ -85,13 +85,11 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
     if (splitMode) {
       onConfirm(tx.id, { is_refund: isRefund, splits: splitsPayload })
     } else {
-      onConfirm(tx.id, { category_id: selectedCategory ?? undefined, is_refund: isRefund })
+      onConfirm(tx.id, { category_id: selectedCategory ?? undefined, is_refund: isRefund, ...(remember && !isRefund ? { remember: true } : {}) })
     }
   }
 
   const isExpense = tx.amount_cents < 0
-  const merchant = merchantFor(tx.description)
-  const ruleOk = ruleKeyOk(merchant.key)
 
   return (
     <div className="panel rev">
@@ -112,8 +110,7 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
         {tx.categorised_by === 'ai' && tx.category_name && (
           <div className="well rev-guess">
             <Sparkles size={14} aria-hidden="true" />
-            <span className="rev-guess-text">AI suggests <strong>{tx.category_name}</strong></span>
-            {tx.ai_confidence && <span className="lab num">{Math.round(tx.ai_confidence * 100)}%</span>}
+            <span className="rev-guess-text">Claude was not sure. Its guess: <strong>{tx.category_name}</strong></span>
           </div>
         )}
       </div>
@@ -173,14 +170,13 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
           <button type="button" className="btn" onClick={onSkip}>Skip</button>
         </div>
 
-        {/* Rule creation: not for splits or refunds, which carry one-off judgement */}
         {!splitMode && !isRefund && (
           <>
-            <button type="button" className="btn btn-wide rev-rule" disabled={selectedCategory === null || !ruleOk} onClick={() => selectedCategory !== null && onCreateRule(tx.id, selectedCategory)}>
-              <Repeat size={14} aria-hidden="true" />
-              <span>Always categorise "{merchant.name}" as this</span>
-            </button>
-            {!ruleOk && <p className="tx-hint">That name is too short to match safely.</p>}
+            <label className="rev-remember">
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+              <span>Remember this shop for next time</span>
+            </label>
+            <p className="tx-hint">This shop's other waiting payments follow your answer either way.</p>
           </>
         )}
       </div>

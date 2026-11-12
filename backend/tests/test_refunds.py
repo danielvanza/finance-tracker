@@ -111,25 +111,3 @@ def test_salary_and_transfers_unaffected(client, db):
     assert data["total_income_cents"] == 300000
     assert data["total_expenses_cents"] == 0
 
-
-def test_monthly_trend_nets_refunds(client, db):
-    food = _cat(db, "Food - Essential")
-    _add_tx(db, "-300.00", category=food, description="groceries")
-    _add_tx(db, "120.00", category=food, is_refund=True, description="reimbursement")
-
-    r = client.get("/dashboard/summary?month=2026-03")
-    trend = r.json()["monthly_trend"]
-    march = next(t for t in trend if t["month"] == "2026-03")
-    assert march["total_cents"] == 18000
-
-
-def test_create_rule_skips_refund_marked_transactions(client, db):
-    food = _cat(db, "Food - Essential")
-    confirmed_tx = _add_tx(db, "-45.00", category=food, description="Albert Heijn")
-    refund_tx = _add_tx(db, "20.00", confirmed=False, is_refund=True,
-                        description="Albert Heijn statiegeld")
-    r = client.post(f"/transactions/{confirmed_tx.id}/create-rule")
-    assert r.status_code == 200
-    db.refresh(refund_tx)
-    assert refund_tx.confirmed is False
-    assert refund_tx.category_id is None

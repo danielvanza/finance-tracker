@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from decimal import Decimal
 from db import get_db
-from models import Category, CategoryType, Transaction, TransactionSplit, Rule, StandingAdjustment, Budget
+from models import Category, CategoryType, Transaction, TransactionSplit, Rule, Budget
 from schemas import CategoryCreate, CategoryReorder
 from pydantic import BaseModel
 from typing import Optional
@@ -38,10 +38,6 @@ def _usage_counts(db: Session, category_id: int) -> dict:
         "transaction": db.query(Transaction).filter_by(category_id=category_id).count(),
         "split": db.query(TransactionSplit).filter_by(category_id=category_id).count(),
         "rule": db.query(Rule).filter_by(category_id=category_id).count(),
-        "standing adjustment": db.query(StandingAdjustment).filter(
-            (StandingAdjustment.income_category_id == category_id)
-            | (StandingAdjustment.expense_category_id == category_id)
-        ).count(),
     }
 
 

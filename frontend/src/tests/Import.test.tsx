@@ -14,17 +14,16 @@ vi.mock('../api', async (importOriginal) => {
 const wrap = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>)
 
-test('renders source selector and file upload', () => {
+test('asks for an ING file and offers no choice of bank', () => {
   wrap(<Import />)
-  // Source is now a button group — check the ING button is present
-  expect(screen.getByRole('button', { name: /^ING$/i })).toBeInTheDocument()
-  // Other source buttons should also be present
-  expect(screen.getByRole('button', { name: /^REVOLUT$/i })).toBeInTheDocument()
+  expect(screen.getByLabelText(/ING file/i)).toBeInTheDocument()
+  expect(screen.queryByText(/Choose the bank/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /^ING/ })).not.toBeInTheDocument()
 })
 
 test('shows preview button after file selected', () => {
   wrap(<Import />)
-  const input = screen.getByLabelText(/CSV file/i)
+  const input = screen.getByLabelText(/ING file/i)
   const file = new File(['test'], 'test.csv', { type: 'text/csv' })
   fireEvent.change(input, { target: { files: [file] } })
   expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument()
@@ -37,7 +36,7 @@ describe('failed preview', () => {
     )
     const user = userEvent.setup()
     wrap(<Import />)
-    fireEvent.change(screen.getByLabelText(/CSV file/i), {
+    fireEvent.change(screen.getByLabelText(/ING file/i), {
       target: { files: [new File(['x'], 'bad.csv', { type: 'text/csv' })] },
     })
     await user.click(screen.getByRole('button', { name: /preview/i }))
@@ -52,7 +51,7 @@ describe('failed preview', () => {
     vi.mocked(api.previewImport).mockRejectedValueOnce(new ApiError(0, 'Network error', null))
     const user = userEvent.setup()
     wrap(<Import />)
-    fireEvent.change(screen.getByLabelText(/CSV file/i), {
+    fireEvent.change(screen.getByLabelText(/ING file/i), {
       target: { files: [new File(['x'], 'bad.csv', { type: 'text/csv' })] },
     })
     await user.click(screen.getByRole('button', { name: /preview/i }))
@@ -70,24 +69,24 @@ describe('after a successful import', () => {
       duplicates: 0,
     })
     vi.mocked(api.confirmImport).mockResolvedValueOnce({
-      imported: 1, skipped_duplicates: 0, categorised_by_rule: 0, categorised_by_ai: 0, uncategorised: 0, ...result,
+      imported: 1, skipped_duplicates: 0, categorised_by_rule: 0, categorised_by_ai: 0, doubtful: 0, uncategorised: 0, ...result,
     })
     const user = userEvent.setup()
     wrap(<Import />)
-    fireEvent.change(screen.getByLabelText(/CSV file/i), {
+    fireEvent.change(screen.getByLabelText(/ING file/i), {
       target: { files: [new File(['x'], 'ok.csv', { type: 'text/csv' })] },
     })
     await user.click(screen.getByRole('button', { name: /preview/i }))
     await user.click(await screen.findByRole('button', { name: /import 1 new transaction/i }))
   }
 
-  it('links to transactions when some need reviewing', async () => {
-    await importFile({ categorised_by_ai: 2, uncategorised: 1 })
+  it('links to transactions when some wait for an answer', async () => {
+    await importFile({ doubtful: 2, uncategorised: 1 })
     expect(await screen.findByRole('link', { name: 'Review 3 transactions' })).toHaveAttribute('href', '/transactions')
   })
 
-  it('links to the month when nothing needs reviewing', async () => {
-    await importFile({ categorised_by_rule: 1 })
+  it('links to the month when everything was sorted, by rules or because Claude was sure', async () => {
+    await importFile({ categorised_by_ai: 1 })
     expect(await screen.findByRole('link', { name: 'See the month' })).toHaveAttribute('href', '/')
   })
 })

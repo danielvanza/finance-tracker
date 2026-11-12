@@ -48,21 +48,12 @@ function Detail({ row, month, categories, onError }: {
     }
   }
 
-  const changeType = async (type: string) => {
-    try {
-      await api.patchCategory(row.category_id, { type })
-      qc.invalidateQueries({ queryKey: ['categories'] })
-      refresh()
-    } catch (e) {
-      onError(describeApiError(e))
-    }
-  }
-
   const recategorise = useMutation({
     mutationFn: ({ txId, categoryId }: { txId: number; categoryId: number }) =>
       api.patchTransaction(txId, { category_id: categoryId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions', { category_id: row.category_id, month }] })
+      qc.invalidateQueries({ queryKey: ['rules'] })
       refresh()
     },
     onError: e => onError(describeApiError(e)),
@@ -84,17 +75,6 @@ function Detail({ row, month, categories, onError }: {
             onBlur={savePlan}
             onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
           />
-        </div>
-        <div className="form-row">
-          <label className="lab" htmlFor={`type-${row.id}`}>Counts as</label>
-          <select
-            id={`type-${row.id}`}
-            className="field"
-            value={row.category_type}
-            onChange={e => changeType(e.target.value)}
-          >
-            {KINDS.map(k => <option key={k.type} value={k.type}>{k.label}</option>)}
-          </select>
         </div>
       </div>
       <div>

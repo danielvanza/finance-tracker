@@ -82,7 +82,7 @@ export function waitingFor(key: string, transactions: Transaction[]): Transactio
 /** The rule that already sorts this merchant: its pattern sits inside the key, so it catches every purchase. */
 export function coveringRule(key: string, rules: Rule[]): Rule | null {
   return [...rules]
-    .sort((a, b) => b.priority - a.priority || a.id - b.id)
+    .sort((a, b) => b.pattern.trim().length - a.pattern.trim().length || a.id - b.id)
     .find(r => r.pattern.trim() !== '' && key.includes(r.pattern.trim().toLowerCase())) ?? null
 }
 

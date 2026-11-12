@@ -9,9 +9,10 @@ import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import AddTransactionModal from '../components/AddTransactionModal'
 import SplitModal from '../components/SplitModal'
+import ImportLink from '../components/ImportLink'
 import CsvChip from '../components/reports/CsvChip'
 import {
-  MerchantSheetProvider, MerchantsView, ViewSwitch, merchantFor, createMerchantRule, type MerchantView,
+  MerchantSheetProvider, MerchantsView, ViewSwitch, type MerchantView,
 } from '../components/merchants'
 import TransactionsToolbar from './transactions/TransactionsToolbar'
 import TransactionsTable from './transactions/TransactionsTable'
@@ -58,6 +59,8 @@ export default function Transactions() {
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
   const [busy, setBusy] = useState(false)
   const [bulkError, setBulkError] = useState<{ title: string; message: string } | null>(null)
+  // After a person corrects a payment the app sorted by itself: offer to always ask about its shop.
+  const [offer, setOffer] = useState<{ tx: Transaction; category: string; asked?: string } | null>(null)
 
   const { data: transactions = [], isLoading: listLoading, error: listError } = useQuery({
     queryKey: ['transactions', 'list'],
@@ -101,23 +104,6 @@ export default function Transactions() {
     }
     setSkippedIds(prev => prev.filter(sid => sid !== id))
     invalidate()
-  }
-
-  // The rule matches the shop (the cleaned name), not the whole bank text with its order number.
-  const handleCreateRule = async (id: number, categoryId: number) => {
-    setActionError('')
-    try {
-      const tx = reviewTx?.id === id ? reviewTx : transactions.find(t => t.id === id)
-      if (!tx) throw new Error('That transaction is no longer listed.')
-      await api.patchTransaction(id, { category_id: categoryId })
-      await createMerchantRule(merchantFor(tx.description).key, categoryId, transactions)
-    } catch (e) {
-      setActionError(describeApiError(e))
-      return
-    }
-    setSkippedIds([])
-    invalidate()
-    qc.invalidateQueries({ queryKey: ['rules'] })
   }
 
   const handleSkip = (id: number) => {
@@ -178,6 +164,33 @@ export default function Transactions() {
     if (!category) return
     return runBulk(pickedRows, () => categoriseRows(pickedRows, category))
   }
+  const changeCategory = async (tx: Transaction, id: number) => {
+    const category = categories.find((c: Category) => c.id === id)
+    if (!category) return
+    setActionError('')
+    const outcome = await categoriseRows([tx], category)
+    invalidate()
+    if (outcome.left.length > 0) {
+      setActionError(`${tx.description} didn't change. Try again.`)
+      return
+    }
+    const sortedByItself = tx.categorised_by === 'ai' || tx.categorised_by === 'rule'
+    setOffer(sortedByItself ? { tx, category: category.name } : null)
+  }
+  const alwaysAsk = async () => {
+    if (!offer) return
+    setActionError('')
+    try {
+      const { removed_rules } = await api.alwaysAsk(offer.tx.id)
+      const rule = removed_rules.length > 0 ? ` The rule “${removed_rules.join('”, “')}” is gone.` : ''
+      setOffer({ ...offer, asked: `From now on you'll be asked about each payment there.${rule} Undo it on the Rules page.` })
+      qc.invalidateQueries({ queryKey: ['ask-shops'] })
+      qc.invalidateQueries({ queryKey: ['rules'] })
+    } catch (e) {
+      setActionError(describeApiError(e))
+    }
+  }
+
   const bulkDelete = () => {
     const n = pickedRows.length
     if (!window.confirm(`Delete ${n} manual transaction${n === 1 ? '' : 's'}?`)) return
@@ -199,6 +212,7 @@ export default function Transactions() {
           </p>
         </div>
         <div className="page-actions">
+          <ImportLink />
           <button type="button" className="btn" onClick={() => setShowAdd(true)}>
             <Plus size={15} aria-hidden="true" />
             Add transaction
@@ -222,6 +236,22 @@ export default function Transactions() {
       {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />}
       {bulkError && <ErrorBanner title={bulkError.title} message={bulkError.message} onDismiss={() => setBulkError(null)} />}
       {showReview && reviewError && <ErrorBanner message={describeApiError(reviewError)} />}
+      {offer && (
+        <div className="panel tx-offer" role="status">
+          {offer.asked ? (
+            <p><strong>{offer.tx.description}</strong> is always asked about. {offer.asked}</p>
+          ) : (
+            <>
+              <p>
+                Moved to {offer.category}. Does <strong>{offer.tx.description}</strong> sell a bit of everything?
+                Then the app asks about each payment there instead of guessing.
+              </p>
+              <button type="button" className="btn btn-sm" onClick={alwaysAsk}>Always ask about this shop</button>
+            </>
+          )}
+          <button type="button" className="btn btn-sm" onClick={() => setOffer(null)}>{offer.asked ? 'OK' : 'No, just this one'}</button>
+        </div>
+      )}
 
       <div className={`tx-layout${reviewVisible ? ' has-review' : ''}`}>
         {reviewVisible && (
@@ -242,7 +272,6 @@ export default function Transactions() {
                   categories={categories}
                   onConfirm={handleConfirm}
                   onSkip={() => handleSkip(reviewTx.id)}
-                  onCreateRule={handleCreateRule}
                 />
               </>
             )}
@@ -285,6 +314,8 @@ export default function Transactions() {
               ) : (
                 <TransactionsTable
                   transactions={visible}
+                  categories={categories}
+                  onCategory={changeCategory}
                   setSplitTx={setSplitTx}
                   handleDelete={handleDelete}
                   filtered={narrowed}

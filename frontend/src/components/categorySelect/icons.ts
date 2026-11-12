@@ -2,8 +2,8 @@ import {
   Home, Zap, UtensilsCrossed, Car, Shield, HeartPulse,
   Coffee, Gamepad2, HelpCircle, Hammer, Shirt, Banknote,
   TrendingUp, PiggyBank, ArrowDownToLine,
-  Wallet, RotateCcw, CircleDollarSign, ArrowLeftRight,
-  Coins, BadgeEuro,
+  Wallet, CircleDollarSign, ArrowLeftRight,
+  Coins,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -25,9 +25,7 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   'Fun Account':                PiggyBank,
   'Savings Transfer':           ArrowDownToLine,
   'Salary':                     Wallet,
-  'Retained Salary':            BadgeEuro,
-  'Personal Allowance':         Coins,
-  'Refunds':                    RotateCcw,
+  'To personal accounts':       Coins,
   'Other Income':               CircleDollarSign,
   'Internal Transfer':          ArrowLeftRight,
 }

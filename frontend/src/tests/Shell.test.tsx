@@ -13,7 +13,7 @@ vi.mock('../api', () => ({
   api: {
     getTransactions: vi.fn(),
     getCategories: vi.fn(() => Promise.resolve([])),
-    getPace: vi.fn(() => Promise.resolve({ to_review: 5 })),
+    getPace: vi.fn(() => Promise.resolve({ to_review: 5, to_review_in_month: 0, free: null, newest_bank_date: null })),
   },
   ApiError: class extends Error {},
 }))
@@ -31,7 +31,7 @@ vi.mock('../components/AddTransactionModal', () => ({
 const tx = (id: number, description: string, over: Partial<Transaction> = {}): Transaction => ({
   id, date: '2026-11-04', description, amount_cents: -7928, source: 'ing', category_id: 3,
   category_name: 'Miscellaneous', confirmed: true, categorised_by: 'rule', ai_confidence: null,
-  is_refund: false, standing_adjustment_id: null, splits: [], ...over,
+  is_refund: false, set_aside_id: null, set_aside_name: null, splits: [], ...over,
 })
 
 function Probe() {

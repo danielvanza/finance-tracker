@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds this checkout's HEAD into a new release and switches the service to it; if it doesn't come
 # up healthy, switches back. The database lives outside the releases, so a deploy can't touch it.
+# Keeps the 3 newest releases under ~/apps/household-finance/releases.
 set -euo pipefail
 
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
@@ -32,6 +33,9 @@ if healthy; then
     systemctl --user restart household-finance-telegram
   fi
   echo "deployed $sha"
+  # Keep the 3 newest releases. The one just built is the newest, so the live one always stays.
+  touch "$release"
+  ls -1dt "$root/releases"/*/ | tail -n +4 | xargs -r rm -rf
   exit 0
 fi
 echo "release $sha did not come up healthy" >&2

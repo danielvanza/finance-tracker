@@ -34,7 +34,8 @@ async function ask(channel: Channel, text: string) {
   if (channel === 'telegram') {
     await expect.poll(async () => (await app.json('/chat/outbox?channel=telegram')).replies.length, { timeout: 30_000 }).toBe(0)
   }
-  const words = replies.filter((r: any) => !r.card).map((r: any) => r.text).join('\n\n')
+  // The agent's words: its answers, and what it said with a card (they arrive on the card, as one message).
+  const words = replies.map((r: any) => (r.card ? r.card.says ?? '' : r.text)).filter(Boolean).join('\n\n')
   return { asked, replies, words, cards: replies.filter((r: any) => r.card).map((r: any) => r.card), steps: (asked.payload?.steps ?? []) as string[] }
 }
 
@@ -49,7 +50,7 @@ async function askPanel(text: string) {
   const all = await messages('bubble')
   const asked = all.find((m: any) => m.role === 'user' && m.id > after && m.text === text)
   const replies = all.filter((m: any) => m.reply_to === asked.id)
-  return { asked, replies, words: replies.filter((r: any) => !r.card).map((r: any) => r.text).join('\n\n'), cards: replies.filter((r: any) => r.card).map((r: any) => r.card) }
+  return { asked, replies, words: replies.map((r: any) => (r.card ? r.card.says ?? '' : r.text)).filter(Boolean).join('\n\n'), cards: replies.filter((r: any) => r.card).map((r: any) => r.card) }
 }
 
 const apply = (card: any) => app.post(`/chat/proposals/${card.id}/apply`, { version: card.version })
@@ -77,7 +78,8 @@ test.describe.serial('the finance agent, with the real Claude', () => {
   test('R-002 R-004: a natural answer with the Month page figures, a follow-up that carries on, and a polite no to anything else', async () => {
     const before = app.dump()
     const pace = await app.json('/dashboard/pace')
-    const left = pace.spendable_plan_cents - pace.spendable_actual_cents
+    // The headline figure is what is free to spend until payday (just-works-for-two R-017).
+    const left = pace.free ? pace.free.free_cents : pace.spendable_plan_cents - pace.spendable_actual_cents
     const first = await askPanel('How are we doing this month?')
     expect(first.words).toContain(euro(left))
     expect(first.words).not.toMatch(/^(Left|Per day|Vs plan|Needs|Wants|Savings):/m) // no fixed layout
@@ -217,18 +219,26 @@ test.describe.serial('the finance agent, with the real Claude', () => {
 
     let reply = await ask('bubble', "Let's go through the guesses.")
     let corrected = false
+    let wanted = 'Food - Not Essential'
     const counts: string[] = []
     let biggest = 0
     for (let round = 0; round < 40 && (await waiting()) > 0; round++) {
       counts.push(reply.words)
       const pending = (await messages('bubble')).filter((m: any) => m.card?.status === 'pending').map((m: any) => m.card)
       const pizzaCard = pending.find((c: any) => c.changes.some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
-      if (!corrected && pizzaCard && !JSON.stringify(pizzaCard.changes).includes('Food - Not Essential')) {
+      if (!corrected && pizzaCard) {
         corrected = true
-        reply = await ask('bubble', 'The Sample Pizza Place ones are takeaway, so those are Food - Not Essential.')
+        // The pizza rows were guessed as Food - Essential. The agent may accept that guess or, seeing the name,
+        // move them to eating out by itself; either way the person now corrects the card the other way.
+        const ofPizza = (card: any) => JSON.stringify(card.changes.filter((ch: any) => ch.title.startsWith('Sample Pizza Place')))
+        const movedAlready = ofPizza(pizzaCard).includes('Food - Not Essential')
+        wanted = movedAlready ? 'Food - Essential' : 'Food - Not Essential'
+        reply = await ask('bubble', movedAlready
+          ? 'No, the Sample Pizza Place ones are our weekly family dinner at home, so keep those as Food - Essential.'
+          : 'The Sample Pizza Place ones are takeaway, so those are Food - Not Essential.')
         const adjusted = reply.cards.find((c: any) => c.changes.some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
         expect(adjusted, reply.words).toBeTruthy()
-        expect(JSON.stringify(adjusted.changes)).toContain('Food - Not Essential')
+        expect(ofPizza(adjusted).includes('Food - Not Essential'), `the adjusted card puts them in ${wanted}`).toBe(!movedAlready)
         const old = (await messages('bubble')).find((m: any) => m.card?.id === pizzaCard.id).card
         expect(old.status, 'the corrected card left the old one open').toBe('superseded')
         continue
@@ -244,7 +254,7 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     expect(await waiting()).toBe(0)
     expect(corrected, 'the pizza rows were never offered, so no correction was made').toBe(true)
     const pizza = (await app.transactions()).filter(t => pizzaIds.includes(t.id))
-    expect(pizza.every(t => t.category_name === 'Food - Not Essential')).toBe(true)
+    expect(pizza.every(t => t.category_name === wanted), `the pizza rows ended in ${wanted}`).toBe(true)
     expect(pizza.every(t => t.confirmed)).toBe(true)
     // After each group the agent said how many were left.
     for (const words of counts) {
@@ -283,7 +293,9 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     const log = await stub.reply_after(count, m => m.text.startsWith('Working on it'))
     await expect.poll(() => log.text, { timeout: 120_000 }).toContain('• ')
     stub.text(DANIEL, 'stop')
-    await expect.poll(() => log.text, { timeout: 120_000 }).toMatch(/^Stopped\./)
+    // The log says it is stopping, and is taken away when the write-up is there (just-works-for-two R-002).
+    await expect.poll(() => [...log.edits, log.text].some(t => t.startsWith('Stopping…')), { timeout: 120_000 }).toBe(true)
+    await expect.poll(() => log.deleted === true, { timeout: 120_000 }).toBe(true)
     await app.settled('telegram')
     expect((await messages('telegram')).at(-1).text).toMatch(/stop/i)
   })

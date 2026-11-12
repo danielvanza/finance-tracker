@@ -67,13 +67,14 @@ class ShowChart(BaseModel):
 _OPERATIONS = "\n".join(f"- {name}: {op.signature}" for name, op in OPS.items())
 _TOOLS = {
     "month_overview": (MonthOverview, (
-        "One financial month exactly as the Month page shows it: what is left to spend, per day, against plan by now, "
-        "needs, wants and savings, and each budget category spent against planned, with category ids. Use it for any "
+        "One financial month exactly as the Month page shows it: what is free to spend until payday and per day, the "
+        "fixed bills still to come and set-asides it allows for, against plan by now, needs, wants and savings, and "
+        "each budget category spent against planned, with category ids. Use it for any "
         "question about how a month stands; its figures are the ones people compare with the page."
     )),
     "run_query": (RunQuery, (
         "Read anything in the household's finances with read-only SQLite SELECTs, as often as you need: history, "
-        "single rows and their ids, guesses waiting for review, plans, rules, standing adjustments and savings goals. "
+        "single rows and their ids, payments waiting for an answer, plans, rules, set-asides and savings goals. "
         f"Each result has at most {ROW_CAP} rows; one marked cut_off is incomplete, so narrow it with WHERE, GROUP BY, "
         "LIMIT and OFFSET. Work sums, differences and averages out in SQL. Name numeric columns for their unit: *_cents, "
         "*_eur, *_pct or *_count. Every response also says where the data has gaps. Nothing can be changed through "

@@ -14,123 +14,145 @@
   "endpoints": [
     {
       "id": "health",
-      "method": "GET", "path": "/health",
+      "method": "GET",
+      "path": "/health",
       "request": null,
-      "response": { "status": "\"ok\" (literal)" },
+      "response": {
+        "status": "\"ok\" (literal)"
+      },
       "frontend_caller": null
     },
     {
       "id": "import-preview",
-      "method": "POST", "path": "/import/preview",
-      "request": { "content_type": "multipart/form-data", "fields": { "source": "ing|revolut|degiro", "file": "CSV file" } },
-      "response": { "rows": [{ "date": "date", "amount_cents": "int", "description": "string", "source": "string", "import_hash": "string", "duplicate": "bool" }], "total": "int", "duplicates": "int" },
+      "method": "POST",
+      "path": "/import/preview",
+      "request": "multipart/form-data: file (an ING export, English or Dutch column names)",
+      "response": {
+        "rows": [
+          {
+            "date": "date",
+            "amount_cents": "int",
+            "description": "string",
+            "source": "string",
+            "import_hash": "string",
+            "duplicate": "bool"
+          }
+        ],
+        "total": "int",
+        "duplicates": "int"
+      },
       "frontend_caller": "api.previewImport"
     },
     {
       "id": "import-confirm",
-      "method": "POST", "path": "/import/confirm",
-      "request": { "content_type": "multipart/form-data", "fields": { "source": "ing|revolut|degiro", "file": "CSV file" } },
-      "response": { "imported": "int", "skipped_duplicates": "int", "categorised_by_rule": "int", "categorised_by_ai": "int", "uncategorised": "int" },
+      "method": "POST",
+      "path": "/import/confirm",
+      "request": "multipart/form-data: file (an ING export, English or Dutch column names)",
+      "response": {
+        "imported": "int",
+        "skipped_duplicates": "int",
+        "categorised_by_rule": "int",
+        "categorised_by_ai": "int (Claude was sure; counted)",
+        "doubtful": "int (waiting for an answer)",
+        "uncategorised": "int"
+      },
       "frontend_caller": "api.confirmImport"
     },
     {
       "id": "transactions-list",
-      "method": "GET", "path": "/transactions",
-      "query": { "month": "YYYY-MM (optional; triggers standing-adjustment materialisation)", "category_id": "int (optional)", "source": "ing|revolut|degiro|manual (optional)", "confirmed": "bool (optional)" },
-      "response": { "type": "TransactionOut[]", "ordering": "unconfirmed first, then date desc" },
+      "method": "GET",
+      "path": "/transactions",
+      "query": {
+        "month": "YYYY-MM (optional)",
+        "category_id": "int (optional)",
+        "source": "ing|manual (optional)",
+        "confirmed": "bool (optional)"
+      },
+      "response": {
+        "type": "TransactionOut[]",
+        "ordering": "unconfirmed first, then date desc"
+      },
       "frontend_caller": "api.getTransactions"
     },
     {
       "id": "transactions-next-review",
-      "method": "GET", "path": "/transactions/review",
-      "query": { "skip_ids": "repeated int query params (optional)" },
+      "method": "GET",
+      "path": "/transactions/review",
+      "query": {
+        "skip_ids": "repeated int query params (optional)"
+      },
       "response": "TransactionOut | null (null = review queue empty)",
       "frontend_caller": "api.getNextReview"
     },
     {
       "id": "transaction-create",
-      "method": "POST", "path": "/transactions",
-      "request": { "date": "date", "amount_cents": "int non-zero", "description": "string", "category_id": "int existing", "is_refund": "bool=false (must be expense category if true, amount must be positive)" },
+      "method": "POST",
+      "path": "/transactions",
+      "request": {
+        "date": "date",
+        "amount_cents": "int non-zero",
+        "description": "string",
+        "category_id": "int existing",
+        "is_refund": "bool=false (must be expense category if true, amount must be positive)"
+      },
       "response": "TransactionOut (201); always source=manual, confirmed=true, categorised_by=manual",
       "frontend_caller": "api.createTransaction"
     },
     {
-      "id": "transaction-adjustment-pair",
-      "method": "POST", "path": "/transactions/adjustment-pair",
-      "request": { "date": "date", "description": "string", "legs": [{ "amount_cents": "int non-zero", "category_id": "int", "description": "string|null" }] },
-      "response": "TransactionOut[] length 2 (201); legs must net to exactly zero",
-      "frontend_caller": "api.createAdjustmentPair"
-    },
-    {
       "id": "transaction-patch",
-      "method": "PATCH", "path": "/transactions/{tx_id}",
-      "request": { "category_id": "int|null (optional)", "confirmed": "bool (optional)", "is_refund": "bool (optional; validated against category types)", "splits": "[{category_id:int, amount_cents:int}] | [] to unsplit | absent to leave untouched (optional; 2+ parts, sum must equal amount_cents, parts share parent's sign)" },
+      "method": "PATCH",
+      "path": "/transactions/{tx_id}",
+      "request": {
+        "category_id": "int|null (optional)",
+        "confirmed": "bool (optional)",
+        "is_refund": "bool (optional; validated against category types)",
+        "splits": "[{category_id:int, amount_cents:int}] | [] to unsplit | absent to leave untouched (optional; 2+ parts, sum must equal amount_cents, parts share parent's sign)",
+        "remember": "bool (optional; also make this payment's category the rule for its shop)"
+      },
       "response": "TransactionOut",
       "frontend_caller": "api.patchTransaction"
     },
     {
       "id": "transaction-delete",
-      "method": "DELETE", "path": "/transactions/{tx_id}",
+      "method": "DELETE",
+      "path": "/transactions/{tx_id}",
       "request": null,
-      "response": { "deleted": "int" },
+      "response": {
+        "deleted": "int"
+      },
       "error_contract": "422 if source != manual (imported rows immutable)",
       "frontend_caller": "api.deleteTransaction"
     },
     {
-      "id": "transaction-create-rule",
-      "method": "POST", "path": "/transactions/{tx_id}/create-rule",
-      "request": null,
-      "response": { "rule_created": "string pattern", "transactions_updated": "int" },
-      "error_contract": "400 if transaction has no category",
-      "frontend_caller": "api.createRuleFromTransaction"
-    },
-    {
-      "id": "standing-adjustments-list",
-      "method": "GET", "path": "/standing-adjustments",
-      "response": "StandingAdjustmentOut[] (amount_cents positive)",
-      "frontend_caller": "api.getStandingAdjustments"
-    },
-    {
-      "id": "standing-adjustment-create",
-      "method": "POST", "path": "/standing-adjustments",
-      "request": { "name": "string unique", "amount_cents": "int > 0", "income_category_id": "int (income type)", "expense_category_id": "int (needs/wants/savings)", "active": "bool=true", "start_month": "date optional, defaults current month 1st" },
-      "response": "StandingAdjustmentOut (201)",
-      "frontend_caller": "api.createStandingAdjustment"
-    },
-    {
-      "id": "standing-adjustment-patch",
-      "method": "PATCH", "path": "/standing-adjustments/{sa_id}",
-      "request": "any subset of create fields",
-      "response": "StandingAdjustmentOut",
-      "frontend_caller": "api.patchStandingAdjustment"
-    },
-    {
-      "id": "standing-adjustment-delete",
-      "method": "DELETE", "path": "/standing-adjustments/{sa_id}",
-      "response": { "deleted": "int" },
-      "notes": "Materialised transactions survive with cleared link",
-      "frontend_caller": "api.deleteStandingAdjustment"
-    },
-    {
       "id": "categories-list",
-      "method": "GET", "path": "/categories",
+      "method": "GET",
+      "path": "/categories",
       "response": "CategoryOut[] ordered by sort_order",
       "frontend_caller": "api.getCategories"
     },
     {
       "id": "category-create",
-      "method": "POST", "path": "/categories",
-      "request": { "name": "string unique non-blank", "type": "needs|wants|savings|income|exclude", "sort_order": "int optional (default max+1)" },
+      "method": "POST",
+      "path": "/categories",
+      "request": {
+        "name": "string unique non-blank",
+        "type": "needs|wants|savings|income|exclude",
+        "sort_order": "int optional (default max+1)"
+      },
       "response": "CategoryOut (201); budgeted types also get a zero-amount default Budget row",
       "frontend_caller": "api.createCategory"
     },
     {
       "id": "category-patch",
-      "method": "PATCH", "path": "/categories/{category_id}",
-      "request": { "name": "string optional", "type": "string optional" },
+      "method": "PATCH",
+      "path": "/categories/{category_id}",
+      "request": {
+        "name": "string optional",
+        "type": "string optional"
+      },
       "response": "CategoryOut",
       "v2_change_category_type_guard": {
-        "behaviour": "Changing type is REJECTED with 422 when dependents exist: transactions/splits referencing it whose sign no longer fits, rules on it, or standing adjustments pointing at it — unless request includes force:true",
+        "behaviour": "Changing type is REJECTED with 422 when dependents exist: transactions/splits referencing it whose sign no longer fits, or rules on it — unless request includes force:true",
         "force_field": "force: bool = false added to request body",
         "response_on_block": "422 {detail} listing dependent counts (same census shape delete uses)"
       },
@@ -138,77 +160,115 @@
     },
     {
       "id": "category-reorder",
-      "method": "PATCH", "path": "/categories/reorder",
-      "request": { "category_ids": "int[] len>=2, complete permutation subset" },
+      "method": "PATCH",
+      "path": "/categories/reorder",
+      "request": {
+        "category_ids": "int[] len>=2, complete permutation subset"
+      },
       "response": "[{id, sort_order}] in request order",
       "frontend_caller": "api.reorderCategories"
     },
     {
       "id": "category-delete",
-      "method": "DELETE", "path": "/categories/{category_id}",
-      "response": { "deleted": "int" },
-      "error_contract": "422 with per-kind usage counts when in use by transaction/split/rule/standing-adjustment",
+      "method": "DELETE",
+      "path": "/categories/{category_id}",
+      "response": {
+        "deleted": "int"
+      },
+      "error_contract": "422 with per-kind usage counts when in use by transaction/split/rule",
       "frontend_caller": "api.deleteCategory"
     },
     {
       "id": "budget-get",
-      "method": "GET", "path": "/budget",
-      "query": { "month": "YYYY-MM required" },
+      "method": "GET",
+      "path": "/budget",
+      "query": {
+        "month": "YYYY-MM required"
+      },
       "response": "BudgetRow[]: { id, category_id, category_name, category_type, month, planned_amount_cents, actual_amount_cents } — actual nets refunds and reads split parts; auto-populates from defaults; may be negative",
       "frontend_caller": "api.getBudget"
     },
     {
       "id": "budget-patch-month",
-      "method": "PATCH", "path": "/budget/{budget_id}",
-      "request": { "planned_amount_cents": "int" },
-      "response": "{ id, planned_amount_cents, category_name, month }",
+      "method": "PATCH",
+      "path": "/budget/{budget_id}",
+      "request": {
+        "planned_amount_cents": "int"
+      },
+      "response": "{id, planned_amount_cents, category_name, month, months_changed}; the amount applies from this row's month on, through the later months that still held the old amount",
       "frontend_caller": "api.patchBudget"
     },
     {
-      "id": "budget-patch-default",
-      "method": "PATCH", "path": "/budget/defaults/{category_id}",
-      "request": { "planned_amount_cents": "int" },
-      "response": "{ category_id, planned_amount_cents }",
-      "frontend_caller": null,
-      "$note": "No api.ts caller today; contract kept because endpoint exists"
-    },
-    {
       "id": "rules-list",
-      "method": "GET", "path": "/rules",
-      "response": "RuleOut[] ordered priority desc",
+      "method": "GET",
+      "path": "/rules",
+      "response": "RuleOut[] oldest first",
       "frontend_caller": "api.getRules"
     },
     {
       "id": "rule-create",
-      "method": "POST", "path": "/rules",
-      "request": { "pattern": "string substring, matched case-insensitively", "category_id": "int", "priority": "int=0" },
+      "method": "POST",
+      "path": "/rules",
+      "request": {
+        "pattern": "string (2+ characters)",
+        "category_id": "int existing"
+      },
       "response": "RuleOut",
       "frontend_caller": "api.createRule"
     },
     {
       "id": "rule-update",
-      "method": "PATCH", "path": "/rules/{rule_id}",
-      "request": "subset of {pattern, category_id, priority}",
+      "method": "PATCH",
+      "path": "/rules/{rule_id}",
+      "request": "subset of {pattern, category_id}",
       "response": "RuleOut",
       "frontend_caller": null
     },
     {
       "id": "rule-delete",
-      "method": "DELETE", "path": "/rules/{rule_id}",
-      "response": { "deleted": "int" },
+      "method": "DELETE",
+      "path": "/rules/{rule_id}",
+      "response": {
+        "deleted": "int"
+      },
       "frontend_caller": "api.deleteRule"
     },
     {
-      "id": "rule-test",
-      "method": "POST", "path": "/rules/test",
-      "request": { "pattern": "string" },
-      "response": { "matches": "int (max 20 counted)", "examples": "string[] up to 5" },
-      "frontend_caller": null
+      "id": "ask-shops-list",
+      "method": "GET",
+      "path": "/rules/ask-shops",
+      "response": "[{pattern}]: shops whose payments are always asked about, never sorted by themselves",
+      "frontend_caller": "api.getAskShops"
+    },
+    {
+      "id": "ask-shop-create",
+      "method": "POST",
+      "path": "/rules/ask-shops",
+      "request": {
+        "transaction_id": "int: a payment at the shop"
+      },
+      "response": "{pattern, removed_rules: [string]}; rules that sorted the shop are removed",
+      "frontend_caller": "api.alwaysAsk"
+    },
+    {
+      "id": "ask-shop-delete",
+      "method": "DELETE",
+      "path": "/rules/ask-shops",
+      "query": {
+        "pattern": "string"
+      },
+      "response": {
+        "deleted": "string"
+      },
+      "frontend_caller": "api.deleteAskShop"
     },
     {
       "id": "dashboard-summary",
-      "method": "GET", "path": "/dashboard/summary",
-      "query": { "month": "YYYY-MM required; triggers standing-adjustment materialisation" },
+      "method": "GET",
+      "path": "/dashboard/summary",
+      "query": {
+        "month": "YYYY-MM required"
+      },
       "response": {
         "month": "string",
         "total_income_cents": "int",
@@ -224,124 +284,327 @@
     },
     {
       "id": "dashboard-trends",
-      "method": "GET", "path": "/dashboard/trends",
-      "query": {"months": "int 1-24 optional (default 12)", "end_month": "YYYY-MM optional; default = label month containing today via financial_month_start_day"},
-      "response": {"months_requested": "int (echoed months)", "start_month": "YYYY-MM (label of series[0])", "end_month": "YYYY-MM (label of last series entry)", "series": "[{month, total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps, top_categories, mom_deltas}] oldest→newest; savings_rate_bps int|null (null when income <= 0); top_categories [{category_id, category_name, type, actual_cents}] top 5 expense-type; mom_deltas null on series[0] else {total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps} signed vs previous entry"},
+      "method": "GET",
+      "path": "/dashboard/trends",
+      "query": {
+        "months": "int 1-24 optional (default 12)",
+        "end_month": "YYYY-MM optional; default = label month containing today via financial_month_start_day"
+      },
+      "response": {
+        "months_requested": "int (echoed months)",
+        "start_month": "YYYY-MM (label of series[0])",
+        "end_month": "YYYY-MM (label of last series entry)",
+        "series": "[{month, total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps, top_categories, mom_deltas}] oldest→newest; savings_rate_bps int|null (null when income <= 0); top_categories [{category_id, category_name, type, actual_cents}] top 5 expense-type; mom_deltas null on series[0] else {total_expenses_cents, needs_cents, wants_cents, savings_cents, total_income_cents, net_cents, savings_rate_bps} signed vs previous entry"
+      },
       "error_contract": "422 months outside 1-24 (FastAPI ge/le), 422 malformed end_month ({detail: string})",
       "frontend_caller": "api.getTrends"
     },
     {
       "id": "dashboard-pace",
-      "method": "GET", "path": "/dashboard/pace",
-      "query": {"month": "YYYY-MM optional; default = label month containing today via financial_month_start_day; triggers budget auto-population and standing-adjustment materialisation"},
-      "response": {"status": "ok | gap (bank files exist, none reach this month) | empty (no bank file ever)", "month, current_month": "YYYY-MM", "start_date, end_date, today, data_through": "ISO date; data_through null unless status ok", "days_total": "int", "day_number, days_left": "int, null unless month is current", "plan_cents, actual_cents": "{needs, wants, savings} integer cents", "spendable_plan_cents, spendable_actual_cents": "needs + wants, integer cents", "pace_delta_cents": "int|null; spent minus plan-by-now through data_through, positive = over", "daily": "[{date, cumulative_cents}] needs + wants, each day from start_date through data_through", "last_import_by_bank": "[{source, last_date|null}] for ing, revolut, degiro", "behind_months": "[YYYY-MM] from the last bank file's month through current_month", "to_review": "int unconfirmed transactions, all months"},
+      "method": "GET",
+      "path": "/dashboard/pace",
+      "query": {
+        "month": "YYYY-MM optional; default = label month containing today via financial_month_start_day; triggers budget auto-population"
+      },
+      "response": {
+        "status": "ok | gap (bank files exist, none reach this month) | empty (no bank file ever)",
+        "month, current_month": "YYYY-MM",
+        "start_date, end_date, today, data_through": "ISO date; data_through null unless status ok",
+        "days_total": "int",
+        "day_number, days_left": "int, null unless month is current",
+        "plan_cents, actual_cents": "{needs, wants, savings} integer cents",
+        "spendable_plan_cents, spendable_actual_cents": "needs + wants, integer cents",
+        "pace_delta_cents": "int|null; spent minus plan-by-now through data_through, positive = over",
+        "daily": "[{date, cumulative_cents}] needs + wants, each day from start_date through data_through",
+        "last_import_by_bank": "[{source, last_date|null}] for ing",
+        "behind_months": "[YYYY-MM] from the last bank file's month through current_month",
+        "to_review": "int unconfirmed transactions, all months"
+      },
       "error_contract": "422 malformed month ({detail: string})",
       "frontend_caller": "api.getPace"
     },
     {
       "id": "settings-get",
-      "method": "GET", "path": "/settings",
+      "method": "GET",
+      "path": "/settings",
       "response": "map<string,string> e.g. { financial_month_start_day: \"24\" }",
       "frontend_caller": "api.getSettings"
     },
     {
       "id": "setting-patch",
-      "method": "PATCH", "path": "/settings/{key}",
-      "request": { "value": "string (validated per key; financial_month_start_day must be 1-28 digits)" },
+      "method": "PATCH",
+      "path": "/settings/{key}",
+      "request": {
+        "value": "string (validated per key; financial_month_start_day must be 1-28 digits)"
+      },
       "response": "{ key, value }",
       "error_contract": "404 unknown key, 422 invalid value",
       "frontend_caller": "api.patchSetting"
     },
     {
       "id": "chat-messages-get",
-      "method": "GET", "path": "/chat/messages",
+      "method": "GET",
+      "path": "/chat/messages",
       "response": "{ messages, guesses_waiting, claude_busy }",
       "error_contract": "422 unknown channel",
       "frontend_caller": "api.getChat"
     },
     {
       "id": "chat-message-post",
-      "method": "POST", "path": "/chat/messages",
-      "request": {"channel": "bubble|telegram", "text": "string", "choose_transaction_id": "int|null", "seen_message_id": "int|null"},
+      "method": "POST",
+      "path": "/chat/messages",
+      "request": {
+        "channel": "bubble|telegram",
+        "text": "string",
+        "choose_transaction_id": "int|null",
+        "seen_message_id": "int|null"
+      },
       "response": "ChatMessage, plus a settled card when the text was a yes or no",
       "error_contract": "404 unknown transaction, 422 empty",
       "frontend_caller": "api.sendChatMessage"
     },
     {
       "id": "chat-new",
-      "method": "POST", "path": "/chat/new",
-      "request": {"channel": "bubble|telegram"},
+      "method": "POST",
+      "path": "/chat/new",
+      "request": {
+        "channel": "bubble|telegram"
+      },
       "response": "{ new_chat }: later messages start a fresh conversation; what came before is kept but not shown or remembered",
       "error_contract": "422 unknown channel",
       "frontend_caller": "api.newChat"
     },
     {
       "id": "chat-stop",
-      "method": "POST", "path": "/chat/stop",
-      "request": {"channel": "bubble|telegram"},
+      "method": "POST",
+      "path": "/chat/stop",
+      "request": {
+        "channel": "bubble|telegram"
+      },
       "response": "{ stopped }: how many messages in that chat were being worked on or waiting",
       "error_contract": "422 unknown channel",
       "frontend_caller": "api.stopChat"
     },
     {
       "id": "chat-outbox-get",
-      "method": "GET", "path": "/chat/outbox",
+      "method": "GET",
+      "path": "/chat/outbox",
       "response": "{ replies, in_flight }: replies a pushing chat has not shown yet, and each in-flight message with its live steps",
       "error_contract": "422 unknown channel",
       "frontend_caller": null
     },
     {
       "id": "chat-message-delivered",
-      "method": "POST", "path": "/chat/messages/{message_id}/delivered",
-      "request": { "message_ids": "[int] Telegram messages showing this reply" },
+      "method": "POST",
+      "path": "/chat/messages/{message_id}/delivered",
+      "request": {
+        "message_ids": "[int] Telegram messages showing this reply"
+      },
       "response": "{ delivered }",
       "error_contract": "404",
       "frontend_caller": null
     },
     {
       "id": "chat-chart-get",
-      "method": "GET", "path": "/chat/messages/{message_id}/chart",
-      "request": { "theme": "day|night (query, default day)", "v": "the message's created_at (query, ignored): keeps a browser from reusing the picture of a cleared chat" },
+      "method": "GET",
+      "path": "/chat/messages/{message_id}/chart",
+      "request": {
+        "theme": "day|night (query, default day)",
+        "v": "the message's created_at (query, ignored): keeps a browser from reusing the picture of a cleared chat"
+      },
       "response": "image/png: the chart drawn from the numbers saved with that reply",
       "error_contract": "404 no such message or no chart, 422 unknown theme",
       "frontend_caller": "api.chatChartUrl"
     },
     {
       "id": "chat-file-post",
-      "method": "POST", "path": "/chat/files",
-      "request": {"channel": "bubble|telegram", "file": "multipart"},
+      "method": "POST",
+      "path": "/chat/files",
+      "request": {
+        "channel": "bubble|telegram",
+        "file": "multipart"
+      },
       "response": "ChatMessage (handled in the background)",
       "error_contract": "422 unknown channel",
       "frontend_caller": "api.sendChatFile"
     },
     {
       "id": "chat-proposal-apply",
-      "method": "POST", "path": "/chat/proposals/{proposal_id}/apply",
-      "request": { "version": "string (the card's version when tapped)" },
+      "method": "POST",
+      "path": "/chat/proposals/{proposal_id}/apply",
+      "request": {
+        "version": "string (the card's version when tapped)"
+      },
       "response": "Card; idempotent; unchanged if the version was replaced",
       "error_contract": "404, 422",
       "frontend_caller": "api.applyChatProposal"
     },
     {
       "id": "chat-proposal-reject",
-      "method": "POST", "path": "/chat/proposals/{proposal_id}/reject",
+      "method": "POST",
+      "path": "/chat/proposals/{proposal_id}/reject",
       "response": "Card",
       "error_contract": "404",
       "frontend_caller": "api.rejectChatProposal"
+    },
+    {
+      "id": "chat-proposal-remember",
+      "method": "POST",
+      "path": "/chat/proposals/{proposal_id}/remember",
+      "response": "Card; makes a rule for each shop the applied card sorted; idempotent",
+      "error_contract": "404",
+      "frontend_caller": "api.rememberChatShops"
+    },
+    {
+      "id": "set-asides-list",
+      "method": "GET",
+      "path": "/set-asides",
+      "request": {
+        "month": "YYYY-MM optional"
+      },
+      "response": "{month, items: [SetAside], set_aside_cents}",
+      "frontend_caller": "api.getSetAsides"
+    },
+    {
+      "id": "set-aside-create",
+      "method": "POST",
+      "path": "/set-asides",
+      "request": {
+        "name": "string",
+        "amount_cents": "int > 0",
+        "due_month": "YYYY-MM",
+        "every_months": "int 2-60 or null=12"
+      },
+      "response": "{month, items: [SetAside], set_aside_cents} (201)",
+      "frontend_caller": "api.createSetAside"
+    },
+    {
+      "id": "set-aside-patch",
+      "method": "PATCH",
+      "path": "/set-asides/{bill_id}",
+      "request": "any of name, amount_cents, due_month, every_months",
+      "response": "{month, items: [SetAside], set_aside_cents}",
+      "frontend_caller": null
+    },
+    {
+      "id": "set-aside-delete",
+      "method": "DELETE",
+      "path": "/set-asides/{bill_id}",
+      "request": null,
+      "response": "{month, items: [SetAside], set_aside_cents}",
+      "frontend_caller": "api.deleteSetAside"
+    },
+    {
+      "id": "set-aside-pay",
+      "method": "POST",
+      "path": "/set-asides/{bill_id}/payments",
+      "request": {
+        "transaction_id": "int, an outgoing payment"
+      },
+      "response": "{month, items: [SetAside], set_aside_cents}",
+      "frontend_caller": "api.paySetAside"
+    },
+    {
+      "id": "set-aside-unpay",
+      "method": "DELETE",
+      "path": "/set-asides/{bill_id}/payments/{transaction_id}",
+      "request": null,
+      "response": "{month, items: [SetAside], set_aside_cents}",
+      "frontend_caller": "api.unpaySetAside"
+    },
+    {
+      "id": "recurring-ignore",
+      "method": "POST",
+      "path": "/recurring/ignored",
+      "request": {
+        "key": "string"
+      },
+      "response": {
+        "ignored": "string"
+      },
+      "frontend_caller": "api.ignoreBill"
+    },
+    {
+      "id": "recurring-count-again",
+      "method": "DELETE",
+      "path": "/recurring/ignored/{key}",
+      "request": null,
+      "response": {
+        "counted": "string"
+      },
+      "frontend_caller": "api.countBillAgain"
+    },
+    {
+      "id": "chat-proposal-show-all",
+      "method": "POST",
+      "path": "/chat/proposals/{proposal_id}/show-all",
+      "request": null,
+      "response": {
+        "shown": "int"
+      },
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-voice-post",
+      "method": "POST",
+      "path": "/chat/voice",
+      "request": "multipart/form-data: channel, file",
+      "response": "ChatMessage with heard, or {heard: null}",
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-photo-post",
+      "method": "POST",
+      "path": "/chat/photos",
+      "request": "multipart/form-data: channel, caption, file",
+      "response": "ChatMessage",
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-question-answer",
+      "method": "POST",
+      "path": "/chat/questions/{message_id}/answer",
+      "request": {
+        "option": "int"
+      },
+      "response": "ChatMessage",
+      "frontend_caller": null
+    },
+    {
+      "id": "chat-question-something-else",
+      "method": "POST",
+      "path": "/chat/questions/{message_id}/something-else",
+      "request": null,
+      "response": "ChatMessage (the question); the app's request to say what it is follows in the outbox",
+      "frontend_caller": null
     }
   ],
   "shared_envelope_shapes": {
     "TransactionOut": {
-      "id": "int", "date": "YYYY-MM-DD", "amount_cents": "int (negative = expense, positive = income or refund)",
-      "description": "string", "source": "ing|revolut|degiro|manual",
-      "category_id": "int|null (null when split)", "category_name": "string|null",
-      "confirmed": "bool", "categorised_by": "rule|ai|manual|null",
-      "ai_confidence": "float|null", "is_refund": "bool",
-      "standing_adjustment_id": "int|null",
+      "id": "int",
+      "date": "YYYY-MM-DD",
+      "amount_cents": "int (negative = expense, positive = income or refund)",
+      "description": "string",
+      "source": "ing|manual",
+      "category_id": "int|null (null when split)",
+      "category_name": "string|null",
+      "confirmed": "bool",
+      "categorised_by": "rule|ai|manual|null",
+      "ai_confidence": "float|null",
+      "is_refund": "bool",
       "splits": "[{id, category_id, category_name, amount_cents, is_refund(bool, v2)}] empty when unsplit"
     },
-    "StandingAdjustmentOut": { "id": "int", "name": "string", "amount_cents": "int>0", "income_category_id": "int", "expense_category_id": "int", "active": "bool", "start_month": "date" },
-    "CategoryOut": { "id": "int", "name": "string", "type": "needs|wants|savings|income|exclude", "sort_order": "int" },
-    "RuleOut": { "id": "int", "pattern": "string", "category_id": "int", "category_name": "string", "priority": "int" }
+    "CategoryOut": {
+      "id": "int",
+      "name": "string",
+      "type": "needs|wants|savings|income|exclude",
+      "sort_order": "int"
+    },
+    "RuleOut": {
+      "id": "int",
+      "pattern": "string",
+      "category_id": "int",
+      "category_name": "string"
+    }
   }
 }

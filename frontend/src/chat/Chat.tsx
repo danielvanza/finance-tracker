@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUp, MessageCircle, Paperclip } from 'lucide-react'
 import { api } from '../api'
 import type { ChatCard, ChatChart, ChatConversation, ChatMessage, ChatTransactionRef, ChatImportCounts, ChatWork } from '../types'
-import { ClarifyCard, ImportCard, ProposalCard, type CardAction, type CardError } from './cards'
+import { ClarifyCard, ImportCard, ProposalCard, Rich, type CardAction, type CardError } from './cards'
 
 const CHAT_KEY = ['chat', 'bubble']
 const DESKTOP = '(min-width: 1024px)'
@@ -82,7 +82,7 @@ function ChartPicture({ messageId, createdAt, chart }: { messageId: number; crea
   )
 }
 
-function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onChoose, cardBusy, cardError, onApply, onReject }: {
+function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onChoose, cardBusy, cardError, onApply, onReject, onRemember }: {
   message: ChatMessage
   inFlightLine: string | null
   onStop: () => void
@@ -93,6 +93,7 @@ function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onCh
   cardError: CardError | null
   onApply: (card: ChatCard) => void
   onReject: (card: ChatCard) => void
+  onRemember: (card: ChatCard) => void
 }) {
   if (message.role === 'user') {
     return (
@@ -109,7 +110,7 @@ function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onCh
     const card = message.card
     return (
       <li>
-        <ProposalCard card={card} localError={cardError} busy={cardBusy} onApply={() => onApply(card)} onReject={() => onReject(card)} />
+        <ProposalCard card={card} localError={cardError} busy={cardBusy} onApply={() => onApply(card)} onReject={() => onReject(card)} onRemember={() => onRemember(card)} />
       </li>
     )
   }
@@ -123,7 +124,7 @@ function Message({ message, inFlightLine, onStop, stopping, chooseDisabled, onCh
   const chart = (message.payload as { chart?: ChatChart } | null)?.chart
   return (
     <>
-      <li className={message.kind === 'error' ? 'chat-reply chat-error' : 'chat-reply'}>{message.text}</li>
+      <li className={message.kind === 'error' ? 'chat-reply chat-error' : 'chat-reply'}>{message.kind === 'answer' ? <Rich text={message.text} /> : message.text}</li>
       {chart && <li><ChartPicture key={message.created_at} messageId={message.id} createdAt={message.created_at} chart={chart} /></li>}
     </>
   )
@@ -230,6 +231,7 @@ export default function Chat() {
     setCardErrors(current => Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== card.id)))
     try {
       if (action === 'apply') await api.applyChatProposal(card.id, card.version)
+      else if (action === 'remember') await api.rememberChatShops(card.id)
       else await api.rejectChatProposal(card.id)
       await refresh()
       queryClient.invalidateQueries({ predicate: q => q.queryKey[0] !== 'chat' })
@@ -295,7 +297,8 @@ export default function Chat() {
     const failure = cardErrors[card.id]
     if (failure?.version !== card.version) return null // never tapped, or the card has since been replaced
     if (dataUpdatedAt <= failure.at) return { unknown: true, action: failure.action }
-    return card.status === 'pending' ? { unknown: false, action: failure.action } : null
+    const open = card.status === 'pending' || (failure.action === 'remember' && !!card.offer)
+    return open ? { unknown: false, action: failure.action } : null
   }
   const stillUnsure = unsure && !messages.some(m => m.role === 'user' && m.id > unsure.afterId && (unsure.text === undefined || m.text === unsure.text))
   const notice = sendError ?? (stillUnsure ? unsure.notice : null) ?? (isError ? UNREACHABLE : null)
@@ -372,6 +375,7 @@ export default function Chat() {
                   cardError={message.card ? cardError(message.card) : null}
                   onApply={card => decide(card, 'apply')}
                   onReject={card => decide(card, 'reject')}
+                  onRemember={card => decide(card, 'remember')}
                 />
               ))}
               <li ref={bottom} aria-hidden="true" />

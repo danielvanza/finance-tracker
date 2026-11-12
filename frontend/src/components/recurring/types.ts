@@ -1,5 +1,5 @@
 /** One repeating payment found in the bank history (GET /recurring). Money is integer cents. */
-export type RecurringState = 'paid' | 'due' | 'expected' | 'later' | 'stopped'
+export type RecurringState = 'paid' | 'due' | 'expected' | 'later' | 'stopped' | 'ignored'
 
 export interface RecurringItem {
   key: string

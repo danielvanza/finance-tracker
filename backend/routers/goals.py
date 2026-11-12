@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import clock
 import money
 import spend_service
 from db import get_db
@@ -30,12 +31,12 @@ MAX_CENTS = 99_999_999
 VALUE_LIMIT = 500  # settings.value is String(500)
 PACE_MONTHS = 3
 PACE_NEEDS = 2
-BANK_SOURCES = (TransactionSource.ing, TransactionSource.revolut, TransactionSource.degiro)
+BANK_SOURCES = (TransactionSource.ing,)
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
 def _today() -> date:
-    return date.today()
+    return clock.today()
 
 
 class GoalIn(BaseModel):

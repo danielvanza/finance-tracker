@@ -1,5 +1,5 @@
-export const SOURCES = ['ing', 'revolut', 'degiro']
-export const BANKS: Record<string, string> = { ing: 'ING', revolut: 'Revolut', degiro: 'DEGIRO' }
+export const SOURCES = ['ing']
+export const BANKS: Record<string, string> = { ing: 'ING' }
 
 const readHead = (file: File) =>
   new Promise<string>(resolve => {
@@ -9,11 +9,8 @@ const readHead = (file: File) =>
     reader.readAsText(file.slice(0, 600))
   })
 
-/** Which bank a file's header line belongs to, or null when it matches none of them. Only used to explain an empty preview. */
-export async function sniffBank(file: File): Promise<string | null> {
-  const head = (await readHead(file)).split(/\r?\n/, 1)[0]
-  if (head.includes('Started Date')) return 'revolut'
-  if (head.includes(';') && head.includes('Name / Description')) return 'ing'
-  if (head.includes('Product') && head.includes('Change')) return 'degiro'
-  return null
+/** Whether a file's header line is that of an ING export, in English or Dutch. Only used to explain an empty preview. */
+export async function looksLikeIng(file: File): Promise<boolean> {
+  const head = (await readHead(file)).split(/\r?\n/, 1)[0].toLowerCase()
+  return head.includes('name / description') || head.includes('naam / omschrijving')
 }

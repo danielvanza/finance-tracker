@@ -5,6 +5,7 @@ and nothing else: no built-in tools, settings or outside MCP, an allowlisted env
 where /home is empty, so the machine's files and normal Claude configuration are not there to read.
 A caller can hand over its own tools; they reach the model as one private MCP server (see assistant/tools.py).
 """
+import base64
 import json
 import os
 import shutil
@@ -98,6 +99,7 @@ def _scrub_account(home: Path) -> None:
 
 def build_command(
     system: str, model: str, binary: str, home: Path, work: Path, credential: Path, allowed_tools: list[str] | None = None,
+    with_picture: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
     """The exact process to start and its complete environment."""
     command = [
@@ -127,7 +129,10 @@ def build_command(
         "--chdir", _SANDBOX_WORK,
         "--",
         f"{_SANDBOX_BIN}/claude",
-        "-p", "--model", model, "--output-format", "json",
+        "-p", "--model", model,
+        # A picture can only be handed over as a message, which the CLI takes and answers as streams of JSON.
+        *(["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"] if with_picture
+          else ["--output-format", "json"]),
         "--tools", "", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "",
         "--no-session-persistence", "--system-prompt", system,
     ]
@@ -171,11 +176,47 @@ def _run(command: list[str], prompt: str, env: dict, cwd: Path, timeout: float, 
     return subprocess.CompletedProcess(command, process.returncode, output.get("stdout", ""), output.get("stderr", ""))
 
 
+_PICTURE_TYPES = {b"\x89PNG": "image/png", b"\xff\xd8\xff": "image/jpeg", b"GIF8": "image/gif", b"RIFF": "image/webp"}
+
+
+def picture_type(picture: bytes) -> str | None:
+    """The kind of picture these bytes are, if it is one Claude can look at."""
+    return next((kind for magic, kind in _PICTURE_TYPES.items() if picture.startswith(magic)), None)
+
+
+def _with_picture(prompt: str, picture: bytes) -> str:
+    """The prompt and a picture as the one message the CLI is given. The picture is seen, not run: the
+    model still has no tools but the ones handed to it."""
+    return json.dumps({"type": "user", "message": {"role": "user", "content": [
+        {"type": "image", "source": {
+            "type": "base64", "media_type": picture_type(picture) or "image/jpeg",
+            "data": base64.b64encode(picture).decode(),
+        }},
+        {"type": "text", "text": prompt},
+    ]}}) + "\n"
+
+
+def _result_of(stdout: str, streamed: bool) -> dict:
+    if not streamed:
+        return json.loads(stdout)
+    for line in reversed(stdout.splitlines()):
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "result":
+            return event
+    raise ValueError("no result")
+
+
 def complete(
     system: str, prompt: str, model: str, timeout: float, on_wait=None,
     tools: dict | None = None, allowed_tools: list[str] | None = None, should_stop=None,
+    picture: bytes | None = None,
 ) -> str:
     """Run one prompt and return the model's text. Raises ClaudeCliError if it can't.
+
+    With a picture, the model is shown it beside the prompt.
 
     Only one run happens at a time. If another is going, on_wait(True) is called before queueing
     behind it and on_wait(False) when this run starts. should_stop() is asked a few times a second;
@@ -195,7 +236,9 @@ def complete(
     for folder in (base, home, work):
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-    command, env = build_command(system, model, binary, home, work, credential, allowed_tools)
+    command, env = build_command(system, model, binary, home, work, credential, allowed_tools, picture is not None)
+    if picture is not None:
+        prompt = _with_picture(prompt, picture)
     command[0] = shutil.which("bwrap") or "bwrap"
     if not _lock.acquire(blocking=False):
         if on_wait:
@@ -222,7 +265,7 @@ def complete(
         _lock.release()
 
     try:
-        result = json.loads(run.stdout)
+        result = _result_of(run.stdout, picture is not None)
     except ValueError as e:
         raise ClaudeCliError(f"exit {run.returncode}: {run.stderr.strip()[:200]}") from e
     if run.returncode != 0 or result.get("is_error"):

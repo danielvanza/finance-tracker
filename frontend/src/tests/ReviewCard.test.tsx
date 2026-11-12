@@ -8,7 +8,7 @@ const mockTx: Transaction = {
   id: 1, date: '2026-03-12', amount_cents: -3499, description: 'Bol.com',
   source: 'ing', category_id: 5, category_name: 'Recreation & Entertainment',
   confirmed: false, categorised_by: 'ai', ai_confidence: 0.72,
-  is_refund: false, standing_adjustment_id: null, splits: [],
+  is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
 }
 
 const mockCategories: Category[] = [
@@ -20,22 +20,32 @@ const wrap = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>)
 
 test('renders transaction description and amount', () => {
-  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} onCreateRule={vi.fn()} />)
+  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} />)
   expect(screen.getByText('Bol.com')).toBeInTheDocument()
   expect(screen.getByText(/34.99/)).toBeInTheDocument()
 })
 
-test('shows AI suggestion and confidence', () => {
-  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} onCreateRule={vi.fn()} />)
-  expect(screen.getByText(/72%/)).toBeInTheDocument()
+test('shows the guess Claude was not sure of', () => {
+  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} />)
+  expect(screen.getByText(/Claude was not sure/)).toBeInTheDocument()
   expect(screen.getAllByText(/Recreation & Entertainment/).length).toBeGreaterThan(0)
 })
 
 test('calls onConfirm with the decision when confirm button clicked', () => {
   const onConfirm = vi.fn()
-  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} onCreateRule={vi.fn()} />)
+  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
   expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false })
+})
+
+test('remembers the shop only when the box is ticked', () => {
+  const onConfirm = vi.fn()
+  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  const box = screen.getByRole('checkbox', { name: 'Remember this shop for next time' })
+  expect(box).not.toBeChecked()
+  fireEvent.click(box)
+  fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false, remember: true })
 })
 
 describe('ReviewCard incoming-money choice', () => {
@@ -51,14 +61,14 @@ describe('ReviewCard incoming-money choice', () => {
     description: 'Albert Heijn', source: 'ing',
     category_id: 1, category_name: 'Food',
     confirmed: false, categorised_by: 'ai', ai_confidence: 0.85,
-    is_refund: false, standing_adjustment_id: null, splits: [],
+    is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   }
   const incomeTx: Transaction = {
     id: 2, date: '2026-03-01', amount_cents: 340000,
     description: 'Salaris Maart', source: 'ing',
     category_id: 2, category_name: 'Salary',
     confirmed: false, categorised_by: 'ai', ai_confidence: 0.9,
-    is_refund: false, standing_adjustment_id: null, splits: [],
+    is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   }
 
   it('shows only expense categories for negative amount transactions', () => {
@@ -68,7 +78,6 @@ describe('ReviewCard incoming-money choice', () => {
         categories={allCategories}
         onConfirm={vi.fn()}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     // No income/refund/transfer choice for outgoing money
@@ -87,7 +96,6 @@ describe('ReviewCard incoming-money choice', () => {
         categories={allCategories}
         onConfirm={vi.fn()}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     expect(screen.getByRole('radio', { name: 'Income' })).toHaveAttribute('aria-checked', 'true')
@@ -106,7 +114,6 @@ describe('ReviewCard incoming-money choice', () => {
         categories={allCategories}
         onConfirm={onConfirm}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     fireEvent.click(screen.getByRole('radio', { name: 'Refund' }))
@@ -129,7 +136,6 @@ describe('ReviewCard incoming-money choice', () => {
         categories={allCategories}
         onConfirm={vi.fn()}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     fireEvent.click(screen.getByRole('radio', { name: 'Transfer' }))
@@ -150,7 +156,7 @@ describe('ReviewCard splitting', () => {
     description: 'Supermarket', source: 'ing',
     category_id: 1, category_name: 'Food',
     confirmed: false, categorised_by: null, ai_confidence: null,
-    is_refund: false, standing_adjustment_id: null, splits: [],
+    is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   }
 
   it('confirms a balanced split with signed parts', () => {
@@ -161,7 +167,6 @@ describe('ReviewCard splitting', () => {
         categories={categories}
         onConfirm={onConfirm}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     fireEvent.click(screen.getByRole('button', { name: /split…/i }))
@@ -198,32 +203,11 @@ describe('ReviewCard splitting', () => {
         categories={categories}
         onConfirm={vi.fn()}
         onSkip={vi.fn()}
-        onCreateRule={vi.fn()}
       />
     )
     fireEvent.click(screen.getByRole('button', { name: /split…/i }))
     fireEvent.change(screen.getByLabelText('Split part 1 amount'), { target: { value: '100' } })
     expect(screen.getByRole('button', { name: /confirm split/i })).toBeDisabled()
     expect(screen.getByText(/Remaining: €150,00/)).toBeInTheDocument()
-  })
-})
-
-describe('ReviewCard rule button', () => {
-  const show = (description: string, onCreateRule = vi.fn()) =>
-    wrap(<ReviewCard transaction={{ ...mockTx, description }} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} onCreateRule={onCreateRule} />)
-
-  it('offers the rule for the shop, not the bank text with its order number', () => {
-    const onCreateRule = vi.fn()
-    show('Albert Heijn 1403 Amsterdam NLD', onCreateRule)
-    const rule = screen.getByRole('button', { name: 'Always categorise "Albert Heijn" as this' })
-    expect(rule).toBeEnabled()
-    fireEvent.click(rule)
-    expect(onCreateRule).toHaveBeenCalledWith(mockTx.id, 5)
-  })
-
-  it('is off, with a reason, when the name is too short to match safely', () => {
-    show('AH')
-    expect(screen.getByRole('button', { name: /Always categorise "AH" as this/ })).toBeDisabled()
-    expect(screen.getByText('That name is too short to match safely.')).toBeInTheDocument()
   })
 })

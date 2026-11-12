@@ -1,4 +1,4 @@
-/* Setup: rules, categories, standing adjustments, settings. */
+/* Setup: budget, rules, categories, set-asides, target split, settings. */
 
 /* One column on a phone. Wider, the long categories list sits beside the shorter sections. */
 .setup-sections {
@@ -67,8 +67,9 @@
 
 .setup-cat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem 0.5rem;
   padding: 0.3rem 0;
   border-top: 1px solid var(--line);
 }
@@ -81,7 +82,7 @@
 
 /* A name reads as text until it's touched, then sinks in as a field. */
 .setup-name {
-  flex: 1;
+  flex: 1 1 4.5rem;
   min-width: 0;
   min-height: 2.25rem;
   padding: 0.3rem 0.6rem;
@@ -121,7 +122,7 @@
   gap: 0.6rem;
 }
 
-/* Standing adjustments */
+/* A row with a name, a line about it and actions: set-asides */
 .setup-adj {
   display: flex;
   flex-wrap: wrap;
@@ -242,11 +243,11 @@
   }
 }
 
-/* Budget, Rules, Categories, Adjustments, Settings (then Your data). The long categories list sits beside the rest. */
+/* Budget, Rules, Categories, Set-asides, Target split, Your own accounts, Settings (then Your data). The long categories list sits beside the rest. */
 @media (min-width: 1100px) {
   .setup-sections {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    grid-template-rows: repeat(5, auto) 1fr;
+    grid-template-rows: repeat(7, auto) 1fr;
     align-items: start;
   }
 
@@ -256,31 +257,32 @@
 
   .setup-sections > :nth-child(3) {
     grid-column: 2;
-    grid-row: 1 / span 6;
+    grid-row: 1 / span 8;
   }
 }
 
 @media (min-width: 1800px) {
-  /* The three narrow ones (adjustments, settings, your data) stack at the top of the third column: the
-     budget and the categories span the three auto rows and the flexible one, so they never stretch them. */
+  /* The five narrow ones (set-asides, target split, your own accounts, settings, your data) stack at the top of
+     the third column: the budget and the categories span the five auto rows and the flexible one, so they never
+     stretch them. */
   .setup-sections {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto auto 1fr auto;
+    grid-template-rows: auto auto auto auto auto 1fr auto;
   }
 
   .setup-sections > :nth-child(1) {
     grid-column: 1;
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 6;
   }
 
   .setup-sections > :nth-child(2) {
     grid-column: 1;
-    grid-row: 5;
+    grid-row: 7;
   }
 
   .setup-sections > :nth-child(3) {
     grid-column: 2;
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 6;
   }
 
   .setup-sections > :nth-child(n + 4) {
@@ -456,4 +458,51 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+/* Set-asides and the target split. */
+.setup-pay {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.setup-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.setup-split .form-row {
+  width: 6.5rem;
+}
+
+.setup-split .setup-own-name {
+  flex: 1 1 9rem;
+  width: auto;
+}
+
+/* What the category counts as: a fixed, narrow select, so the name gives way first and the row never spills. */
+.setup-cat .setup-type {
+  flex: 0 1 6.75rem;
+  width: auto;
+  min-width: 4.25rem;
+  padding-block: 0.25rem;
+  padding-inline: 0.5rem 1.5rem;
+  font-size: 0.8125rem;
+}
+
+/* Rules > Always asked about: shops whose payments are never sorted by themselves. */
+.rules-ask {
+  margin-top: 1rem;
+}
+
+.rules-ask h3 {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rules-ask-row {
+  justify-content: space-between;
 }

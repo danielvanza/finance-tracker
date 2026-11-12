@@ -16,26 +16,24 @@ from pydantic import ValidationError
 from sqlalchemy import select, text as sql
 from sqlalchemy.orm import Session
 
+import clock
 import db as database
+import guesses
 import money
 import spend_service
 from financial_month import label_month_for_date
-from models import Budget, Category, Rule, Setting, StandingAdjustment, Transaction, TransactionSplit
+from models import AskShop, Budget, Category, IgnoredBill, Rule, SetAside, Setting, Transaction, TransactionSplit
 from routers import budget as budget_router
 from routers import categories as categories_router
 from routers import goals as goals_router
+from routers import recurring as recurring_router
 from routers import rules as rules_router
+from routers import set_asides as set_asides_router
 from routers import settings as settings_router
-from routers import standing_adjustments as standing_router
 from routers import transactions as transactions_router
-from schemas import (
-    AdjustmentPairCreate, BudgetPatch, CategoryCreate, CategoryReorder, RuleCreate, RuleUpdate,
-    SettingPatch, StandingAdjustmentCreate, StandingAdjustmentPatch, TransactionCreate,
-)
+from schemas import BudgetPatch, CategoryCreate, CategoryReorder, RuleCreate, RuleUpdate, SettingPatch, TransactionCreate
 
 _NOTHING = "—"
-_APPLIED_ROWS = 5
-_APPLIED_LINE = 240
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 _LONG_MONTHS = [
     "January", "February", "March", "April", "May", "June", "July", "August", "September",
@@ -43,7 +41,12 @@ _LONG_MONTHS = [
 ]
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
 MAX_BATCH = 500
-_TABLES = (Transaction, TransactionSplit, Category, Rule, Budget, StandingAdjustment, Setting)
+_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting)
+_SETTING_NAMES = {
+    "financial_month_start_day": "Financial month start day",
+    "target_split": "Target split (needs/wants/savings)",
+    "own_names": "The household's own names on bank transfers",
+}
 
 
 class ActionError(Exception):
@@ -129,7 +132,7 @@ def _update_transaction(db: Session, a: dict):
     bank_detail = {k: a[k] for k in ("date", "amount_cents", "description") if k in a}
     if bank_detail:
         is_manual = (tx.source.value if hasattr(tx.source, "value") else tx.source) == "manual"
-        if not is_manual or tx.standing_adjustment_id is not None:
+        if not is_manual:
             raise ActionError("Only a manually added entry can have its date, amount or description changed")
         if tx.splits:
             raise ActionError("Remove the split before changing this entry's amount")
@@ -203,11 +206,18 @@ def _confirm_guesses(db: Session, a: dict):
         raise ActionError("There are no guesses to confirm")
     if len(set(ids)) != len(ids):
         raise ActionError("The same row is listed twice")
+    rows = []
     for tx_id in ids:
         tx = _get(db, Transaction, tx_id, f"transaction (id {tx_id})")
         if tx.confirmed or not (tx.category_id or tx.splits):
             raise ActionError(f"Row {tx.id} ('{tx.description}') is not a guess waiting for review")
+        rows.append(tx)
+    for tx in rows:
         tx.confirmed = True
+        tx.categorised_by = "manual"
+    db.flush()
+    for tx in rows:  # each confirmed shop's other waiting payments follow
+        guesses.settle_like(db, tx)
     db.commit()
 
 
@@ -234,20 +244,23 @@ def _merge(db: Session, a: dict):
 def _set_budget(db: Session, a: dict):
     cents = _cents(a.get("planned_amount_cents"), "planned amount")
     body = BudgetPatch(planned_amount_cents=cents)
-    if a.get("month") is None:
-        budget_router.patch_default(a.get("category_id"), body, db)
-        return
-    year, mo = _month(a["month"])
+    year, mo = _budget_month(db, a)
     row = db.query(Budget).filter_by(category_id=a.get("category_id"), month=date(year, mo, 1)).first()
     if row is None:
         raise ActionError("That category has no budget for that month")
     budget_router.patch_budget(row.id, body, db)
 
 
-def _prepare_budget(db: Session, a: dict):
+def _budget_month(db: Session, a: dict) -> tuple[int, int]:
+    """The month a plan change starts in: the one named, or the current financial month."""
     if a.get("month") is not None:
-        year, mo = _month(a["month"])
-        budget_router._auto_populate(date(year, mo, 1), db)
+        return _month(a["month"])
+    return label_month_for_date(clock.today(), spend_service.get_start_day(db))
+
+
+def _prepare_budget(db: Session, a: dict):
+    year, mo = _budget_month(db, a)
+    budget_router._auto_populate(date(year, mo, 1), db)
 
 
 def _goal_in(g: dict) -> dict:
@@ -305,19 +318,16 @@ def _prepare_batch(db: Session, a: dict):
             OPS[name].prepare(db, args)
 
 
-def _standing_fields(a: dict) -> dict:
-    fields = {k: a[k] for k in ("name", "income_category_id", "expense_category_id", "active") if k in a}
+def _set_aside_fields(a: dict) -> dict:
+    fields = {k: a[k] for k in ("name", "due_month", "every_months") if k in a}
     if "amount_cents" in a:
         fields["amount_cents"] = _cents(a["amount_cents"])
-    if "start_month" in a:
-        year, mo = _month(a["start_month"])
-        fields["start_month"] = date(year, mo, 1)
     return fields
 
 
 def _set_setting(db: Session, a: dict):
-    if a.get("key") != "financial_month_start_day":
-        raise ActionError("Only the financial month start day can be set here; savings goals have goal.set")
+    if a.get("key") not in _SETTING_NAMES:
+        raise ActionError("Only financial_month_start_day, target_split and own_names can be set here; savings goals have goal.set")
     settings_router.patch_setting(a.get("key"), SettingPatch(value=str(a.get("value"))), db)
 
 
@@ -337,27 +347,25 @@ OPS: dict[str, Op] = {
         '{"id":int,"parts":[{"category_id":int,"amount_cents":int,"is_refund":bool optional}]} parts sum exactly to the transaction amount with the same sign; "parts":[] removes a split'),
     "transaction.delete": Op(lambda db, a: transactions_router.delete_transaction(a.get("id"), db),
         '{"id":int} manual entries only'),
-    "transaction.rule": Op(lambda db, a: transactions_router.create_rule_from_transaction(a.get("id"), db),
-        '{"id":int} make a rule from this transaction\'s description and category'),
-    "adjustment_pair.add": Op(
-        lambda db, a: transactions_router.create_adjustment_pair(AdjustmentPairCreate(**{
-            **a, "legs": [{**leg, "amount_cents": _cents(leg.get("amount_cents"))} for leg in a.get("legs", [])],
-        }), db),
-        '{"date":"YYYY-MM-DD","description":str,"legs":[{"amount_cents":int,"category_id":int,"description":str optional},{...}]} two legs netting to zero'),
     "refund.book": Op(_book_refund,
         '{"refund_id":int (the incoming payment),"purchase_id":int (the original purchase),"category_id":int only if the purchase is split}'),
     "refund.add": Op(_add_refund,
         '{"purchase_id":int if known otherwise "category_id":int,"amount_cents":int positive,"date":"YYYY-MM-DD","description":str} when the incoming payment is not in the data'),
     "review.confirm": Op(_confirm_guesses, '{"ids":[int,...]} guesses to accept as they stand'),
     "budget.set": Op(_set_budget,
-        '{"category_id":int,"month":"YYYY-MM" or null for the default of future months,"planned_amount_cents":int}',
+        '{"category_id":int,"month":"YYYY-MM" optional (the current month if left out),"planned_amount_cents":int} the plan from that month on; earlier months keep theirs',
         prepare=_prepare_budget),
     "rule.add": Op(lambda db, a: rules_router.create_rule(RuleCreate(**a), db),
-        '{"pattern":str,"category_id":int,"priority":int optional}'),
+        '{"pattern":str,"category_id":int} when several rules fit a payment the longest pattern wins'),
     "rule.update": Op(
         lambda db, a: rules_router.update_rule(a.get("id"), RuleUpdate(**{k: v for k, v in a.items() if k != "id"}), db),
-        '{"id":int, then only what changes: "pattern","category_id","priority"}'),
+        '{"id":int, then only what changes: "pattern","category_id"}'),
     "rule.delete": Op(lambda db, a: rules_router.delete_rule(a.get("id"), db), '{"id":int}'),
+    "shop.always_ask": Op(
+        lambda db, a: rules_router.add_ask_shop(rules_router.AskShopIn(transaction_id=a.get("transaction_id")), db),
+        '{"transaction_id":int (a payment at the shop)} for a shop whose payments differ every time, such as one that sells a bit of everything: its payments are never sorted by themselves or remembered as a rule, and each is asked about on its own. A rule that sorted the shop is removed. Payments already sorted keep their category'),
+    "shop.sort_again": Op(lambda db, a: rules_router.delete_ask_shop(a.get("pattern") or "", db),
+        '{"pattern":str (from ask_shops)} undo shop.always_ask: Claude sorts the shop by itself again'),
     "category.add": Op(lambda db, a: categories_router.create_category(CategoryCreate(**a), db),
         '{"name":str,"type":"needs|wants|savings|income|exclude"}'),
     "category.update": Op(
@@ -367,14 +375,25 @@ OPS: dict[str, Op] = {
     "category.delete": Op(lambda db, a: categories_router.delete_category(a.get("id"), db), '{"id":int}'),
     "category.reorder": Op(lambda db, a: categories_router.reorder_categories(CategoryReorder(**a), db),
         '{"category_ids":[int,...]} in the new order'),
-    "standing.add": Op(
-        lambda db, a: standing_router.create_standing_adjustment(StandingAdjustmentCreate(**_standing_fields(a)), db),
-        '{"name":str,"amount_cents":int positive,"income_category_id":int,"expense_category_id":int,"start_month":"YYYY-MM" optional}'),
-    "standing.update": Op(
-        lambda db, a: standing_router.patch_standing_adjustment(a.get("id"), StandingAdjustmentPatch(**_standing_fields(a)), db),
-        '{"id":int, then only what changes: "name","amount_cents","income_category_id","expense_category_id","active","start_month"}'),
-    "standing.delete": Op(lambda db, a: standing_router.delete_standing_adjustment(a.get("id"), db), '{"id":int}'),
-    "setting.set": Op(_set_setting, '{"key":"financial_month_start_day","value":"1-28"}'),
+    "set_aside.add": Op(
+        lambda db, a: set_asides_router.create_set_aside(set_asides_router.SetAsideIn(**_set_aside_fields(a)), db),
+        '{"name":str,"amount_cents":int positive,"due_month":"YYYY-MM" (when it is next due),"every_months":int 2-60 or null, optional (how often it comes back: 3 quarterly, 12 yearly (the default), null once)} a bill that does not come monthly, set aside for in equal monthly shares until it is due'),
+    "set_aside.update": Op(
+        lambda db, a: set_asides_router.patch_set_aside(a.get("id"), set_asides_router.SetAsidePatch(**_set_aside_fields(a)), db),
+        '{"id":int, then only what changes: "name","amount_cents","due_month","every_months"}'),
+    "set_aside.delete": Op(lambda db, a: set_asides_router.delete_set_aside(a.get("id"), db), '{"id":int}'),
+    "set_aside.pay": Op(
+        lambda db, a: set_asides_router.pay_from_set_aside(
+            a.get("id"), set_asides_router.PaymentIn(transaction_id=a.get("transaction_id")), db),
+        '{"id":int (the set-aside),"transaction_id":int (the outgoing payment that is this bill)} the payment then comes out of what was set aside and counts in no month\'s spending'),
+    "set_aside.unpay": Op(lambda db, a: set_asides_router.unpay(a.get("id"), a.get("transaction_id"), db),
+        '{"id":int,"transaction_id":int} undo set_aside.pay'),
+    "bill.ignore": Op(lambda db, a: recurring_router.ignore_bill(recurring_router.BillKey(key=a.get("key") or ""), db),
+        '{"key":str (a fixed bill\'s key from upcoming_bills)} stop counting it as a fixed bill still to pay'),
+    "bill.count": Op(lambda db, a: recurring_router.count_bill_again(a.get("key") or "", db),
+        '{"key":str} count an ignored bill as a fixed bill again'),
+    "setting.set": Op(_set_setting,
+        '{"key":"financial_month_start_day","value":"1-28"} or {"key":"target_split","value":"needs/wants/savings in whole percent adding up to 100, such as 60/25/15"} or {"key":"own_names","value":"the household\'s own names as the bank shows them, separated by ;"} (money moved to them goes to To personal accounts)'),
     "goal.set": Op(_set_goal,
         '{"category_id":int (a savings category; one goal each),"name":str,"target_cents":int,"start_cents":int optional (already in the pot when it started),"by":"YYYY-MM" or null optional} adds a goal, or changes the one that category has (then only what changes)'),
     "goal.delete": Op(_delete_goal, '{"category_id":int}'),
@@ -432,6 +451,13 @@ def _flag(v) -> str:
     return "Yes" if v else "No"
 
 
+def _every(months) -> str:
+    """How often a set-aside's bill comes back, in words."""
+    if not months:
+        return "No, once"
+    return "Every year" if months == 12 else f"Every {months} months"
+
+
 def _month_label(d: date) -> str:
     return f"{_LONG_MONTHS[d.month - 1]} {d.year}"
 
@@ -443,8 +469,16 @@ class _Names:
             for snap in (before, after) for cid, row in snap["categories"].items()
         }
 
+        self.set_asides = {
+            sid: row["name"]
+            for snap in (before, after) for sid, row in snap["set_asides"].items()
+        }
+
     def category(self, cid) -> str:
         return self.categories.get(cid, "None") if cid is not None else "None"
+
+    def set_aside(self, sid) -> str:
+        return self.set_asides.get(sid, "No") if sid is not None else "No"
 
 
 def _splits_of(snap: dict, tx_id: int, names: _Names) -> str:
@@ -475,6 +509,7 @@ def _tx_values(tx: dict, snap: dict, names: _Names) -> dict[str, str]:
         "Counts as": _counts_as(tx),
         "Category": f"Split: {split}" if split else names.category(tx["category_id"]),
         "Reviewed": _flag(tx["confirmed"]),
+        "Paid from set-aside": names.set_aside(tx["set_aside_id"]),
     }
 
 
@@ -499,29 +534,9 @@ def _row_changes(
     return out
 
 
-def _short(line: str) -> str:
-    return line if len(line) <= _APPLIED_LINE else line[:_APPLIED_LINE] + "…"
-
-
 def applied_text(changes: list[dict]) -> str:
     """What was really saved, in the app's own words. The model's sentence was only its proposal."""
-    lines = []
-    for change in changes[:_APPLIED_ROWS]:
-        lines.append(_short(change["title"]))
-        title = change["title"].replace("\u2060", "")
-        details = []
-        for field in change["fields"]:
-            added, removed = field["before"] == _NOTHING, field["after"] == _NOTHING
-            value = field["before"] if removed else field["after"]
-            if not added and not removed:
-                details.append(f"{field['label']}: {field['before']} → {field['after']}")
-            elif field["label"] != "Date" and value not in title:  # a row's title already names it
-                details.append(f"{field['label']}: {value}")
-        if details:
-            lines.append(_short(", ".join(details)))
-    if len(changes) > _APPLIED_ROWS:
-        lines.append(f"And {len(changes) - _APPLIED_ROWS} more.")
-    return "\n".join(lines)
+    return "\n".join(plain({"changes": changes})["lines"])
 
 
 def _changes(before: dict, after: dict) -> list[dict]:
@@ -545,7 +560,15 @@ def _changes(before: dict, after: dict) -> list[dict]:
             if old_values.get(label) != new_values.get(label)
         ]
         heading = "New manual entry: " if not old else ("Removed: " if not new else "")
-        out.append({"title": heading + tx_title(new or old), "fields": fields})
+        row = new or old
+        changed = {f["label"] for f in fields}
+        how = "new" if not old else "removed" if not new else (
+            "moved" if "Category" in changed else "confirmed" if changed == {"Reviewed"} and new["confirmed"] else "changed")
+        out.append({"title": heading + tx_title(row), "fields": fields, "payment": {
+            # A row that is only being added has no id yet that will still be its id at Apply.
+            "id": tx_id if old else None, "how": how, "shop": guesses.shop_pattern(row["description"]), "amount_cents": _cents_of(row["amount"]),
+            "category": new_values.get("Category") or old_values.get("Category"),
+        }})
 
     out += _row_changes(
         lambda c: c["name"], before["categories"], after["categories"],
@@ -554,30 +577,35 @@ def _changes(before: dict, after: dict) -> list[dict]:
     )
     out += _row_changes(
         lambda r: f"Rule “{r['pattern']}”", before["rules"], after["rules"],
-        lambda r: {"Pattern": r["pattern"], "Category": names.category(r["category_id"]), "Priority": str(r["priority"])},
+        lambda r: {"Pattern": r["pattern"], "Category": names.category(r["category_id"])},
         "New: ", "Removed: ",
     )
     out += _row_changes(
         lambda b: f"Budget for {names.category(b['category_id'])}, "
-                  + (_month_label(b["month"]) if b["month"] else "default for future months"),
+                  + (_month_label(b["month"]) if b["month"] else "starting amount"),
         before["budgets"], after["budgets"],
         lambda b: {"Planned": eur(_cents_of(b["planned_amount"]))},
         "New: ", "Removed: ",
     )
     out += _row_changes(
-        lambda s: f"Standing adjustment “{s['name']}”",
-        before["standing_adjustments"], after["standing_adjustments"],
-        lambda s: {
-            "Name": s["name"], "Amount": eur(_cents_of(s["amount"])),
-            "Income category": names.category(s["income_category_id"]),
-            "Expense category": names.category(s["expense_category_id"]),
-            "Active": _flag(s["active"]), "First month": _month_label(s["start_month"]),
+        lambda b: f"Set-aside “{b['name']}”", before["set_asides"], after["set_asides"],
+        lambda b: {
+            "Name": b["name"], "Amount": eur(_cents_of(b["amount"])), "Due": _month_label(b["due_month"]),
+            "Comes back": _every(b["every_months"]),
         },
         "New: ", "Removed: ",
     )
+    out += _row_changes(
+        lambda s: f"Shop “{s['pattern']}”", before["ask_shops"], after["ask_shops"],
+        lambda s: {"Always asked about": "Yes"}, "Always ask about: ", "Sorted by Claude again: ",
+    )
+    out += _row_changes(
+        lambda b: f"Fixed bill “{b['key']}”", before["ignored_bills"], after["ignored_bills"],
+        lambda b: {"Counted as a fixed bill": "No"}, "No longer counted: ", "Counted again: ",
+    )
     plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(
-        lambda s: {"financial_month_start_day": "Financial month start day"}.get(s["key"], s["key"]),
+        lambda s: _SETTING_NAMES.get(s["key"], s["key"]),
         plain(before), plain(after), lambda s: {"Value": s["value"]}, "New setting: ", "Removed setting: ",
     )
     out += _row_changes(
@@ -626,7 +654,7 @@ def _totals(db: Session, months: set[tuple[int, int]]) -> dict[tuple, dict]:
     categories = [c for c in db.query(Category).all() if c.type.value in _TYPES_WITH_BUDGET]
     for year, mo in months:
         budget_router._auto_populate(date(year, mo, 1), db)
-        start, end = spend_service.financial_month_bounds(db, year, mo, materialise=True)
+        start, end = spend_service.financial_month_bounds(db, year, mo)
         spend = spend_service.spend_totals_by_category(spend_service.confirmed_parts_in_range(db, start, end))
         plans = {b.category_id: b.planned_amount for b in db.query(Budget).filter(Budget.month == date(year, mo, 1))}
         for kind in _TYPES_WITH_BUDGET:
@@ -705,7 +733,7 @@ def _execute(
             if prepare:
                 prepare(session, args)
             start_day = spend_service.get_start_day(session)
-            this_month = label_month_for_date(date.today(), start_day)
+            this_month = label_month_for_date(clock.today(), start_day)
             before = _snapshot(conn)
 
             # The session's own savepoint must not enclose this one, or its commits would end it.
@@ -713,7 +741,7 @@ def _execute(
             conn.execute(sql("SAVEPOINT chat_preview"))
             _run_op(name, args, session)
             after = _snapshot(conn)
-            this_month_after = label_month_for_date(date.today(), spend_service.get_start_day(session))
+            this_month_after = label_month_for_date(clock.today(), spend_service.get_start_day(session))
             months = _affected_months(before, after, session) | {this_month, this_month_after}
             changes = _changes(before, after)
             if not changes:
@@ -759,3 +787,185 @@ def apply(
         on_commit(conn, fresh)
 
     return _execute(name, args, checked, precheck)
+
+
+# ---- The card in plain words --------------------------------------------------------------------
+
+SIMPLE_CHANGES = 3  # up to this many changes are said one line each; more are summed up per category
+_GROUP_LINES = 12
+_SHOPS = 3
+_OTHER_LINES = 4
+_EFFECT_LINES = 3
+_REMEMBERED, _OTHER = "Remembered for next time", "Other changes"
+_ACTIONS = {"confirmed": "Confirm as", "moved": "Move to", "new": "Add to", "removed": "Remove from", "changed": "Change in"}
+
+
+def _plain_line(change: dict) -> str:
+    """One change in one line, in the app's own words."""
+    fields = {f["label"]: f for f in change["fields"]}
+    payment = change.get("payment")
+    title = change["title"]
+    if payment:
+        if payment["how"] == "new":
+            refund = fields.get("Counts as", {}).get("after") == "Refund"
+            return f"{title.replace('New manual entry: ', 'Add: ')}, {'a refund in' if refund else 'in'} {payment['category']}"
+        if payment["how"] == "removed":
+            return title.replace("Removed: ", "Remove: ")
+        if payment["how"] == "confirmed":
+            return f"{title}: confirmed as {payment['category']}"
+        said = []
+        for label, f in fields.items():
+            if label == "Reviewed":
+                continue
+            if label == "Category":
+                said.append(f"{f['before']} → {f['after']}" if f["before"] != "None" else f"now {f['after']}")
+            elif label == "Counts as":
+                said.append(f"counts as a {f['after'].lower()}" if f["after"] == "Refund" else f"counts as {f['after'].lower()}")
+            elif label == "Paid from set-aside":
+                said.append(f"paid from {f['after']}" if f["after"] != "No" else "no longer paid from a set-aside")
+            else:
+                said.append(f"{label.lower()} {f['before']} → {f['after']}")
+        return f"{title}: {', '.join(said) or 'confirmed'}"
+    if all(f["before"] == _NOTHING for f in change["fields"]):
+        wanted = [f["after"] for f in change["fields"] if f["label"] not in ("Name", "Pattern", "Position", "Every year")]
+        return f"{title}: {', '.join(wanted)}" if wanted else title
+    if all(f["after"] == _NOTHING for f in change["fields"]):
+        return title
+    return f"{title}: " + ", ".join(f"{f['label'].lower()} {f['before']} → {f['after']}" for f in change["fields"])
+
+
+def _count(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def _summed_up(payments: list[dict], others: list[dict], shops_named: bool = True) -> list[str]:
+    """Many changes, summed up per category with counts and totals, and the shops that weigh most
+    when `shops_named`."""
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for change in payments:
+        groups.setdefault((change["payment"]["how"], change["payment"]["category"]), []).append(change)
+    lines = []
+    ordered = sorted(groups.items(), key=lambda item: (-len(item[1]), item[0]))
+    for (how, category), rows in ordered[:_GROUP_LINES]:
+        total = sum(abs(r["payment"]["amount_cents"]) for r in rows)
+        shops: dict[str, int] = {}
+        for r in rows:
+            shops[r["payment"]["shop"]] = shops.get(r["payment"]["shop"], 0) + 1
+        top = sorted(shops.items(), key=lambda item: (-item[1], item[0]))
+        named = ", ".join(f"{shop}{f' ×{n}' if n > 1 else ''}" for shop, n in top[:_SHOPS])
+        if len(top) > _SHOPS:
+            named += f" and {len(top) - _SHOPS} more"
+        lines.append(f"• {_ACTIONS[how]} {category}: {_count(len(rows), 'payment')}, {eur(total)}"
+                     + (f" ({named})" if shops_named else ""))
+    if len(ordered) > _GROUP_LINES:
+        rest = [r for _, rows in ordered[_GROUP_LINES:] for r in rows]
+        lines.append(f"• And {_count(len(rest), 'payment')} in {_count(len(ordered) - _GROUP_LINES, 'other group')}")
+    rules = [c for c in others if c["title"].startswith(("New: Rule", "Rule "))]
+    rest = [c for c in others if c not in rules]
+    if rules:
+        lines.append(f"• Remembers {_count(len(rules), 'shop')} for next time")
+    lines += [f"• {_plain_line(c)}" for c in rest[:_OTHER_LINES]]
+    if len(rest) > _OTHER_LINES:
+        lines.append(f"• And {_count(len(rest) - _OTHER_LINES, 'other change')}")
+    return lines
+
+
+def plain(preview: dict) -> dict:
+    """What a card says: a line per change when there are few, a summary per category when there are many.
+
+    `summed_up` tells the chats that the rows themselves are only shown when asked for.
+    """
+    changes = preview["changes"]
+    payments = [c for c in changes if c.get("payment")]
+    others = [c for c in changes if not c.get("payment")]
+    # A remembered shop comes with nearly every confirmation; it is not a change of its own to read through.
+    remembered = [c for c in others if payments and c["title"].startswith(("New: Rule", "Rule "))]
+    told = [c for c in changes if c not in remembered]
+    if len(told) <= SIMPLE_CHANGES:
+        lines = [_plain_line(c) for c in told]
+        if remembered:
+            lines.append("Remembered for next time." if len(remembered) == 1 else f"Remembers {len(remembered)} shops for next time.")
+        return {"lines": lines, "summed_up": False, "rows": len(changes), "payments": len(payments)}
+    head = _count(len(payments), "payment") if payments else _count(len(changes), "change")
+    return {
+        "lines": [f"{head}:", *_summed_up(payments, others)], "summed_up": True, "rows": len(changes),
+        "payments": len(payments),
+        # The same without the shops, for a chat that keeps a card short, and one sentence for once it is applied.
+        "head": head, "short_lines": _summed_up(payments, others, shops_named=False),
+        "applied_line": _applied_line(payments, len(changes)),
+    }
+
+
+def _applied_line(payments: list[dict], changes: int) -> str:
+    """A card with many changes, once applied, in one sentence."""
+    sorted_now = [c for c in payments if c["payment"]["how"] in ("moved", "confirmed")]
+    said = []
+    if sorted_now:
+        categories = {c["payment"]["category"] for c in sorted_now}
+        total = eur(sum(abs(c["payment"]["amount_cents"]) for c in sorted_now))
+        one = len(sorted_now) == 1
+        where = f"in {categories.pop()}" if len(categories) == 1 else f"sorted, in {len(categories)} categories"
+        said.append(f"{_count(len(sorted_now), 'payment')} {'is' if one else 'are'} now {where}, {total} in all")
+    rest = changes - len(sorted_now)
+    if rest:
+        said.append(f"{_count(rest, 'other change')} made" if said else f"{_count(rest, 'change')} made")
+    return " and ".join(said) + "."
+
+
+def plain_effect(effect: list[dict], applied: bool = False) -> list[str]:
+    """What the change does to this month's budget lines, the biggest moves first; other months are counted."""
+    def line(item: dict) -> str:
+        planned = f" of {eur(item['planned_cents'])}" if item["planned_cents"] is not None else ""
+        label = f"{item['category']} {item['when']}"
+        if applied:
+            return f"{label}: {eur(item['after_cents'])}{planned}"
+        return f"{label}: {eur(item['before_cents'])} → {eur(item['after_cents'])}{planned}"
+
+    now = sorted((e for e in effect if e["when"] == "this month"),
+                 key=lambda e: -abs(e["after_cents"] - e["before_cents"]))
+    shown = now[:_EFFECT_LINES] if now else effect[:_EFFECT_LINES]
+    lines = [line(e) for e in shown]
+    if len(effect) > len(shown):
+        lines.append(f"And {_count(len(effect) - len(shown), 'other budget line')} in this or other months.")
+    return lines
+
+
+def detail_groups(preview: dict) -> list[dict]:
+    """Every row of a card, grouped by what changes: a group of payments has `rows` (when, amount,
+    name), any other group has `lines`."""
+    groups: dict[str, dict] = {}
+    for change in preview["changes"]:
+        fields = {f["label"]: f for f in change["fields"]}
+        payment = change.get("payment")
+        if payment and payment["how"] in ("moved", "confirmed") and set(fields) <= {"Category", "Reviewed"}:
+            name, when, amount = change["title"].rsplit(" · ", 2)
+            if payment["how"] == "confirmed":
+                heading = f"Confirmed as {payment['category']}"
+            elif fields["Category"]["before"] == "None":
+                heading = f"Now {fields['Category']['after']}"
+            else:
+                heading = f"{fields['Category']['before']} → {fields['Category']['after']}"
+            groups.setdefault(heading, {"heading": heading, "rows": []})["rows"].append(
+                {"when": when, "amount": amount, "name": name})
+            continue
+        if change["title"].startswith("New: Rule") and "Pattern" in fields and "Category" in fields:
+            heading, line = _REMEMBERED, f"“{fields['Pattern']['after']}” → {fields['Category']['after']}"
+        else:
+            heading, line = _OTHER, _plain_line(change)
+        groups.setdefault(heading, {"heading": heading, "lines": []})["lines"].append(line)
+    last = (_REMEMBERED, _OTHER)
+    return sorted(groups.values(), key=lambda g: (
+        last.index(g["heading"]) + 1 if g["heading"] in last else 0, -len(g.get("rows") or g["lines"])))
+
+
+def details(preview: dict) -> str:
+    """Every row of a card as plain text, for when a person asks to see them all: grouped by what
+    changes, with one short line per payment."""
+    groups = detail_groups(preview)
+    if [g["heading"] for g in groups] == [_OTHER]:
+        return "\n".join(f"• {line}" for line in groups[0]["lines"])
+    said = []
+    for group in groups:
+        lines = group.get("lines") or [f"{r['when']} · {r['amount']} · {r['name']}" for r in group["rows"]]
+        said.append("\n".join([f"{group['heading']} ({len(lines)})", *[f"• {line}" for line in lines]]))
+    return "\n\n".join(said)

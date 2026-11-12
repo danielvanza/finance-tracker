@@ -2,25 +2,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, FileText, LoaderCircle, Upload } from 'lucide-react'
-import { api, ApiError } from '../api'
+import { api } from '../api'
 import type { ImportConfirmResponse, ImportPreviewResponse, Pace } from '../types'
+import { dayLabel } from '../dates'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
-import BankStep from './import/BankStep'
 import Catchup from './import/Catchup'
 import Preview from './import/Preview'
 import Result from './import/Result'
 import { BANKS } from './import/bank'
 import { catchupPath, catchupProgress } from './import/catchup'
-import { stalestBank } from './import/freshness'
 
-// A network failure already says what to do; a server rejection usually means the wrong bank.
-const describeFailure = (e: unknown) =>
-  describeApiError(e) + (e instanceof ApiError && e.status > 0 ? ' Check the chosen bank matches the file, then try again.' : '')
+// A server rejection already says why the file could not be used and what is accepted.
+const describeFailure = (e: unknown) => describeApiError(e)
 
 export default function Import() {
   const qc = useQueryClient()
-  // Until a bank is picked (or a file chosen), the one furthest behind is the choice.
-  const [picked, setPicked] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null)
   const [result, setResult] = useState<{ data: ImportConfirmResponse; bank: string } | null>(null)
@@ -38,7 +34,7 @@ export default function Import() {
   if (pace && !snapshot) setSnapshot(pace)
   const path = snapshot ? catchupPath(snapshot) : null
 
-  const source = picked ?? stalestBank(pace) ?? 'ing'
+  const source = 'ing'
   const loading = busy !== null
 
   useEffect(() => {
@@ -51,19 +47,17 @@ export default function Import() {
 
   const choose = (next: File | null) => {
     if (!next && fileInput.current) fileInput.current.value = ''
-    setPicked(source)
     setFile(next)
     setPreview(null)
     setResult(null)
   }
 
-  const handlePreview = async (as = source) => {
+  const handlePreview = async () => {
     if (!file) return
     setBusy('preview')
     setError('')
     try {
-      const data = await api.previewImport(as, file)
-      setPicked(as)
+      const data = await api.previewImport(file)
       setPreview(data)
       setResult(null)
     } catch (e) {
@@ -78,7 +72,7 @@ export default function Import() {
     setBusy('confirm')
     setError('')
     try {
-      const data = await api.confirmImport(source, file)
+      const data = await api.confirmImport(file)
       // The freshness lines and Month read the pace; make them current.
       void qc.invalidateQueries({ queryKey: ['pace'] })
       setImported(list => [...list, source])
@@ -92,9 +86,8 @@ export default function Import() {
     }
   }
 
-  const another = (bank?: string) => {
+  const another = () => {
     focusFileNext.current = true
-    setPicked(bank ?? null)
     setFile(null)
     setPreview(null)
     setError('')
@@ -111,25 +104,21 @@ export default function Import() {
       </Link>
 
       <div className="page-head">
-        <h1>Bring in bank files</h1>
+        <h1>Bring in an ING file</h1>
       </div>
 
       {path && <Catchup path={path} pace={pace} imported={imported} />}
 
       {!result && (
         <div className="import-steps">
-          <BankStep
-            source={source}
-            onPick={s => { setPicked(s); setPreview(null) }}
-            pace={pace}
-            snapshot={snapshot}
-          />
-
           <section className="panel import-step">
             <h2>
-              <span className="import-num">2</span> <label htmlFor="csv-file">Choose the CSV file</label>
+              <label htmlFor="csv-file">Choose the ING file</label>
             </h2>
-            <p className="import-hint">Export it from the bank's website or app first.</p>
+            <p className="import-hint">
+              Export it from ING's website or app first, as a CSV file. English and Dutch exports both work.
+              {pace?.newest_bank_date && <> Bank data runs to <strong className="num">{dayLabel(pace.newest_bank_date)}</strong>; rows already in are skipped.</>}
+            </p>
 
             <div
               className={`well import-drop${dragOver ? ' is-over' : ''}`}
@@ -205,7 +194,6 @@ export default function Import() {
           loading={loading}
           onConfirm={handleConfirm}
           onAnother={() => { choose(null); fileInput.current?.focus() }}
-          onReadAs={bank => handlePreview(bank)}
         />
       )}
 

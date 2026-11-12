@@ -17,9 +17,9 @@ const okPace: Pace = {
   daily: [{ date: '2026-10-24', cumulative_cents: 90000 }, { date: '2026-10-25', cumulative_cents: 211500 }],
   data_through: '2026-11-08',
   last_import_by_bank: [
-    { source: 'ing', last_date: '2026-11-08' }, { source: 'revolut', last_date: null }, { source: 'degiro', last_date: null },
+    { source: 'ing', last_date: '2026-11-08' }, { source: 'manual', last_date: null },
   ],
-  behind_months: ['2026-11'], to_review: 14,
+  behind_months: ['2026-11'], to_review: 14, to_review_in_month: 0, free: null, newest_bank_date: null,
 }
 
 vi.mock('../api', () => ({
@@ -32,7 +32,7 @@ vi.mock('../api', () => ({
       month: '2026-11', total_income_cents: 586026, total_expenses_cents: 342000, total_savings_cents: 40000,
       left_over_cents: 204026, category_breakdown: [],
       income_breakdown: [{ category_id: 18, category_name: 'Retained Salary', amount_cents: 586026 }],
-      needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 }, monthly_trend: [],
+      needs_wants_savings: { needs_cents: 0, wants_cents: 0, savings_cents: 0 },
     })),
   },
   // The recurring link asks for its own data; nothing repeating yet keeps it hidden.
@@ -66,7 +66,7 @@ describe('Month', () => {
   })
 
   it('offers the month report with no review row and no bank files', async () => {
-    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0 })
+    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null })
     expect(await screen.findByRole('link', { name: 'Month report' })).toBeInTheDocument()
     expect(screen.queryByText(/to review/)).toBeNull()
   })
@@ -86,8 +86,8 @@ describe('Month', () => {
 
   it('does not guess after a gap: it names the gap and offers the import', async () => {
     show({
-      ...okPace, status: 'gap', daily: [], data_through: null, pace_delta_cents: null, to_review: 0,
-      last_import_by_bank: [{ source: 'ing', last_date: '2026-08-12' }, { source: 'revolut', last_date: null }, { source: 'degiro', last_date: null }],
+      ...okPace, status: 'gap', daily: [], data_through: null, pace_delta_cents: null, to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null,
+      last_import_by_bank: [{ source: 'ing', last_date: '2026-08-12' }, { source: 'manual', last_date: null }],
       behind_months: ['2026-08', '2026-09', '2026-10', '2026-11'],
     })
     expect(await screen.findByRole('heading', { level: 1, name: "Can't tell yet" })).toBeInTheDocument()
@@ -98,7 +98,7 @@ describe('Month', () => {
   })
 
   it('tells a first run it needs a bank file', async () => {
-    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0,
+    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null,
       last_import_by_bank: okPace.last_import_by_bank.map(b => ({ ...b, last_date: null })) })
     expect(await screen.findByRole('heading', { level: 1, name: 'No bank files yet' })).toBeInTheDocument()
   })

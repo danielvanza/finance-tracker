@@ -18,7 +18,7 @@ let nextId = 1
 const tx = (date: string, cents: number, description: string, over: Partial<Transaction> = {}): Transaction => ({
   id: nextId++, date, description, amount_cents: cents, source: 'ing',
   category_id: 1, category_name: 'Food - Essential', confirmed: true, categorised_by: 'rule',
-  ai_confidence: null, is_refund: false, standing_adjustment_id: null, splits: [], ...over,
+  ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [], ...over,
 })
 
 describe('merchantFor', () => {
@@ -99,7 +99,7 @@ describe('buildMerchantModel', () => {
   })
 
   it('finds a rule that covers the whole key, not one that pins part of it', () => {
-    const rule = (id: number, pattern: string): Rule => ({ id, pattern, category_id: 1, category_name: 'Food - Essential', priority: 0 })
+    const rule = (id: number, pattern: string): Rule => ({ id, pattern, category_id: 1, category_name: 'Food - Essential' })
     expect(coveringRule('bol.com bestelling', [rule(1, 'bol.com bestelling 1048293771')])).toBeNull()
     expect(coveringRule('bol.com bestelling', [rule(1, 'bol.com')])?.id).toBe(1)
   })
@@ -183,7 +183,7 @@ describe('merchant sheet', () => {
     fireEvent.click(d.getByRole('button', { name: 'Set rule' }))
     await waitFor(() => expect(d.getByRole('status')).toHaveTextContent('Rule saved. 1 waiting purchase settled.'))
     const { api } = await import('../api')
-    expect(api.createRule).toHaveBeenCalledWith({ pattern: 'zara', category_id: 2, priority: 0 })
+    expect(api.createRule).toHaveBeenCalledWith({ pattern: 'zara', category_id: 2 })
     expect(api.patchTransaction).toHaveBeenCalledTimes(1)
     expect(api.patchTransaction).toHaveBeenCalledWith(waiting.id, { category_id: 2, confirmed: true })
   })
@@ -201,7 +201,7 @@ describe('merchant sheet', () => {
 
   it('shows the rule that already covers it, and refuses a key under 4 characters', async () => {
     store.txs = [tx('2026-11-02', -1000, 'Zara 1001')]
-    store.rules = [{ id: 9, pattern: 'zara', category_id: 2, category_name: 'Clothing', priority: 0 }]
+    store.rules = [{ id: 9, pattern: 'zara', category_id: 2, category_name: 'Clothing' }]
     const d = within(await open('Zara 1001'))
     expect(await d.findByText(/goes to/)).toHaveTextContent('Anything with “zara” goes to Clothing.')
     expect(d.queryByRole('button', { name: 'Set rule' })).toBeNull()

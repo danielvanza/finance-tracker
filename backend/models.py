@@ -13,8 +13,6 @@ class CategoryType(str, enum.Enum):
 
 class TransactionSource(str, enum.Enum):
     ing = "ing"
-    revolut = "revolut"
-    degiro = "degiro"
     manual = "manual"
 
 class CategorisedBy(str, enum.Enum):
@@ -38,6 +36,9 @@ class Transaction(Base):
     date = Column(Date, nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     description = Column(String, nullable=False)
+    # What the bank wrote with the payment, whole. NULL for a manual entry and for a row imported
+    # before notes were kept; importing its file again fills it in.
+    note = Column(Text, nullable=True)
     source = Column(SAEnum(TransactionSource), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
     confirmed = Column(Boolean, default=False)
@@ -47,9 +48,12 @@ class Transaction(Base):
     # A positive amount marked as refund nets against its expense category
     # instead of counting as income.
     is_refund = Column(Boolean, nullable=False, default=False, server_default="0")
-    standing_adjustment_id = Column(
-        Integer, ForeignKey("standing_adjustments.id", ondelete="SET NULL"), nullable=True
-    )
+    # What Claude would also consider for a row it was not sure about, as category ids. NULL means the
+    # row has not been judged sure-or-doubtful yet; a list (even an empty one) means it has.
+    ai_options = Column(JSON, nullable=True)
+    # The bill that does not come monthly this payment settles. Such a payment comes out of what was set
+    # aside and counts in no month's spending.
+    set_aside_id = Column(Integer, ForeignKey("set_asides.id", ondelete="SET NULL"), nullable=True)
     category = relationship("Category", back_populates="transactions")
     splits = relationship(
         "TransactionSplit",
@@ -57,7 +61,7 @@ class Transaction(Base):
         cascade="all, delete-orphan",
         order_by="TransactionSplit.id",
     )
-    standing_adjustment = relationship("StandingAdjustment", back_populates="transactions")
+    set_aside = relationship("SetAside", back_populates="payments")
 
 class TransactionSplit(Base):
     __tablename__ = "transaction_splits"
@@ -74,29 +78,36 @@ class TransactionSplit(Base):
     transaction = relationship("Transaction", back_populates="splits")
     category = relationship("Category")
 
-class StandingAdjustment(Base):
-    """Template for a net-zero manual pair materialised into each financial month
-    (e.g. +600 retained salary / -600 personal allowance)."""
-    __tablename__ = "standing_adjustments"
+class SetAside(Base):
+    """A bill that does not come monthly, spread over the months before it is due."""
+    __tablename__ = "set_asides"
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
-    amount = Column(Numeric(12, 2), nullable=False)  # positive; legs are +amount/-amount
-    income_category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
-    expense_category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
-    active = Column(Boolean, nullable=False, default=True, server_default="1")
-    # First label month (1st of month) this adjustment applies to — months
-    # before it never materialise, so history isn't rewritten retroactively.
-    start_month = Column(Date, nullable=False)
-    transactions = relationship("Transaction", back_populates="standing_adjustment")
-    income_category = relationship("Category", foreign_keys=[income_category_id])
-    expense_category = relationship("Category", foreign_keys=[expense_category_id])
+    name = Column(String, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    start_month = Column(Date, nullable=False)  # label month (1st) setting aside began
+    due_month = Column(Date, nullable=False)  # label month (1st) the bill is first due
+    every_months = Column(Integer, nullable=True)  # it comes back every this many months (12: yearly); NULL: once
+    payments = relationship("Transaction", back_populates="set_aside")
+
+
+class AskShop(Base):
+    """A shop whose payments differ every time (a shop that sells a bit of everything): never sorted by
+    itself, never remembered as a rule, each payment asked about on its own."""
+    __tablename__ = "ask_shops"
+    pattern = Column(String, primary_key=True)  # as guesses.shop_pattern gives it
+
+
+class IgnoredBill(Base):
+    """A repeating payment a person said is not a fixed bill, by its recurring key."""
+    __tablename__ = "ignored_bills"
+    key = Column(String, primary_key=True)
+
 
 class Rule(Base):
     __tablename__ = "rules"
     id = Column(Integer, primary_key=True)
     pattern = Column(String, nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
-    priority = Column(Integer, default=0)
     category = relationship("Category", back_populates="rules")
 
 class Budget(Base):
@@ -128,8 +139,9 @@ class ChatMessage(Base):
     )
     id = Column(Integer, primary_key=True)
     channel = Column(String, nullable=False)
-    role = Column(String, nullable=False)  # user | assistant
-    kind = Column(String, nullable=False)  # text | file | answer | clarify | proposal | import | error
+    role = Column(String, nullable=False)  # user | assistant | system
+    # text | file | voice | photo | answer | clarify | proposal | import | error | question | nudge | new_chat
+    kind = Column(String, nullable=False)
     text = Column(Text, nullable=False, default="", server_default="")
     status = Column(String, nullable=False, default="done", server_default="done")
     reply_to = Column(Integer, nullable=True)

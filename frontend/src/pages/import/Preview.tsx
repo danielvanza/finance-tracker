@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { dayLabel } from '../../dates'
 import { formatCents } from '../../money'
 import type { ImportPreviewResponse, ImportPreviewRow, Pace } from '../../types'
-import { BANKS, sniffBank } from './bank'
+import { BANKS, looksLikeIng } from './bank'
 import { lastDates } from './freshness'
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -53,36 +53,33 @@ interface Props {
   loading: boolean
   onConfirm: () => void
   onAnother: () => void
-  onReadAs: (bank: string) => void
 }
 
 /** Step 3: the head says what to do next; new rows come first and rows already in fold away. */
-export default function Preview({ preview, source, file, pace, busy, loading, onConfirm, onAnother, onReadAs }: Props) {
+export default function Preview({ preview, source, file, pace, busy, loading, onConfirm, onAnother }: Props) {
   const rows = preview.rows
   const fresh = rows.filter(r => !r.duplicate)
   const seen = rows.filter(r => r.duplicate)
   const bank = BANKS[source]
 
-  // Only an empty preview asks the file which bank it belongs to.
-  const [looksLike, setLooksLike] = useState<string | null>(null)
+  // Only an empty preview asks the file whether it is an ING export at all.
+  const [isIng, setIsIng] = useState(true)
   useEffect(() => {
     if (rows.length > 0 || !file) return
     let live = true
-    sniffBank(file).then(b => { if (live) setLooksLike(b && b !== source ? b : null) })
+    looksLikeIng(file).then(yes => { if (live) setIsIng(yes) })
     return () => { live = false }
-  }, [rows.length, file, source])
+  }, [rows.length, file])
 
   let title: string
   let say: React.ReactNode
   let action: React.ReactNode
   if (rows.length === 0) {
     title = `No ${bank} rows in this file`
-    say = looksLike
-      ? <>It looks like a <strong>{BANKS[looksLike]}</strong> export, so nothing could be read as {bank}.</>
-      : <>Check the bank matches the file, then try again.</>
-    action = looksLike
-      ? <button type="button" className="btn btn-primary" onClick={() => onReadAs(looksLike)} disabled={loading}>Read it as {BANKS[looksLike]}</button>
-      : <button type="button" className="btn" onClick={onAnother}>Choose another file</button>
+    say = isIng
+      ? <>The file has the right columns but no payments in it.</>
+      : <>This does not look like an ING export. Only ING files can be imported.</>
+    action = <button type="button" className="btn" onClick={onAnother}>Choose another file</button>
   } else if (fresh.length === 0) {
     const reaches = lastDates(pace)[source]
     const end = rows.map(r => r.date).sort().pop() as string

@@ -28,9 +28,10 @@ def run_migrations() -> None:
 
     Runs `alembic upgrade head` programmatically against DATABASE_URL
     (same precedence as this module's DATABASE_URL: env var, else
-    sqlite:///./data/finance.db). Fresh databases are created entirely by the
-    baseline revision; existing pre-Alembic databases whose schema already
-    equals baseline must be registered once with `.venv/bin/alembic stamp head`.
+    sqlite:///./data/finance.db). Fresh databases are created by the baseline
+    revision and the ones after it; a database from before Alembic, whose schema
+    equals the baseline, must be registered once with
+    `.venv/bin/alembic stamp afe0635828ba`.
     """
     backend_dir = Path(__file__).resolve().parent
     cfg = Config(str(backend_dir / "alembic.ini"))

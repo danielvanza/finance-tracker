@@ -83,9 +83,50 @@ def post_file(channel: Channel = Form(...), file: UploadFile = File(...)):
     return service.submit_file(channel, file.filename or "", file.file.read())
 
 
+@router.post("/voice", status_code=202)
+def post_voice(channel: Channel = Form(...), file: UploadFile = File(...)):
+    """A voice note. `heard` is what was understood, or null when it could not be made out."""
+    return service.submit_voice(channel, file.file.read())
+
+
+@router.post("/photos", status_code=202)
+def post_photo(channel: Channel = Form(...), caption: str = Form(""), file: UploadFile = File(...)):
+    return service.submit_photo(channel, file.file.read(), caption)
+
+
+class AnswerIn(BaseModel):
+    option: int  # which of the question's buttons was tapped
+
+
+@router.post("/questions/{message_id}/answer")
+def answer_question(message_id: int, body: AnswerIn):
+    return _found(service.answer_question, message_id, body.option)
+
+
+@router.post("/questions/{message_id}/remember")
+def remember_question(message_id: int):
+    return _found(service.remember_question, message_id)
+
+
+@router.post("/questions/{message_id}/something-else")
+def something_else(message_id: int):
+    return _found(service.something_else, message_id)
+
+
+@router.post("/proposals/{proposal_id}/show-all", status_code=202)
+def show_all(proposal_id: int):
+    _found(service.show_all, proposal_id)
+    return {"shown": proposal_id}
+
+
 @router.post("/proposals/{proposal_id}/apply")
 def apply_proposal(proposal_id: int, body: ApplyIn):
     return _found(service.apply_proposal, proposal_id, body.version)
+
+
+@router.post("/proposals/{proposal_id}/remember")
+def remember_shops(proposal_id: int):
+    return _found(service.remember_shops, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/reject")

@@ -5,12 +5,25 @@
     "engine": "SQLite",
     "url_env": "DATABASE_URL (default sqlite:///./data/finance.db)",
     "table_creation": "Base.metadata.create_all() on startup + db.py::run_migrations ADD COLUMN for post-deploy column additions (no migration tool by design)",
-    "seed": "backend/seed.py idempotent: categories, budgets, settings (financial_month_start_day=24), two standing adjustments (Retained Salary <-> Personal Allowance)"
+    "seed": "backend/seed.py idempotent: categories, starting budgets, settings (financial_month_start_day=24, target_split=50/30/20)"
   },
   "enums": {
-    "CategoryType": ["needs", "wants", "savings", "income", "exclude"],
-    "TransactionSource": ["ing", "revolut", "degiro", "manual"],
-    "CategorisedBy": ["rule", "ai", "manual"]
+    "CategoryType": [
+      "needs",
+      "wants",
+      "savings",
+      "income",
+      "exclude"
+    ],
+    "TransactionSource": [
+      "ing",
+      "manual"
+    ],
+    "CategorisedBy": [
+      "rule",
+      "ai",
+      "manual"
+    ]
   },
   "tables": {
     "categories": {
@@ -20,7 +33,11 @@
         "type": "ENUM CategoryType NOT NULL",
         "sort_order": "INTEGER DEFAULT 0"
       },
-      "relationships": ["transactions (1:N, FK ondelete SET NULL)", "rules (1:N, CASCADE)", "budgets (1:N, CASCADE)"]
+      "relationships": [
+        "transactions (1:N, FK ondelete SET NULL)",
+        "rules (1:N, CASCADE)",
+        "budgets (1:N, CASCADE)"
+      ]
     },
     "transactions": {
       "columns": {
@@ -35,9 +52,14 @@
         "ai_confidence": "FLOAT nullable",
         "import_hash": "STRING NOT NULL UNIQUE (SHA-256 of source|date|amount|description[|extra])",
         "is_refund": "BOOLEAN NOT NULL DEFAULT false (positive amount netting against its expense category)",
-        "standing_adjustment_id": "INTEGER FK standing_adjustments.id ON DELETE SET NULL nullable"
+        "ai_options": "JSON nullable: category ids Claude would also consider for a row it was not sure of; NULL = not yet judged sure-or-doubtful",
+        "set_aside_id": "INTEGER FK set_asides.id ON DELETE SET NULL nullable; a row with it counts in no month's spending"
       },
-      "relationships": ["category", "splits (1:N TransactionSplit, CASCADE, order_by id)", "standing_adjustment"],
+      "relationships": [
+        "category",
+        "splits (1:N TransactionSplit, CASCADE, order_by id)",
+        "set_aside"
+      ],
       "invariants": [
         "imported rows immutable (only source=manual deletable)",
         "is_refund=true requires amount>0 and category type in needs/wants/savings",
@@ -58,27 +80,11 @@
         "v2: effective_parts (backend/aggregate.py) reads per-part is_refund with parent fallback"
       ]
     },
-    "standing_adjustments": {
-      "columns": {
-        "id": "INTEGER PK",
-        "name": "STRING NOT NULL UNIQUE",
-        "amount": "NUMERIC(12,2) NOT NULL positive; materialises +amount income leg / -amount expense leg",
-        "income_category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL (must be income type)",
-        "expense_category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL (must be needs/wants/savings)",
-        "active": "BOOLEAN NOT NULL DEFAULT true",
-        "start_month": "DATE NOT NULL (1st of first label month; earlier months never materialise)"
-      },
-      "invariants": [
-        "materialisation idempotent per financial month (backend/adjustments.py)",
-        "future months never materialise; deleting a materialised row = opt-out for that month"
-      ]
-    },
     "rules": {
       "columns": {
         "id": "INTEGER PK",
         "pattern": "STRING NOT NULL (case-insensitive substring match on description)",
-        "category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL",
-        "priority": "INTEGER DEFAULT 0 (higher wins)"
+        "category_id": "INTEGER FK categories.id ON DELETE CASCADE NOT NULL"
       }
     },
     "budgets": {
@@ -88,7 +94,9 @@
         "month": "DATE nullable (NULL = default template, auto-populated per month)",
         "planned_amount": "NUMERIC(12,2) NOT NULL"
       },
-      "constraints": ["UNIQUE(category_id, month)"],
+      "constraints": [
+        "UNIQUE(category_id, month)"
+      ],
       "notes": "income/exclude categories get no budget rows"
     },
     "settings": {
@@ -96,7 +104,29 @@
         "key": "STRING(100) PK",
         "value": "STRING(500) NOT NULL"
       },
-      "known_keys": { "financial_month_start_day": "1-28, default 24" }
+      "known_keys": {
+        "financial_month_start_day": "1-28, default 24"
+      }
+    },
+    "set_asides": {
+      "columns": {
+        "id": "INTEGER PK",
+        "name": "VARCHAR NOT NULL",
+        "amount": "NUMERIC(12,2) NOT NULL",
+        "start_month": "DATE NOT NULL (1st of the label month setting aside began)",
+        "due_month": "DATE NOT NULL (1st of the label month the bill is due)",
+        "every_months": "INTEGER"
+      }
+    },
+    "ignored_bills": {
+      "columns": {
+        "key": "VARCHAR PK: the recurring key of a payment a person said is not a fixed bill"
+      }
+    },
+    "ask_shops": {
+      "columns": {
+        "pattern": "VARCHAR PK: a shop whose payments are always asked about (guesses.shop_pattern)"
+      }
     }
   },
   "domain_rules": {
@@ -104,18 +134,29 @@
     "effective_parts": "every aggregate expands a transaction into (category_id, amount, is_refund) parts: splits yield one part per row, unsplit yields the row itself (backend/aggregate.py)",
     "spend_contribution": "-amount for expense parts and refund parts (refunds reduce category spend, may go below zero); refunds never count as income",
     "sign_policy": "rules/AI only auto-assign sign-compatible categories; user may override via review UI (refund/income/transfer three-way for positives)",
-    "net_zero_adjustments": "adjustment pairs must sum to exactly zero so left_over is unchanged; standing adjustments are the stored template form"
+    "counted_rows": "only confirmed rows count; a confirmed row with categorised_by=ai was sorted automatically; a row with set_aside_id counts in no month",
+    "budget_carry_forward": "a month takes the planned amount of the newest earlier month; changing a month's row changes every later row"
   },
   "v2_migration_delta": {
     "run_migrations_add_columns": {
-      "transaction_splits": [["is_refund", "BOOLEAN"]]
+      "transaction_splits": [
+        [
+          "is_refund",
+          "BOOLEAN"
+        ]
+      ]
     },
     "backfill": "none required (NULL = inherit parent)",
     "wire_format": "monetary fields cross the API as integer cents (see api-contracts.json conventions.money_wire_format_v2); DB columns stay NUMERIC(12,2)"
   },
   "ts_mirror": {
     "$comment": "frontend/src/types.ts must stay shape-compatible with these; F1 updates it for cents + split is_refund",
-    "files": ["frontend/src/types.ts"],
-    "v2_changes": ["all *_amount/amount/planned/actual fields become integer cents", "TransactionSplit gains is_refund: boolean"]
+    "files": [
+      "frontend/src/types.ts"
+    ],
+    "v2_changes": [
+      "all *_amount/amount/planned/actual fields become integer cents",
+      "TransactionSplit gains is_refund: boolean"
+    ]
   }
 }

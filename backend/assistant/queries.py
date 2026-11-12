@@ -11,16 +11,20 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from statistics import median_low
 
+import clock
+import guesses
 import money
+import set_asides
 import spend_service
-from aggregate import effective_parts, is_spend_part, spend_contribution
+from aggregate import is_spend_part, spend_contribution
 import db as database
 from db import SessionLocal
+from importers.ing import written
 from financial_month import get_financial_month_range, label_month_for_date
-from models import Budget, Category, Rule, StandingAdjustment, Transaction, TransactionSource
+from models import Budget, Category, Rule, Transaction, TransactionSource
 from routers import budget as budget_router
 from routers import dashboard as dashboard_router
 from routers import goals as goals_router
@@ -34,18 +38,19 @@ MAX_VALUE_LENGTH = 20_000
 QUIET_DAYS = 3  # a bank's rows this far from a month's edge mean its files start late or stop early
 HOLE_DAYS = 14  # this long without a row inside a month means part of a bank's file is missing
 MIN_DATES_FOR_RHYTHM = 4  # a bank seen on fewer days than this can't be said to be missing from a month
-_BANK_SOURCES = (TransactionSource.ing, TransactionSource.revolut, TransactionSource.degiro)
+_BANK_SOURCES = (TransactionSource.ing,)
 
 # What Claude is told it can read. Every column of the DDL below is described here.
-SCHEMA = """spending: one row per effective part of a confirmed transaction, exactly as the Month page counts them (a split gives one row per part, standing adjustments included). Columns: month ('YYYY-MM', the financial month), date, transaction_id, description, merchant (lower-case words that group one shop's rows), source, category, category_type (needs, wants, savings, income, exclude), amount_cents (signed, as at the bank), spend_cents (what it adds to spending: positive for an expense, negative for a refund, 0 otherwise), counts_as (spend, refund, income, excluded, uncategorised, other), is_split.
+SCHEMA = """spending: one row per effective part of a confirmed transaction, exactly as the Month page counts them (a split gives one row per part; a bill paid from a set-aside is here only for the part that had not been set aside yet). Columns: month ('YYYY-MM', the financial month), date, transaction_id, description, merchant (lower-case words that group one shop's rows), source, category, category_type (needs, wants, savings, income, exclude), amount_cents (signed, as at the bank), spend_cents (what it adds to spending: positive for an expense, negative for a refund, 0 otherwise), counts_as (spend, refund, income, excluded, uncategorised, other), is_split.
 category_months: one row per expense category per financial month that has any rows, zero included, equal to the Month page. Columns: month, category, category_type (needs, wants, savings), spent_cents (refunds already netted; can be negative).
 month_totals: one row per financial month that has any rows. Columns: month, income_cents, expenses_cents, needs_cents, wants_cents, savings_cents, left_over_cents.
-coverage: one row per financial month from the first imported month to now. Columns: month, start_date, end_date, bank_rows, first_bank_date, last_bank_date, to_review (rows awaiting review, not counted in the views above), status (complete, in progress, partial, no data), detail (which bank's rows are missing, when partial).
-transactions: the raw rows, not resolved: a split shows as one row and refunds are not netted, so totals from here will differ from the app. confirmed = 0 with categorised_by 'ai' is a guess waiting for review, with its guessed category. Columns: id, date, month, amount_cents, description, merchant, source, category_id, category, category_type, is_refund, confirmed, categorised_by, has_splits.
+coverage: one row per financial month from the first imported month to now. Columns: month, start_date, end_date, bank_rows, first_bank_date, last_bank_date, to_review (payments waiting for an answer, not counted in the views above), status (complete, in progress, partial, no data), detail (which bank's rows are missing, when partial).
+transactions: the raw rows, not resolved: a split shows as one row and refunds are not netted, so totals from here will differ from the app. confirmed = 0 is a payment waiting for a person's answer (Claude was not sure of it), with its guessed category if it has one; confirmed = 1 with categorised_by 'ai' was sorted automatically because Claude was sure. set_aside_id is set when the payment settled a set-aside bill. note is what the payer typed with the payment, such as what a transfer between people was for (empty when nothing was typed, for a manual entry, and for rows imported before notes were kept). Columns: id, date, month, amount_cents, description, note, merchant, source, category_id, category, category_type, is_refund, confirmed, categorised_by, has_splits, set_aside_id.
 categories: every category. Columns: id, name, type (needs, wants, savings, income, exclude), position.
-budgets: planned amounts. A month's rows exist once that month has been opened in the app; rows with month NULL are the defaults new months start from. Columns: month, category_id, category, planned_cents.
-rules: what sorts imported rows automatically: a description containing pattern gets category, highest priority first. Columns: id, pattern, category_id, category, priority.
-standing_adjustments: a fixed amount moved every month from an income category to an expense category. Columns: id, name, amount_cents, income_category, expense_category, active, start_month.
+budgets: planned amounts. A plan stays as it is until changed: a month without rows of its own has the amounts of the newest earlier month (rows with month NULL are only the starting amounts from before any month was planned). Columns: month, category_id, category, planned_cents.
+rules: what sorts imported rows automatically: a description containing pattern gets category; when several fit, the longest pattern wins. Columns: id, pattern, category_id, category.
+ask_shops: shops whose payments differ every time: a payment whose description contains pattern is never sorted by itself, however sure Claude is, and is asked about on its own. Columns: pattern.
+set_asides: bills that do not come monthly, spread over the months before they are due, as this month sees them. Columns: id, name, amount_cents, due_month (the next one), every_months (how often it comes back: 3 quarterly, 12 yearly; NULL once), monthly_cents (this month's share, which lowers what is free to spend), saved_cents (set aside so far), paid_transaction_id, paid_date.
 savings_goals: as the Trends page shows them. Columns: name, category_id, category, target_cents, start_cents (in the pot when it started), saved_cents, started, by_month, status (done, open, late, unknown, short, on_track), needed_per_month_cents, pace_per_month_cents, short_per_month_cents, reach_month."""
 
 _DDL = """
@@ -56,21 +61,23 @@ CREATE TABLE month_totals (month TEXT, income_cents INTEGER, expenses_cents INTE
   wants_cents INTEGER, savings_cents INTEGER, left_over_cents INTEGER);
 CREATE TABLE coverage (month TEXT, start_date TEXT, end_date TEXT, bank_rows INTEGER, first_bank_date TEXT,
   last_bank_date TEXT, to_review INTEGER, status TEXT, detail TEXT);
-CREATE TABLE transactions (id INTEGER, date TEXT, month TEXT, amount_cents INTEGER, description TEXT, merchant TEXT,
+CREATE TABLE transactions (id INTEGER, date TEXT, month TEXT, amount_cents INTEGER, description TEXT, note TEXT,
+  merchant TEXT,
   source TEXT, category_id INTEGER, category TEXT, category_type TEXT, is_refund INTEGER, confirmed INTEGER,
-  categorised_by TEXT, has_splits INTEGER);
+  categorised_by TEXT, has_splits INTEGER, set_aside_id INTEGER);
 CREATE TABLE categories (id INTEGER, name TEXT, type TEXT, position INTEGER);
 CREATE TABLE budgets (month TEXT, category_id INTEGER, category TEXT, planned_cents INTEGER);
-CREATE TABLE rules (id INTEGER, pattern TEXT, category_id INTEGER, category TEXT, priority INTEGER);
-CREATE TABLE standing_adjustments (id INTEGER, name TEXT, amount_cents INTEGER, income_category TEXT,
-  expense_category TEXT, active INTEGER, start_month TEXT);
+CREATE TABLE rules (id INTEGER, pattern TEXT, category_id INTEGER, category TEXT);
+CREATE TABLE ask_shops (pattern TEXT);
+CREATE TABLE set_asides (id INTEGER, name TEXT, amount_cents INTEGER, due_month TEXT, every_months INTEGER,
+  monthly_cents INTEGER, saved_cents INTEGER, paid_transaction_id INTEGER, paid_date TEXT);
 CREATE TABLE savings_goals (name TEXT, category_id INTEGER, category TEXT, target_cents INTEGER, start_cents INTEGER,
   saved_cents INTEGER, started TEXT, by_month TEXT, status TEXT, needed_per_month_cents INTEGER,
   pace_per_month_cents INTEGER, short_per_month_cents INTEGER, reach_month TEXT);
 """
 _TABLES = {
     "spending", "category_months", "month_totals", "coverage", "transactions", "categories", "budgets", "rules",
-    "standing_adjustments", "savings_goals",
+    "ask_shops", "set_asides", "savings_goals",
 }
 _FUNCTIONS = {
     "abs", "avg", "coalesce", "concat", "concat_ws", "count", "cume_dist", "date", "datetime", "dense_rank",
@@ -120,7 +127,6 @@ class _Month:
     parts: list = field(default_factory=list)  # (category_id, amount, refund): the Month page's input
     bank_dates: dict = field(default_factory=dict)  # bank name -> the days it has rows
     to_review: int = 0
-    adjusted: set = field(default_factory=set)  # standing adjustments already in this month
 
 
 def _months_between(first: tuple[int, int], last: tuple[int, int], start_day: int) -> dict[str, _Month]:
@@ -180,7 +186,7 @@ def _status(month: _Month, today: date, missing: list[str]) -> str:
 
 
 def _fill_setup(conn: sqlite3.Connection, db) -> None:
-    """The household's set-up: categories, plans, rules, standing adjustments and savings goals."""
+    """The household's set-up: categories, plans, rules, set-asides and savings goals."""
     names = {c.id: c.name for c in db.query(Category).all()}
     conn.executemany("INSERT INTO categories VALUES (?,?,?,?)", [
         (c.id, c.name, c.type.value, c.sort_order) for c in db.query(Category).order_by(Category.sort_order).all()
@@ -189,13 +195,14 @@ def _fill_setup(conn: sqlite3.Connection, db) -> None:
         (b.month.strftime("%Y-%m") if b.month else None, b.category_id, names.get(b.category_id), money.to_cents(b.planned_amount))
         for b in db.query(Budget).all()
     ])
-    conn.executemany("INSERT INTO rules VALUES (?,?,?,?,?)", [
-        (r.id, r.pattern, r.category_id, names.get(r.category_id), r.priority) for r in db.query(Rule).all()
+    conn.executemany("INSERT INTO rules VALUES (?,?,?,?)", [
+        (r.id, r.pattern, r.category_id, names.get(r.category_id)) for r in db.query(Rule).all()
     ])
-    conn.executemany("INSERT INTO standing_adjustments VALUES (?,?,?,?,?,?,?)", [
-        (sa.id, sa.name, money.to_cents(sa.amount), names.get(sa.income_category_id), names.get(sa.expense_category_id),
-         bool(sa.active), sa.start_month.strftime("%Y-%m"))
-        for sa in db.query(StandingAdjustment).all()
+    conn.executemany("INSERT INTO ask_shops VALUES (?)", [(p,) for p in guesses.ask_shops(db)])
+    conn.executemany("INSERT INTO set_asides VALUES (?,?,?,?,?,?,?,?,?)", [
+        (b["id"], b["name"], b["amount_cents"], b["due_month"], b["every_months"], b["monthly_cents"], b["saved_cents"],
+         (b["payment"] or {}).get("transaction_id"), (b["payment"] or {}).get("date"))
+        for b in set_asides.month_view(db)["items"]
     ])
     conn.executemany("INSERT INTO savings_goals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
         (g["name"], g["category_id"], g["category_name"], g["target_cents"], g["start_cents"], g["saved_cents"],
@@ -208,22 +215,18 @@ def _fill(conn: sqlite3.Connection, db) -> None:
     """Copy the ledger in, resolved the way the Month page resolves it. Writes nothing to the real database."""
     _fill_setup(conn, db)
     conn.commit()
-    today = date.today()
+    today = clock.today()
     start_day = spend_service.get_start_day(db)
     categories = {c.id: c for c in db.query(Category).all()}
     txs = (
         db.query(Transaction).options(selectinload(Transaction.splits))
         .order_by(Transaction.date, Transaction.id).all()
     )
-    adjustments = db.query(StandingAdjustment).filter(StandingAdjustment.active == True).all()  # noqa: E712
-    # The Month page counts a standing adjustment from its first month, even before anything was imported.
-    firsts = [label_month_for_date(txs[0].date, start_day)] if txs else []
-    firsts += [(sa.start_month.year, sa.start_month.month) for sa in adjustments]
-    if not firsts:
+    if not txs:
         return
     current = label_month_for_date(today, start_day)
-    newest = label_month_for_date(txs[-1].date, start_day) if txs else current
-    months = _months_between(min(firsts), max(current, newest), start_day)
+    newest = label_month_for_date(txs[-1].date, start_day)
+    months = _months_between(label_month_for_date(txs[0].date, start_day), max(current, newest), start_day)
 
     def spending_row(label, day, tx_id, description, source, category_id, amount, refund, is_split):
         category = categories.get(category_id)
@@ -242,33 +245,21 @@ def _fill(conn: sqlite3.Connection, db) -> None:
         category = categories.get(tx.category_id)
         raw.append((
             tx.id, tx.date.isoformat(), label, money.to_cents(tx.amount), tx.description[:MAX_TEXT],
-            merchant_key(tx.description), tx.source.value, tx.category_id, category.name if category else None,
+            written(tx.note)[:MAX_TEXT], merchant_key(tx.description), tx.source.value, tx.category_id, category.name if category else None,
             category.type.value if category else None, bool(tx.is_refund), bool(tx.confirmed),
-            tx.categorised_by.value if tx.categorised_by else None, bool(tx.splits),
+            tx.categorised_by.value if tx.categorised_by else None, bool(tx.splits), tx.set_aside_id,
         ))
-        if tx.standing_adjustment_id is not None:
-            month.adjusted.add(tx.standing_adjustment_id)
         if tx.source in _BANK_SOURCES:
             month.bank_dates.setdefault(tx.source.value, []).append(tx.date)
         if not tx.confirmed:
             month.to_review += 1
             continue
-        for category_id, amount, refund in effective_parts(tx):
+        # A bill paid from a set-aside is here only for the part that had not been set aside yet.
+        for category_id, amount, refund in set_asides.counted_parts(tx, start_day):
             month.parts.append((category_id, amount, refund))
             spending.append(spending_row(
                 label, tx.date, tx.id, tx.description, tx.source.value, category_id, amount, refund, bool(tx.splits),
             ))
-
-    # The Month page adds a standing adjustment's two rows on first viewing a month. Counted the same here, unsaved.
-    for label, month in months.items():
-        day = date(month.year, month.mo, 1)
-        if month.start > today:
-            continue
-        for sa in adjustments:
-            if day >= sa.start_month and sa.id not in month.adjusted:
-                for category_id, amount in ((sa.income_category_id, sa.amount), (sa.expense_category_id, -sa.amount)):
-                    month.parts.append((category_id, amount, False))
-                    spending.append(spending_row(label, day, None, sa.name, "manual", category_id, amount, False, False))
 
     excluded = {cid for cid, c in categories.items() if c.type.value == "exclude"}
     not_expenses = excluded | {cid for cid, c in categories.items() if c.type.value == "income"}
@@ -304,7 +295,7 @@ def _fill(conn: sqlite3.Connection, db) -> None:
     conn.executemany("INSERT INTO category_months VALUES (?,?,?,?)", by_category)
     conn.executemany("INSERT INTO month_totals VALUES (?,?,?,?,?,?,?)", totals)
     conn.executemany("INSERT INTO coverage VALUES (?,?,?,?,?,?,?,?,?)", coverage)
-    conn.executemany("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", raw)
+    conn.executemany("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", raw)
     conn.commit()
 
 
@@ -378,7 +369,7 @@ class Views:
             "first_month": self._coverage[0]["month"],
             "last_month": self._coverage[-1]["month"],
             "months_with_gaps": [m for m in self._coverage if m["status"] in ("no data", "partial")],
-            "rows_awaiting_review_not_counted": sum(m["to_review"] for m in self._coverage),
+            "payments_waiting_for_an_answer_not_counted": sum(m["to_review"] for m in self._coverage),
         }
 
 
@@ -386,8 +377,8 @@ class Views:
 
 @contextmanager
 def _untouched():
-    """A session for reading the Month page's figures. Opening a month fills in its plan and standing
-    adjustments, as the page does; here that is rolled back, so a lookup never changes anything."""
+    """A session for reading the Month page's figures. Opening a month fills in its plan, as the page
+    does; here that is rolled back, so a lookup never changes anything."""
     with database.engine.connect() as conn:
         conn.exec_driver_sql("BEGIN")
         session = Session(bind=conn, join_transaction_mode="create_savepoint", autoflush=False)
@@ -410,15 +401,16 @@ def month_overview(label: str | None = None) -> dict:
             "month": label, "is_current": label == pace["current_month"], "current_month": pace["current_month"],
             "from": pace["start_date"], "to": pace["end_date"], "today": pace["today"],
             "data": {"ok": "bank files cover it", "gap": "no bank rows in this month yet", "empty": "nothing imported yet"}[pace["status"]],
-            "bank_files_run_to": pace["data_through"],
-            "left_to_spend_cents": left,
+            "bank_files_run_to": pace["newest_bank_date"],
+            "left_in_plan_cents": left,
             "spendable_plan_cents": pace["spendable_plan_cents"],
             "spendable_spent_cents": pace["spendable_actual_cents"],
             "planned_cents": pace["plan_cents"], "spent_cents": pace["actual_cents"],
             "income_cents": summary["total_income_cents"],
             "expenses_cents": summary["total_expenses_cents"],
             "income_minus_spending_cents": summary["left_over_cents"],
-            "rows_awaiting_review_not_counted": pace["to_review"],
+            "payments_waiting_for_an_answer_not_counted": pace["to_review"],
+            "of_those_in_this_month": pace["to_review_in_month"],
             "categories": [
                 {"category_id": r["category_id"], "category": r["category_name"], "type": r["category_type"],
                  "spent_cents": r["actual_amount_cents"], "planned_cents": r["planned_amount_cents"]}
@@ -428,6 +420,12 @@ def month_overview(label: str | None = None) -> dict:
         if out["is_current"]:
             out.update(day_number=pace["day_number"], days_left_after_today=pace["days_left"],
                        vs_plan_by_now_cents=pace["pace_delta_cents"])
-            if pace["days_left"] is not None and left > 0:
-                out["left_per_day_cents"] = left // (pace["days_left"] + 1)  # as the Month page says it
+            free = pace["free"]
+            if free is not None:
+                # The Month page's headline: what is left in the plan, less fixed bills still to come and set-asides.
+                out.update(
+                    free_to_spend_cents=free["free_cents"], free_per_day_cents=free["per_day_cents"],
+                    fixed_bills_still_to_come_cents=free["bills_cents"], upcoming_bills=free["bills"],
+                    set_aside_this_month_cents=free["set_aside_cents"], set_asides=free["set_asides"],
+                )
         return out

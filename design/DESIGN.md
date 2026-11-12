@@ -1,5 +1,10 @@
 # DESIGN — Household Finance re-platform (design-gate artifact)
 
+> **Historical.** This is the plan of the re-platform as it stood then. Parts of it no longer describe the app:
+> standing adjustments, the importer abstraction with its second and third bank, the reports export and rule
+> priority were removed by `thoughts/features/2026-11-11-just-works-for-two`. The current state is in
+> `README.md`, `AGENTS.md` and `PRODUCT.md`.
+
 Task: T8-recon (`t_6595d7cc`). This document is the contract-of-record the parallel
 implementation branches build against and the merge gate verifies. It was written
 AFTER a full read of the code; every claim cites a path.

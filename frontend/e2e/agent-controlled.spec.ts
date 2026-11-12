@@ -153,7 +153,7 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
       { reply: overview('Checking a month long ago', d.back(30)) },
       { reply: query('Looking at the last six months', `SELECT month, category, spent_cents FROM category_months WHERE month >= '${d.back(6)}'`, 'SELECT * FROM month_totals') },
       { reply: query('Checking plans, rules and goals', 'SELECT * FROM budgets', 'SELECT * FROM rules', 'SELECT * FROM savings_goals') },
-      { reply: query('Checking categories and standing amounts', 'SELECT * FROM categories', 'SELECT * FROM standing_adjustments', "SELECT id, description, category_id FROM transactions WHERE confirmed = 0") },
+      { reply: query('Checking categories and standing amounts', 'SELECT * FROM categories', 'SELECT * FROM set_asides', "SELECT id, description, category_id FROM transactions WHERE confirmed = 0") },
       { reply: answer('Here is everything in one reply.') },
     ])
     const replies = await replyTo('Tell me everything')
@@ -186,7 +186,7 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     const before = app.dump()
     const replies = await replyTo('Move the bakery, plan 80 for clothes, add a florist rule and start a holiday goal')
     expect(replies.filter((r: any) => r.card).map((r: any) => r.card.status)).toEqual(['pending', 'pending', 'pending', 'pending'])
-    expect(replies.at(-1).text).toContain('Nothing changes until you press Apply')
+    expect(replies.at(-1).card.says).toContain('Nothing changes until you press Apply')
     expect(app.dump(), 'a card changed something before Apply').toEqual(before)
     const cards = page.locator('.chat-card[data-state="pending"]')
     await expect(cards).toHaveCount(4)
@@ -221,8 +221,9 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
       { date: d.today, amount_cents: -1234, description, category_id: await idOf('Miscellaneous') }, 'Here is the card. Apply adds it.')
     app.fakeReply(await addCard('Sample Typed Yes'))
     const replies = await replyTo('Add the typed yes payment')
-    expect(replies.map((r: any) => r.kind)).toEqual(['proposal', 'answer'])
-    await expect(page.locator('.chat-reply', { hasText: 'Here is the card. Apply adds it.' })).toBeVisible()
+    // The agent's words arrive on the card, as one message (just-works-for-two R-002).
+    expect(replies.map((r: any) => r.kind)).toEqual(['proposal'])
+    await expect(page.locator('.chat-card .chat-says', { hasText: 'Here is the card. Apply adds it.' })).toBeVisible()
     await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(1)
     const calls = app.calls().length
     await say(page, 'yes')
@@ -262,35 +263,40 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     expect(rows).not.toContain('Sample Keep One')
   })
 
-  test('R-006: one card holds 85 guesses, readable in both chats, split over Telegram messages with the buttons last, and Apply confirms all 85', async () => {
+  test('R-006: one card holds 85 guesses, summed up in both chats with every row on request, as one Telegram message, and Apply confirms all 85', async () => {
     const guesses = await addGuesses(85, 'Sample Batch Shop Number')
     const step = propose('Accept these 85 guesses as they stand.', 'review.confirm', { ids: guesses.map(g => g.id) }, 'One card for all 85.')
     app.fakeReply(step)
     await replyTo('Confirm the 85 batch guesses')
     const card = page.locator('.chat-card[data-state="pending"]').last()
-    await expect(card).toContainText('85 rows')
-    await expect(card.locator('.chat-batch > li')).toHaveCount(8)
-    await card.getByRole('button', { name: 'Show all 85' }).click()
-    await expect(card.locator('.chat-batch > li')).toHaveCount(85)
+    // Summed up per category, with the rows themselves behind Show all (just-works-for-two R-003).
+    await expect(card.locator('.chat-lines').first()).toContainText('85 payments:')
+    await expect(card.locator('.chat-lines').first()).toContainText('Confirm as Miscellaneous: 85 payments')
+    await expect(card.locator('.chat-batch > li').first()).toBeHidden()
+    await card.locator('.chat-all > summary').click()
+    await expect(card.locator('.chat-batch > li').filter({ hasText: 'Sample Batch Shop Number' })).toHaveCount(85)
     await expect(card.locator('.chat-batch > li').first()).toContainText('Reviewed: No → Yes')
     await shot(page, 'agent-batch-85-desktop')
-    await card.getByRole('button', { name: 'Show fewer' }).click()
 
     app.fakeReply(step)
     const count = stub.sent.length
     const [cardReply] = await telegramReply('Confirm the 85 batch guesses in Telegram')
     const parts = stub.sent.slice(count).filter(m => cardReply.card.message_ids.includes(m.message_id))
-    expect(parts.length).toBeGreaterThan(1)
-    for (const part of parts) expect(part.text.length).toBeLessThanOrEqual(4096)
-    const keyed = parts.filter(m => (m.reply_markup?.inline_keyboard ?? []).length > 0)
-    expect(keyed).toEqual([parts.at(-1)])
-    const all = parts.map(m => m.text).join('\n')
-    for (const g of guesses) expect(all).toContain(g.description)
-    expect(all.split('\n').filter(line => line.startsWith('• '))).toHaveLength(85)
+    expect(parts, 'the whole card is one Telegram message').toHaveLength(1)
+    expect(parts[0].text.length).toBeLessThanOrEqual(4096)
+    expect(parts[0].text).toContain('Confirm as Miscellaneous: 85 payments')
+    expect(parts[0].text.split('\n').length).toBeLessThan(12)
+    // Asking to see everything lists the rows.
+    const beforeAll = stub.sent.length
+    stub.tap(DANIEL, parts[0], stub.button(parts[0], 'Show all'))
+    const listed = () => stub.sent.slice(beforeAll).map(m => m.text).join('\n').split('\n').filter(line => / {2}Sample Batch Shop/.test(line))
+    await expect.poll(() => listed().length, { timeout: 20_000 }).toBe(85)
+    // Date, amount and as much of the name as fits a phone, in columns.
+    expect(listed().every(line => /^\d+ \w{3} +\d+,\d\d {2}Sample Batch Shop/.test(line) && line.length <= 34)).toBe(true)
+    expect(stub.unreadable, 'Telegram could read every layout').toEqual([])
 
     stub.tap(DANIEL, parts.at(-1)!, stub.button(parts.at(-1)!, 'Apply'))
     await expect.poll(() => parts[0].text, { timeout: 20_000 }).toMatch(/^Applied/)
-    expect(parts.slice(1).every(m => m.deleted)).toBe(true)
     const after = (await app.transactions()).filter(t => t.description.startsWith('Sample Batch Shop Number '))
     expect(after.filter(t => t.confirmed)).toHaveLength(85)
     // The panel's own card for the same rows cannot apply anything a second time.
@@ -301,7 +307,7 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
 
   test('R-007: when the app turns part of a card down, the agent is told why and the person only sees the corrected card', async () => {
     const guesses = await addGuesses(3, 'Sample Fix Shop')
-    const manual = (await app.transactions()).find(t => t.source === 'manual' && t.standing_adjustment_id === null)
+    const manual = (await app.transactions()).find(t => t.source === 'manual')
       ?? await app.addManual(d.inMonth(2), -999, 'Sample Manual McD', 'Food - Not Essential')
     app.script([
       { reply: propose('Accept these four guesses.', 'review.confirm', { ids: [...guesses.map(g => g.id), manual.id] }) },
@@ -314,10 +320,10 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     expect(refused.text).toContain(`Row ${manual.id}`)
     expect(refused.text).toContain('is not a guess waiting for review')
     expect(accepted.isError).toBe(false)
-    expect(replies.map((r: any) => r.kind)).toEqual(['proposal', 'answer'])
+    expect(replies.map((r: any) => r.kind)).toEqual(['proposal'])
     expect(replies.some((r: any) => r.kind === 'error')).toBe(false)
     const card = replies[0].card
-    expect(card.changes).toHaveLength(3)
+    expect(card.changes.filter((c: any) => c.payment)).toHaveLength(3)
     expect(card.changes.map((c: any) => c.title).join()).not.toContain(manual.description)
     const steps = (await bubble()).find((m: any) => m.text === 'Review the fix shop guesses').payload.steps
     expect(steps).toContain('The app would not take that as it was, so I am correcting it')
@@ -366,8 +372,8 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     await expect.poll(() => logMessage.text, { timeout: 8_000 }).toContain('• Checking how this month stands')
     await expect.poll(() => logMessage.text, { timeout: 8_000 }).toContain('• Looking through the history')
     await stub.reply_after(count, m => m.text === 'Done looking.')
-    await expect.poll(() => logMessage.text, { timeout: 8_000 }).toMatch(/^Worked through:/)
-    expect(logMessage.reply_markup?.inline_keyboard ?? []).toEqual([])
+    // The log is taken away once the reply is there (just-works-for-two R-002).
+    await expect.poll(() => logMessage.deleted === true, { timeout: 8_000 }).toBe(true)
     const fresh = stub.sent.slice(count)
     expect(fresh.filter(m => m.text.startsWith('Working on it') || m.edits.some(e => e.startsWith('Working on it')))).toHaveLength(1)
     expect(logMessage.edits.length).toBeGreaterThanOrEqual(3)
@@ -432,7 +438,9 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
       else stub.text(DANIEL, how === 'typing stop' ? 'Stop' : '/stop')
       await stub.reply_after(count, m => m.text === 'I stopped early. So far I had found the scripted figures.')
       expect(Date.now() - pressed).toBeLessThan(8_000)
-      await expect.poll(() => log.text, { timeout: 8_000 }).toMatch(/^Stopped\./)
+      // The log says it is stopping at once, and is taken away when the write-up is there (just-works-for-two R-002).
+      await expect.poll(() => log.deleted === true, { timeout: 8_000 }).toBe(true)
+      expect([...log.edits, log.text].some(t => t.startsWith('Stopping…'))).toBe(true)
       const asked = (await telegram()).filter((m: any) => m.role === 'user')
       expect(asked.map((m: any) => m.text)).not.toContain('Stop')
       expect(asked.map((m: any) => m.text)).not.toContain('/stop')
@@ -506,6 +514,75 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
     const card = page.locator('.chat-card', { hasText: 'ING import' }).last()
     await expect(card).toContainText('New1')
     expect(app.calls().slice(calls).some(c => c.argv.includes('--mcp-config'))).toBe(false)
+  })
+
+  test('what the payer typed with a payment reaches the sorter and the agent, and a row without its note gets it on a second import', async () => {
+    const note = 'Name: Sample Note Payer Description: Geld terug voor vliegtickets IBAN: NL00INGB0000000001 Value date: 05/09/2026'
+    const csv = ingCsv([ingRow(d.inMonth(4), 'Sample Note Payer', 30000, note)])
+    const calls = app.calls().length
+    expect((await app.importCsv(csv)).imported).toBe(1)
+    const sorter = app.calls().slice(calls).find(c => !c.argv.includes('--mcp-config'))!
+    expect(sorter.prompt).toContain('"Sample Note Payer" (€300.00) note: "Geld terug voor vliegtickets"')
+    expect(sorter.prompt, 'the bank fields around it stay out').not.toContain('NL00INGB0000000001')
+
+    app.script([
+      { reply: query('Reading the note', "SELECT description, note FROM transactions WHERE description = 'Sample Note Payer'") },
+      { reply: answer('It was money back for the flight tickets.') },
+    ])
+    await replyTo('What was the money from Sample Note Payer for?')
+    expect(app.queryResults().at(-1).rows).toEqual([['Sample Note Payer', 'Geld terug voor vliegtickets']])
+
+    // A row from before notes were kept: the same file sent again gives it its note and adds nothing.
+    app.sql("UPDATE transactions SET note = NULL WHERE description = 'Sample Note Payer'")
+    const sent = stub.sent.length
+    stub.document(DANIEL, 'again.csv', csv)
+    const summary = await stub.reply_after(sent, m => m.text.startsWith('ING import'))
+    expect(summary.text).toBe("ING import: nothing new. All 1 payments were here already.\n1 payment already here got the bank's note.")
+    app.script([
+      { reply: query('Reading the note', "SELECT note FROM transactions WHERE description = 'Sample Note Payer'") },
+      { reply: answer('Still the flight tickets.') },
+    ])
+    await replyTo('And now?')
+    expect(app.queryResults().at(-1).rows).toEqual([['Geld terug voor vliegtickets']])
+  })
+
+  test('Claude\'s bold leads and lists show as such in both chats, with a long list folded in Telegram', async () => {
+    const items = ['Miscellaneous: 26', 'Food & drink: 16', 'Transfers: 15', 'Personal: 11', 'Groceries: 7', 'Transport: 7', 'Income <other>: 6']
+    const words = `**96 payments are waiting**, mostly old ones.\n- Names are people\n- PRT is Portugal\n\nBy category:\n${items.map(i => `- ${i}`).join('\n')}\n**Where shall we start?**`
+    app.fakeReply(answer(words))
+    await replyTo('Can we go through the payments slowly?')
+    const reply = page.locator('.chat-reply').last()
+    await expect(reply.locator('strong')).toHaveText(['96 payments are waiting', 'Where shall we start?'])
+    await expect(reply).toContainText('• Names are people')
+    await expect(reply).toContainText('• Income <other>: 6')
+    expect(await reply.innerText()).not.toContain('**')
+
+    app.fakeReply(answer(words))
+    const count = stub.sent.length
+    await telegramReply('Can we go through the payments slowly, here?')
+    const sent = await stub.reply_after(count, m => m.text.startsWith('96 payments are waiting'))
+    expect(sent.html.split('\n').slice(0, 3)).toEqual(['<b>96 payments are waiting</b>, mostly old ones.', '• Names are people', '• PRT is Portugal'])
+    expect(sent.html).toContain(`By category:\n<blockquote expandable>Miscellaneous: 26\nFood &amp; drink: 16`)
+    expect(sent.html).toContain('Income &lt;other&gt;: 6</blockquote>\n<b>Where shall we start?</b>')
+    expect(sent.text).not.toContain('**')
+    expect(stub.unreadable).toEqual([])
+  })
+
+  test('an applied card in the panel offers to remember the shop it sorted, and remembers it only when pressed', async () => {
+    const guesses = await addGuesses(2, 'Sample Offer Shop')
+    app.fakeReply(propose('Accept these two.', 'review.confirm', { ids: guesses.map(g => g.id) }))
+    await replyTo('Confirm the two offer shop guesses')
+    await page.locator('.chat-card[data-state="pending"]').last().getByRole('button', { name: 'Apply' }).click()
+    const done = page.locator('[data-state="applied"]').last()
+    const offer = done.getByRole('button', { name: 'Remember Sample Offer Shop for next time' })
+    await expect(offer).toBeVisible()
+    await shot(page, 'agent-remember-offer-desktop')
+    const rule = async () => (await app.json<any[]>('/rules')).filter(r => r.pattern === 'sample offer shop').map(r => r.category_name)
+    expect(await rule(), 'nothing is remembered by itself').toEqual([])
+    await offer.click()
+    await expect(done).toContainText('Remembered: “sample offer shop” → Miscellaneous.')
+    await expect(offer).toHaveCount(0)
+    expect(await rule()).toEqual(['Miscellaneous'])
   })
 })
 

@@ -89,10 +89,11 @@ def import_rows(rows: list, db: Session, cli_only: bool = False) -> ImportOutcom
 
     if ai_pending:
         ai_results = batch_categorise_with_ai([r for _, r in ai_pending], db, cli_only=cli_only)
+        asked = guesses.ask_shops(db)
         for ai_idx, (tx_idx, _) in enumerate(ai_pending):
             guess = ai_results.get(ai_idx)
             if guess:
-                guesses.take_guess(outcome.new_transactions[tx_idx], guess)
+                guesses.take_guess(outcome.new_transactions[tx_idx], guess, asked)
 
     db.add_all(outcome.new_transactions)
     db.flush()

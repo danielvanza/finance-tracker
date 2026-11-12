@@ -36,7 +36,7 @@ A fixed bill is a payment the bank data shows coming back on a regular day, at l
 
 ## Set-asides
 
-In Setup. For a bill that comes once a year or now and then: enter its name, amount and the month it is due. From this month to that one, an equal share is set aside each month. A yearly bill then starts again over twelve months.
+In Setup. For a bill that does not come every month: enter its name, amount, the month it is next due and how often it comes (every 3 months, every 6 months, every year, or once). From this month to that one, an equal share is set aside each month. A bill that comes back then starts again over its own number of months: three for car tax each quarter, twelve for a yearly bill.
 
 When the bill is paid, press "Mark as paid" on the set-aside and choose the payment. It then comes out of what was set aside and does not count against the month. If the bill came before it was set aside for in full, the part that was missing counts as spending in that month.
 

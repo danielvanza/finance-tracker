@@ -5,4 +5,5 @@
 - **Fixed bars** (the selection bar) clear the chat button: on desktop they stop one button short, on a phone they sit above the tab slab at a higher z-index.
 - **Bulk actions** run one PATCH per row and report "1 of 3 saved", keeping the failed rows ticked. Delete only appears when every ticked row is manual. Confirm stays plain so the page keeps one vermilion mark.
 - **"This month"** uses the pace endpoint's `start_date`/`end_date`, never the calendar. `?q=` sets the search on arrival.
+- **A row's category** is the picker's trigger in plain text with a chevron, so it reads as a value, not a field. Changing it on a row the app sorted by itself (`ai` or `rule`) shows one quiet offer above the layout: always ask about this shop, or "No, just this one".
 - Remember this shop for next time is a tick box under Confirm, unticked by default: a rule is only made when it is ticked. The line under it says the shop's other waiting payments follow either way.

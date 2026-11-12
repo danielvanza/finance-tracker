@@ -16,6 +16,7 @@ vi.mock('../api', () => ({
     patchTransaction: vi.fn(() => Promise.resolve({})),
     deleteTransaction: vi.fn(() => Promise.resolve({})),
     createRule: vi.fn(() => Promise.resolve({})),
+    alwaysAsk: vi.fn(() => Promise.resolve({ pattern: 'albert heijn amsterdam', removed_rules: ['albert heijn'] })),
   },
   ApiError: class extends Error {},
 }))
@@ -149,6 +150,18 @@ describe('Transactions', () => {
     await userEvent.click(await screen.findByRole('option', { name: /Utilities/ }))
     expect(rows()).toHaveLength(1)
     expect(screen.getByText('1 of 4')).toBeInTheDocument()
+  })
+
+  it('changes a category on its row, then offers to always ask about a shop it sorted by itself', async () => {
+    show()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Change the category of Albert Heijn Amsterdam/ }))
+    await user.click(await screen.findByRole('option', { name: 'Utilities' }))
+    await waitFor(() => expect(api.patchTransaction).toHaveBeenCalledWith(1, { category_id: 2, is_refund: false, confirmed: true }))
+    const offer = (await screen.findByText(/Moved to Utilities/)).closest('.tx-offer') as HTMLElement
+    await user.click(within(offer).getByRole('button', { name: 'Always ask about this shop' }))
+    expect(api.alwaysAsk).toHaveBeenCalledWith(1)
+    expect(await screen.findByText(/each payment there\. The rule “albert heijn” is gone/)).toBeInTheDocument()
   })
 
   it('confirms several ticked rows and leaves the failed one ticked', async () => {

@@ -33,14 +33,14 @@ export interface SplitInput {
   amount_cents: number
 }
 
-/** A yearly or irregular bill, spread over the months before it is due, as one month sees it. */
+/** A bill that does not come monthly, spread over the months before it is due, as one month sees it. */
 export interface SetAside {
   id: number
   name: string
   amount_cents: number
   start_month: string        // YYYY-MM
   due_month: string          // YYYY-MM
-  yearly: boolean
+  every_months: number | null // how often it comes back (3: quarterly, 12: yearly); null: once
   monthly_cents: number      // this month's share, which lowers what is free to spend
   saved_cents: number        // set aside so far for the bill that is coming
   /** The payment that settled the bill; `counted_cents` of it had not been set aside yet and counts as spending. */
@@ -78,6 +78,8 @@ export interface BudgetRow {
 }
 
 export interface Rule { id: number; pattern: string; category_id: number; category_name: string }
+/** A shop that sells a bit of everything: its payments are always asked about. */
+export interface AskShop { pattern: string }
 
 // NOTE: nested keys keep their LEGACY names by wire contract; the VALUES are
 // integer cents since B1 (see contracts api-contracts money_wire_format_v2).

@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+import guesses
 from db import get_db
-from models import Category, Rule
+from models import AskShop, Category, Rule, Transaction
 from schemas import RuleCreate, RuleUpdate
 
 router = APIRouter(prefix="/rules", tags=["rules"])
@@ -31,6 +34,41 @@ def _category(category_id: int, db: Session) -> int:
 @router.get("")
 def list_rules(db: Session = Depends(get_db)):
     return [_to_out(r) for r in db.query(Rule).order_by(Rule.id).all()]
+
+
+class AskShopIn(BaseModel):
+    transaction_id: int
+
+
+@router.get("/ask-shops")
+def list_ask_shops(db: Session = Depends(get_db)):
+    """Shops that are different every time: their payments are always asked about."""
+    return [{"pattern": p} for p in guesses.ask_shops(db)]
+
+
+@router.post("/ask-shops")
+def add_ask_shop(body: AskShopIn, db: Session = Depends(get_db)):
+    """Always ask about this payment's shop. A rule that sorted the shop is removed."""
+    tx = db.get(Transaction, body.transaction_id)
+    if tx is None:
+        raise HTTPException(422, f"There is no payment with id {body.transaction_id}")
+    try:
+        pattern, removed = guesses.always_ask(db, tx)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    db.commit()
+    return {"pattern": pattern, "removed_rules": removed}
+
+
+@router.delete("/ask-shops")
+def delete_ask_shop(pattern: str = Query(...), db: Session = Depends(get_db)):
+    """Let Claude sort this shop's payments by itself again."""
+    shop = db.get(AskShop, guesses.squeeze(pattern))
+    if shop is None:
+        raise HTTPException(404, f"“{pattern}” is not a shop that is always asked about")
+    db.delete(shop)
+    db.commit()
+    return {"deleted": shop.pattern}
 
 
 @router.post("")

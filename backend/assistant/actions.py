@@ -22,7 +22,7 @@ import guesses
 import money
 import spend_service
 from financial_month import label_month_for_date
-from models import Budget, Category, IgnoredBill, Rule, SetAside, Setting, Transaction, TransactionSplit
+from models import AskShop, Budget, Category, IgnoredBill, Rule, SetAside, Setting, Transaction, TransactionSplit
 from routers import budget as budget_router
 from routers import categories as categories_router
 from routers import goals as goals_router
@@ -41,7 +41,7 @@ _LONG_MONTHS = [
 ]
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
 MAX_BATCH = 500
-_TABLES = (Transaction, TransactionSplit, Category, Rule, Budget, SetAside, IgnoredBill, Setting)
+_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting)
 _SETTING_NAMES = {
     "financial_month_start_day": "Financial month start day",
     "target_split": "Target split (needs/wants/savings)",
@@ -319,7 +319,7 @@ def _prepare_batch(db: Session, a: dict):
 
 
 def _set_aside_fields(a: dict) -> dict:
-    fields = {k: a[k] for k in ("name", "due_month", "yearly") if k in a}
+    fields = {k: a[k] for k in ("name", "due_month", "every_months") if k in a}
     if "amount_cents" in a:
         fields["amount_cents"] = _cents(a["amount_cents"])
     return fields
@@ -361,6 +361,11 @@ OPS: dict[str, Op] = {
         lambda db, a: rules_router.update_rule(a.get("id"), RuleUpdate(**{k: v for k, v in a.items() if k != "id"}), db),
         '{"id":int, then only what changes: "pattern","category_id"}'),
     "rule.delete": Op(lambda db, a: rules_router.delete_rule(a.get("id"), db), '{"id":int}'),
+    "shop.always_ask": Op(
+        lambda db, a: rules_router.add_ask_shop(rules_router.AskShopIn(transaction_id=a.get("transaction_id")), db),
+        '{"transaction_id":int (a payment at the shop)} for a shop whose payments differ every time, such as one that sells a bit of everything: its payments are never sorted by themselves or remembered as a rule, and each is asked about on its own. A rule that sorted the shop is removed. Payments already sorted keep their category'),
+    "shop.sort_again": Op(lambda db, a: rules_router.delete_ask_shop(a.get("pattern") or "", db),
+        '{"pattern":str (from ask_shops)} undo shop.always_ask: Claude sorts the shop by itself again'),
     "category.add": Op(lambda db, a: categories_router.create_category(CategoryCreate(**a), db),
         '{"name":str,"type":"needs|wants|savings|income|exclude"}'),
     "category.update": Op(
@@ -372,10 +377,10 @@ OPS: dict[str, Op] = {
         '{"category_ids":[int,...]} in the new order'),
     "set_aside.add": Op(
         lambda db, a: set_asides_router.create_set_aside(set_asides_router.SetAsideIn(**_set_aside_fields(a)), db),
-        '{"name":str,"amount_cents":int positive,"due_month":"YYYY-MM","yearly":bool optional (true: it comes back every year)} a yearly or irregular bill, set aside for in equal monthly shares until it is due'),
+        '{"name":str,"amount_cents":int positive,"due_month":"YYYY-MM" (when it is next due),"every_months":int 2-60 or null, optional (how often it comes back: 3 quarterly, 12 yearly (the default), null once)} a bill that does not come monthly, set aside for in equal monthly shares until it is due'),
     "set_aside.update": Op(
         lambda db, a: set_asides_router.patch_set_aside(a.get("id"), set_asides_router.SetAsidePatch(**_set_aside_fields(a)), db),
-        '{"id":int, then only what changes: "name","amount_cents","due_month","yearly"}'),
+        '{"id":int, then only what changes: "name","amount_cents","due_month","every_months"}'),
     "set_aside.delete": Op(lambda db, a: set_asides_router.delete_set_aside(a.get("id"), db), '{"id":int}'),
     "set_aside.pay": Op(
         lambda db, a: set_asides_router.pay_from_set_aside(
@@ -444,6 +449,13 @@ def _cents_of(value) -> int:
 
 def _flag(v) -> str:
     return "Yes" if v else "No"
+
+
+def _every(months) -> str:
+    """How often a set-aside's bill comes back, in words."""
+    if not months:
+        return "No, once"
+    return "Every year" if months == 12 else f"Every {months} months"
 
 
 def _month_label(d: date) -> str:
@@ -579,9 +591,13 @@ def _changes(before: dict, after: dict) -> list[dict]:
         lambda b: f"Set-aside “{b['name']}”", before["set_asides"], after["set_asides"],
         lambda b: {
             "Name": b["name"], "Amount": eur(_cents_of(b["amount"])), "Due": _month_label(b["due_month"]),
-            "Every year": _flag(b["yearly"]),
+            "Comes back": _every(b["every_months"]),
         },
         "New: ", "Removed: ",
+    )
+    out += _row_changes(
+        lambda s: f"Shop “{s['pattern']}”", before["ask_shops"], after["ask_shops"],
+        lambda s: {"Always asked about": "Yes"}, "Always ask about: ", "Sorted by Claude again: ",
     )
     out += _row_changes(
         lambda b: f"Fixed bill “{b['key']}”", before["ignored_bills"], after["ignored_bills"],

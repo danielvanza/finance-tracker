@@ -16,6 +16,16 @@ export default function Rules() {
   const rulesQuery = useQuery({ queryKey: ['rules'], queryFn: api.getRules })
   const rules = rulesQuery.data ?? []
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.getCategories })
+  const { data: askShops = [] } = useQuery({ queryKey: ['ask-shops'], queryFn: api.getAskShops })
+
+  const sortAgain = async (pattern: string) => {
+    try {
+      await api.deleteAskShop(pattern)
+    } catch (e) {
+      setError(describeApiError(e)); return
+    }
+    qc.invalidateQueries({ queryKey: ['ask-shops'] })
+  }
 
   const handleCreate = async () => {
     if (!newPattern || !newCategory) return
@@ -182,6 +192,24 @@ export default function Rules() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {askShops.length > 0 && (
+        <div className="panel setup-panel rules-ask" aria-labelledby="ask-shops-title">
+          <h3 id="ask-shops-title">Always asked about</h3>
+          <p className="setup-note">
+            These shops sell a bit of everything, so their payments are never sorted by themselves: each one is asked about.
+          </p>
+          {askShops.map(shop => (
+            <div className="setup-adj rules-ask-row" key={shop.pattern}>
+              <code className="setup-code">{shop.pattern}</code>
+              <button type="button" className="btn btn-sm" onClick={() => sortAgain(shop.pattern)}
+                aria-label={`Let Claude sort ${shop.pattern} again`}>
+                Let Claude sort it again
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </section>

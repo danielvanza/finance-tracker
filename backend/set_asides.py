@@ -1,7 +1,9 @@
-"""Set-asides: a yearly or irregular bill spread over the months before it is due.
+"""Set-asides: a bill that does not come monthly, spread over the months before it is due.
 
-A bill has a name, an amount and the month it is due. From the month it was entered until the month
-it is due, an equal share is set aside each month; a yearly bill then starts again over twelve months.
+A bill has a name, an amount, the month it is due and how often it comes back (every 3 months, every
+year, or once). From the month it was entered until the month it is due, an equal share is set aside
+each month; a bill that comes back then starts again over its own number of months (three for a
+quarterly bill, twelve for a yearly one).
 The share lowers what is free to spend. The payment that settles the bill is linked to it and comes out
 of what was set aside; only the part that had not been set aside yet counts as spending, in its month.
 """
@@ -42,21 +44,26 @@ def _cycle(bill: SetAside, m: int) -> tuple[int, int] | None:
         return None
     if m <= due:
         return start, due
-    if not bill.yearly:
+    n = bill.every_months
+    if not n:
         return None
-    end = due + 12 * ((m - due + 11) // 12)
-    return end - 11, end
+    end = due + n * ((m - due + n - 1) // n)
+    return end - n + 1, end
+
+
+def _nearest_due(bill: SetAside, p: int) -> int:
+    """The due month that a payment in month p settles. A bill may come a little early or late, so a
+    payment belongs to the due month it is nearest to; one before the first due month settles that one."""
+    due, n = month_index(bill.due_month), bill.every_months
+    return max(due, due + n * round((p - due) / n)) if n else due
 
 
 def _paid_in(bill: SetAside, cycle: tuple[int, int], start_day: int):
-    """The linked payment that settles this cycle's bill, if there is one. A bill may come a little
-    early or late, so a payment belongs to the due month it is nearest to."""
-    due = month_index(bill.due_month)
+    """The linked payment that settles this cycle's bill, if there is one."""
     for tx in sorted(bill.payments, key=lambda t: t.date):
         paid = label_month_for_date(tx.date, start_day)
         p = paid[0] * 12 + paid[1] - 1
-        nearest = due + 12 * round((p - due) / 12) if bill.yearly else due
-        if nearest == cycle[1]:
+        if _nearest_due(bill, p) == cycle[1]:
             return tx, p
     return None
 
@@ -79,9 +86,8 @@ def uncovered_cents(tx, start_day: int) -> int:
         return paid_cents
     year, month = label_month_for_date(tx.date, start_day)
     p = year * 12 + month - 1
-    start, due = month_index(bill.start_month), month_index(bill.due_month)
-    end = due + 12 * round((p - due) / 12) if bill.yearly else due
-    cycle = (start if end == due else end - 11, end)
+    end = _nearest_due(bill, p)
+    cycle = _cycle(bill, end)
     saved = sum(_share(bill, cycle, i) for i in range(cycle[0], min(p, cycle[1]) + 1))
     return max(0, paid_cents - saved)
 
@@ -115,7 +121,7 @@ def view(db: Session, bill: SetAside, m: int, start_day: int) -> dict:
         "id": bill.id, "name": bill.name, "amount_cents": money.to_cents(bill.amount),
         "start_month": index_label(month_index(bill.start_month)),
         "due_month": index_label(cycle[1] if cycle else month_index(bill.due_month)),
-        "yearly": bool(bill.yearly), "monthly_cents": share, "saved_cents": saved, "payment": payment,
+        "every_months": bill.every_months, "monthly_cents": share, "saved_cents": saved, "payment": payment,
         "over": cycle is None,
     }
 

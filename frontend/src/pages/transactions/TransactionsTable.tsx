@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { dayLabel } from '../../dates'
-import { Check, CircleAlert } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert } from 'lucide-react'
 import { formatCents } from '../../money'
-import type { Transaction } from '../../types'
+import type { Category, Transaction } from '../../types'
+import CategorySelect from '../../components/CategorySelect'
 import { MerchantName, useMerchantSheet } from '../../components/merchants'
 
 interface TransactionsTableProps {
   transactions: Transaction[]
+  categories: Category[]
+  /** A person picked another category for this row. */
+  onCategory: (tx: Transaction, categoryId: number) => void
   setSplitTx: (tx: Transaction) => void
   handleDelete: (tx: Transaction) => void
   /** Some filter or search is narrowing the list. */
@@ -75,7 +79,7 @@ function DescriptionCell({ text, tag }: { text: string; tag: ReactNode }) {
   return available ? <MerchantDescription text={text} tag={tag} /> : <Description text={text} tag={tag} />
 }
 
-export default function TransactionsTable({ transactions, setSplitTx, handleDelete, filtered, selecting, picked, onPick, onClear }: TransactionsTableProps) {
+export default function TransactionsTable({ transactions, categories, onCategory, setSplitTx, handleDelete, filtered, selecting, picked, onPick, onClear }: TransactionsTableProps) {
   const [shown, setShown] = useState(PAGE)
   const hidden = transactions.length - shown
 
@@ -113,7 +117,7 @@ export default function TransactionsTable({ transactions, setSplitTx, handleDele
                   tag={tx.set_aside_name != null ? (
                     <span className="tx-tag" title={`Paid from the set-aside "${tx.set_aside_name}": counts in no month's spending`}>set aside</span>
                   ) : tx.confirmed && tx.categorised_by === 'ai' && (
-                    <span className="tx-tag" title="Sorted automatically: Claude was sure. Change the category if it is wrong.">auto</span>
+                    <span className="tx-tag" title="Sorted automatically: Claude was sure. Click the category to change it if it is wrong.">auto</span>
                   )}
                 />
               </td>
@@ -135,10 +139,19 @@ export default function TransactionsTable({ transactions, setSplitTx, handleDele
                       </span>
                     ))}
                   </div>
-                ) : tx.category_name ? (
-                  tx.category_name
                 ) : (
-                  <span className="muted">—</span>
+                  <CategorySelect
+                    categories={categories}
+                    value={tx.category_id}
+                    onChange={id => id !== tx.category_id && onCategory(tx, id)}
+                    renderTrigger={({ open, toggle }) => (
+                      <button type="button" className="tx-cat-btn" aria-haspopup="listbox" aria-expanded={open} onClick={toggle}
+                        aria-label={`Change the category of ${tx.description} (now ${tx.category_name ?? 'none'})`}>
+                        {tx.category_name ?? <span className="muted">Choose…</span>}
+                        <ChevronDown size={13} aria-hidden="true" />
+                      </button>
+                    )}
+                  />
                 )}
               </td>
               <td><span className="lab">{tx.source}</span></td>

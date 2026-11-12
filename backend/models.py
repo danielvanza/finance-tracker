@@ -51,7 +51,7 @@ class Transaction(Base):
     # What Claude would also consider for a row it was not sure about, as category ids. NULL means the
     # row has not been judged sure-or-doubtful yet; a list (even an empty one) means it has.
     ai_options = Column(JSON, nullable=True)
-    # The yearly or irregular bill this payment settles. Such a payment comes out of what was set
+    # The bill that does not come monthly this payment settles. Such a payment comes out of what was set
     # aside and counts in no month's spending.
     set_aside_id = Column(Integer, ForeignKey("set_asides.id", ondelete="SET NULL"), nullable=True)
     category = relationship("Category", back_populates="transactions")
@@ -85,9 +85,16 @@ class SetAside(Base):
     name = Column(String, nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     start_month = Column(Date, nullable=False)  # label month (1st) setting aside began
-    due_month = Column(Date, nullable=False)  # label month (1st) the bill is due; the next one if yearly
-    yearly = Column(Boolean, nullable=False, default=True, server_default="1")
+    due_month = Column(Date, nullable=False)  # label month (1st) the bill is first due
+    every_months = Column(Integer, nullable=True)  # it comes back every this many months (12: yearly); NULL: once
     payments = relationship("Transaction", back_populates="set_aside")
+
+
+class AskShop(Base):
+    """A shop whose payments differ every time (a shop that sells a bit of everything): never sorted by
+    itself, never remembered as a rule, each payment asked about on its own."""
+    __tablename__ = "ask_shops"
+    pattern = Column(String, primary_key=True)  # as guesses.shop_pattern gives it
 
 
 class IgnoredBill(Base):

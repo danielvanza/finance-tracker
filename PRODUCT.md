@@ -33,7 +33,7 @@ A private household ledger that sits beside the life dashboard: the household's 
 - Category types: needs, wants, savings, income, exclude. Categories are user-managed and ordered.
 - A plan per category; a changed amount applies from its month on. The household sets its own target split between needs, wants and savings.
 - The headline is "free to spend until payday": what is left in the plan, less fixed bills still to come and what the month sets aside.
-- Set-asides spread a yearly or irregular bill over the months before it is due.
+- Set-asides spread a bill that does not come monthly (quarterly, yearly, once) over the months before it is due.
 - Transactions can be split across categories and marked as refunds. Money moved to one of the household's own accounts counts as spending.
 - A Telegram bot in the household's group: text, voice notes in English, photos and ING files. It writes first when the bank data is old, with a weekly recap and at the month's close.
 - Money is integer cents on the wire. British spelling for domain terms (categorise).

@@ -10,9 +10,19 @@ import ErrorBanner, { describeApiError } from './ErrorBanner'
 const monthWord = (label: string) =>
   new Date(`${label}-15T12:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
+/** How often a bill can come back, in months; null: it comes once. */
+const EVERY: { months: number | null; label: string }[] = [
+  { months: 3, label: 'Every 3 months' },
+  { months: 6, label: 'Every 6 months' },
+  { months: 12, label: 'Every year' },
+  { months: null, label: 'Once' },
+]
+
+const everyWord = (months: number) => (months === 12 ? 'every year' : `every ${months} months`)
+
 function about(bill: SetAside) {
   const parts = [`${formatEuros(bill.amount_cents)} due ${monthWord(bill.due_month)}`]
-  if (bill.yearly) parts.push('every year')
+  if (bill.every_months) parts.push(everyWord(bill.every_months))
   if (bill.over) parts.push('its month has passed')
   else if (bill.payment) parts.push(`paid ${dayLabel(bill.payment.date)}`)
   else parts.push(`${formatEuros(bill.monthly_cents)} this month`, `${formatEuros(bill.saved_cents)} set aside so far`)
@@ -27,7 +37,7 @@ export default function SetAsides() {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [due, setDue] = useState('')
-  const [yearly, setYearly] = useState(true)
+  const [every, setEvery] = useState('12')
   const [paying, setPaying] = useState<number | null>(null)
   const [payment, setPayment] = useState('')
   const [error, setError] = useState('')
@@ -63,8 +73,8 @@ export default function SetAsides() {
     if (!name.trim()) { setError('Give the bill a name.'); return }
     if (cents === null || cents <= 0) { setError('Enter the amount of the bill.'); return }
     if (!/^\d{4}-\d{2}$/.test(due)) { setError('Pick the month the bill is due.'); return }
-    if (await run(() => api.createSetAside({ name: name.trim(), amount_cents: cents, due_month: due, yearly }))) {
-      setName(''); setAmount(''); setDue(''); setYearly(true); setAdding(false)
+    if (await run(() => api.createSetAside({ name: name.trim(), amount_cents: cents, due_month: due, every_months: every ? Number(every) : null }))) {
+      setName(''); setAmount(''); setDue(''); setEvery('12'); setAdding(false)
     }
   }
 
@@ -77,7 +87,7 @@ export default function SetAsides() {
       {query.isSuccess && (
         <div className="panel setup-panel">
           <p className="setup-note">
-            For a bill that comes once a year or now and then: car insurance, a holiday, the municipal taxes. Its
+            For a bill that does not come every month: car tax each quarter, car insurance, a holiday, the municipal taxes. Its
             amount is spread over the months until it is due, and each month's share lowers what is free to spend.
             When the bill is paid, mark the payment here and it comes out of what was set aside; only what was
             not set aside yet counts as spending.
@@ -147,13 +157,15 @@ export default function SetAsides() {
                   onChange={e => setAmount(e.target.value)} placeholder={centsToInputString(60000)} />
               </div>
               <div className="form-row">
-                <label className="lab" htmlFor="set-aside-due">Month it is due</label>
+                <label className="lab" htmlFor="set-aside-due">Month it is next due</label>
                 <input id="set-aside-due" className="field" type="month" value={due} onChange={e => setDue(e.target.value)} />
               </div>
-              <label className="setup-check">
-                <input type="checkbox" checked={yearly} onChange={e => setYearly(e.target.checked)} />
-                <span>It comes back every year</span>
-              </label>
+              <div className="form-row">
+                <label className="lab" htmlFor="set-aside-every">How often it comes</label>
+                <select id="set-aside-every" className="field" value={every} onChange={e => setEvery(e.target.value)}>
+                  {EVERY.map(o => <option key={o.label} value={o.months ?? ''}>{o.label}</option>)}
+                </select>
+              </div>
               <div className="setup-form-actions">
                 <button type="button" className="btn btn-primary" onClick={add}>Add set-aside</button>
                 <button type="button" className="btn" onClick={() => { setAdding(false); setError('') }}>Cancel</button>

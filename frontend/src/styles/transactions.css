@@ -51,6 +51,46 @@
   color: var(--text);
 }
 
+/* After a correction: offer to always ask about the shop. */
+.tx-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.tx-offer p {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
+/* The category on a row: plain text that opens the picker; the chevron says it can. */
+.tx-cat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tx-cat-btn svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.tx-cat-btn:hover,
+.tx-cat-btn[aria-expanded='true'] {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 /* Search, then one scrolling row of filter chips, then the count. */
 .tx-controls {
   display: flex;

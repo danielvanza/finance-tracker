@@ -218,7 +218,7 @@ test.describe.serial('chat with the real Claude', () => {
     }],
     ['set-aside', 'Set aside for the road tax: 240 euro, due in the month twelve months from now, every year. Call it Sample Road Tax.', async () => {
       const list = (await app.json<any>('/set-asides')).items
-      expect(list.find((s: any) => s.name === 'Sample Road Tax')).toMatchObject({ amount_cents: 24000, yearly: true })
+      expect(list.find((s: any) => s.name === 'Sample Road Tax')).toMatchObject({ amount_cents: 24000, every_months: 12 })
     }],
     ['target split', 'Change our target split to 60 percent needs, 25 wants and 15 savings', async () => {
       expect((await app.json('/settings')).target_split).toBe('60/25/15')

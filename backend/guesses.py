@@ -2,8 +2,10 @@
 answer teaches.
 
 A guess Claude is sure of counts straight away (confirmed, still marked `ai`: "sorted automatically").
-A doubtful one waits, unconfirmed, and counts nowhere. When a person says where a shop belongs, that
-becomes a rule, so the shop's other waiting payments and every later one follow without a question.
+A doubtful one waits, unconfirmed, and counts nowhere. When a person says where a shop belongs, the
+shop's other waiting payments follow, and remembering it makes a rule for every later one. A shop marked
+"always ask" (one that sells a bit of everything) is the exception: Claude's guess for it never counts by
+itself, an answer settles only that payment, and no rule is made for it.
 """
 import logging
 from dataclasses import dataclass, field
@@ -15,7 +17,7 @@ import money
 from categorizer import claude_cli
 from categorizer.ai import batch_categorise_with_ai
 from categorizer.rules import fits, is_sign_compatible, matching_rule, squeeze  # noqa: F401 - squeeze is used through here
-from models import Category, CategoryType, Rule, Setting, Transaction
+from models import AskShop, Category, CategoryType, Rule, Setting, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,37 @@ def hides_shop(pattern: str) -> bool:
     return bool(service) and not telling
 
 
+# ---- Shops that are different every time --------------------------------------------------------
+
+def ask_shops(db: Session) -> list[str]:
+    """The shops a person said to always ask about, as patterns."""
+    return [squeeze(s.pattern) for s in db.query(AskShop).order_by(AskShop.pattern).all()]
+
+
+def asks(description: str, asked: list[str]) -> bool:
+    """Whether a payment is at one of the shops in `asked`."""
+    text = squeeze(description)
+    return any(fits(pattern, text) for pattern in asked)
+
+
+def always_ask(db: Session, tx: Transaction) -> tuple[str, list[str]]:
+    """Mark this payment's shop as different every time. Returns the shop's pattern and the rules that
+    sorted it, which are removed: from now on its payments are asked about."""
+    pattern = shop_pattern(tx.description)
+    if len(pattern) < MIN_PATTERN or hides_shop(pattern):
+        raise ValueError("This payment's description does not name a shop, so there is no shop to always ask about")
+    if db.get(AskShop, pattern) is None:
+        db.add(AskShop(pattern=pattern))
+    text = squeeze(tx.description)
+    removed = []
+    for rule in db.query(Rule).all():
+        if fits(squeeze(rule.pattern), text):
+            removed.append(rule.pattern)
+            db.delete(rule)
+    db.flush()
+    return pattern, removed
+
+
 def waiting(db: Session) -> list[Transaction]:
     """Every payment that waits for a person: not counted, not split, not a refund already."""
     rows = (
@@ -129,11 +162,12 @@ def to_remember(db: Session, rows: list[Transaction]) -> list[Transaction]:
     """One payment per shop among these that remembering would make or change a rule for. Nothing is
     remembered by itself: this is what a person is offered after an answer."""
     rules = db.query(Rule).all()
+    asked = ask_shops(db)
     seen: set[tuple[str, bool]] = set()
     offered = []
     for tx in rows:
         pattern = rule_text(tx)
-        if pattern is None or (pattern, tx.amount > 0) in seen:
+        if pattern is None or (pattern, tx.amount > 0) in seen or asks(tx.description, asked):
             continue
         seen.add((pattern, tx.amount > 0))
         same = _rule_of(rules, pattern, tx)
@@ -145,7 +179,7 @@ def to_remember(db: Session, rows: list[Transaction]) -> list[Transaction]:
 def remember(db: Session, tx: Transaction) -> Rule | None:
     """A person asked to remember this payment's shop: its category becomes the rule for the shop."""
     pattern = rule_text(tx)
-    if pattern is None:
+    if pattern is None or asks(tx.description, ask_shops(db)):
         return None
     same = _rule_of(db.query(Rule).all(), pattern, tx)
     if same is not None:
@@ -163,7 +197,7 @@ def settle_like(db: Session, tx: Transaction) -> list[Transaction]:
     if tx.category is None or tx.is_refund or tx.splits:
         return []
     pattern = shop_pattern(tx.description)
-    if hides_shop(pattern):
+    if hides_shop(pattern) or asks(tx.description, ask_shops(db)):
         return []
     settled = []
     for other in waiting(db):
@@ -209,14 +243,16 @@ def sort_personal(db: Session, rows: list[Transaction]) -> int:
 
 # ---- Sure or doubtful ---------------------------------------------------------------------------
 
-def take_guess(tx: Transaction, guess) -> None:
-    """Put Claude's sorting on a payment: counted if it was sure, waiting with its options if not."""
+def take_guess(tx: Transaction, guess, asked: list[str] = ()) -> None:
+    """Put Claude's sorting on a payment: counted if it was sure, waiting with its options if not. At a
+    shop in `asked` (always ask) it waits however sure Claude was."""
+    sure = guess.sure and not asks(tx.description, asked)
     tx.category = guess.category
     tx.category_id = guess.category.id
     tx.ai_confidence = guess.confidence
     tx.categorised_by = "ai"
-    tx.confirmed = guess.sure
-    tx.ai_options = [] if guess.sure else [c.id for c in guess.options]
+    tx.confirmed = sure
+    tx.ai_options = [] if sure else [c.id for c in guess.options or [guess.category]]
 
 
 def judge_backlog(db: Session, limit: int = 100) -> dict:
@@ -246,6 +282,7 @@ def judge_backlog(db: Session, limit: int = 100) -> dict:
         logger.warning("[guesses] Claude could not judge the waiting payments: %s", e)
         guessed = {}
     still_open = []
+    asked = ask_shops(db)
     for i, tx in enumerate(for_claude):
         guess = guessed.get(i)
         if guess is None:
@@ -256,9 +293,9 @@ def judge_backlog(db: Session, limit: int = 100) -> dict:
         db.refresh(tx)
         if tx.confirmed or tx.ai_options is not None or tx.splits:
             continue
-        take_guess(tx, guess)
+        take_guess(tx, guess, asked)
         still_open.append(tx)
-        counts["sure" if guess.sure else "doubtful"] += 1
+        counts["sure" if tx.confirmed else "doubtful"] += 1
     counts["by_rule"] += sort_personal(db, still_open)
     db.commit()
     return counts
@@ -290,14 +327,16 @@ class Group:
 
 def groups(db: Session, judged_only: bool = False, tried: frozenset[int] | set[int] = frozenset()) -> list[Group]:
     """Waiting payments by shop, the largest amounts first. A payment through a service that hides the
-    shop is a group of its own. With judged_only, payments Claude has not looked at yet are left out,
+    shop, or at a shop marked always ask, is a group of its own. With judged_only, payments Claude has not looked at yet are left out,
     except those it was asked about and gave no answer for (`tried`)."""
     found: dict[str, Group] = {}
+    asked = ask_shops(db)
     for tx in waiting(db):
         if judged_only and tx.ai_options is None and not tx.is_refund and tx.id not in tried:
             continue
         pattern = shop_pattern(tx.description)
-        group = Group(pattern, tx.amount > 0, only=tx.id if hides_shop(pattern) else None)
+        alone = hides_shop(pattern) or asks(tx.description, asked)
+        group = Group(pattern, tx.amount > 0, only=tx.id if alone else None)
         found.setdefault(group.key, group).rows.append(tx)
     return sorted(found.values(), key=lambda g: (-abs(g.total_cents), g.key))
 
@@ -319,6 +358,16 @@ def options_for(db: Session, group: Group) -> list[dict]:
     order += sorted(votes, key=lambda cid: -votes[cid])
     for tx in group.rows:
         order += [cid for cid in (tx.ai_options or []) if isinstance(cid, int)]
+    if asks(group.rows[0].description, ask_shops(db)):  # what the shop's earlier payments turned out to be
+        earlier = db.query(Transaction).filter(
+            Transaction.confirmed == True, Transaction.category_id != None,  # noqa: E711,E712
+            (Transaction.amount > 0) == group.incoming,
+        ).all()
+        before: dict[int, int] = {}
+        for t in earlier:
+            if fits(group.pattern, squeeze(t.description)):
+                before[t.category_id] = before.get(t.category_id, 0) + 1
+        order += sorted(before, key=lambda cid: -before[cid])
     if group.incoming:
         bought = db.query(Transaction).filter(
             Transaction.amount < 0, Transaction.confirmed == True, Transaction.category_id != None,  # noqa: E711,E712

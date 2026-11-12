@@ -102,7 +102,7 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     cfg = _alembic_config(scratch_db)
     command.upgrade(cfg, "head")
 
-    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version", "chat_messages", "chat_proposals"}
+    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version", "chat_messages", "chat_proposals", "ask_shops"}
     assert _version_row(scratch_db) == _head_revision(cfg)
 
     # R7 columns, exactly as models.py declares them.
@@ -117,7 +117,8 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
 
     bills = _table_info(scratch_db, "set_asides")
     assert bills["start_month"][3] == 1  # NOT NULL
-    assert bills["yearly"][4] == "'1'"  # server default 1
+    assert bills["every_months"][1:4] == ("every_months", "INTEGER", 0)  # nullable: once
+    assert "yearly" not in bills
 
     # FK ondelete semantics.
     tx_fks = _foreign_keys(scratch_db, "transactions")
@@ -147,6 +148,30 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     assert settings["key"][2].upper().startswith("VARCHAR(100)")
     assert settings["key"][5] == 1  # primary key
     assert settings["value"][3] == 1  # NOT NULL
+
+
+def test_yearly_set_asides_become_every_twelve_months(scratch_db):
+    cfg = _alembic_config(scratch_db)
+    command.upgrade(cfg, "d2f8a6c31e75")
+    con = sqlite3.connect(scratch_db)
+    con.executemany(
+        "INSERT INTO set_asides (name, amount, start_month, due_month, yearly) VALUES (?, 100, '2026-11-01', '2027-01-01', ?)",
+        [("Insurance", 1), ("Holiday", 0)],
+    )
+    con.commit()
+    con.close()
+
+    command.upgrade(cfg, "head")
+    con = sqlite3.connect(scratch_db)
+    rows = dict(con.execute("SELECT name, every_months FROM set_asides").fetchall())
+    con.close()
+    assert rows == {"Insurance": 12, "Holiday": None}
+
+    command.downgrade(cfg, "d2f8a6c31e75")
+    con = sqlite3.connect(scratch_db)
+    rows = dict(con.execute("SELECT name, yearly FROM set_asides").fetchall())
+    con.close()
+    assert rows == {"Insurance": 1, "Holiday": 0}
 
 
 def test_stamp_makes_existing_schema_upgrade_a_noop(scratch_db):

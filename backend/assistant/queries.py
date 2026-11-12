@@ -15,6 +15,7 @@ from datetime import date
 from statistics import median_low
 
 import clock
+import guesses
 import money
 import set_asides
 import spend_service
@@ -48,7 +49,8 @@ transactions: the raw rows, not resolved: a split shows as one row and refunds a
 categories: every category. Columns: id, name, type (needs, wants, savings, income, exclude), position.
 budgets: planned amounts. A plan stays as it is until changed: a month without rows of its own has the amounts of the newest earlier month (rows with month NULL are only the starting amounts from before any month was planned). Columns: month, category_id, category, planned_cents.
 rules: what sorts imported rows automatically: a description containing pattern gets category; when several fit, the longest pattern wins. Columns: id, pattern, category_id, category.
-set_asides: yearly or irregular bills spread over the months before they are due, as this month sees them. Columns: id, name, amount_cents, due_month, yearly, monthly_cents (this month's share, which lowers what is free to spend), saved_cents (set aside so far), paid_transaction_id, paid_date.
+ask_shops: shops whose payments differ every time: a payment whose description contains pattern is never sorted by itself, however sure Claude is, and is asked about on its own. Columns: pattern.
+set_asides: bills that do not come monthly, spread over the months before they are due, as this month sees them. Columns: id, name, amount_cents, due_month (the next one), every_months (how often it comes back: 3 quarterly, 12 yearly; NULL once), monthly_cents (this month's share, which lowers what is free to spend), saved_cents (set aside so far), paid_transaction_id, paid_date.
 savings_goals: as the Trends page shows them. Columns: name, category_id, category, target_cents, start_cents (in the pot when it started), saved_cents, started, by_month, status (done, open, late, unknown, short, on_track), needed_per_month_cents, pace_per_month_cents, short_per_month_cents, reach_month."""
 
 _DDL = """
@@ -66,7 +68,8 @@ CREATE TABLE transactions (id INTEGER, date TEXT, month TEXT, amount_cents INTEG
 CREATE TABLE categories (id INTEGER, name TEXT, type TEXT, position INTEGER);
 CREATE TABLE budgets (month TEXT, category_id INTEGER, category TEXT, planned_cents INTEGER);
 CREATE TABLE rules (id INTEGER, pattern TEXT, category_id INTEGER, category TEXT);
-CREATE TABLE set_asides (id INTEGER, name TEXT, amount_cents INTEGER, due_month TEXT, yearly INTEGER,
+CREATE TABLE ask_shops (pattern TEXT);
+CREATE TABLE set_asides (id INTEGER, name TEXT, amount_cents INTEGER, due_month TEXT, every_months INTEGER,
   monthly_cents INTEGER, saved_cents INTEGER, paid_transaction_id INTEGER, paid_date TEXT);
 CREATE TABLE savings_goals (name TEXT, category_id INTEGER, category TEXT, target_cents INTEGER, start_cents INTEGER,
   saved_cents INTEGER, started TEXT, by_month TEXT, status TEXT, needed_per_month_cents INTEGER,
@@ -74,7 +77,7 @@ CREATE TABLE savings_goals (name TEXT, category_id INTEGER, category TEXT, targe
 """
 _TABLES = {
     "spending", "category_months", "month_totals", "coverage", "transactions", "categories", "budgets", "rules",
-    "set_asides", "savings_goals",
+    "ask_shops", "set_asides", "savings_goals",
 }
 _FUNCTIONS = {
     "abs", "avg", "coalesce", "concat", "concat_ws", "count", "cume_dist", "date", "datetime", "dense_rank",
@@ -195,8 +198,9 @@ def _fill_setup(conn: sqlite3.Connection, db) -> None:
     conn.executemany("INSERT INTO rules VALUES (?,?,?,?)", [
         (r.id, r.pattern, r.category_id, names.get(r.category_id)) for r in db.query(Rule).all()
     ])
+    conn.executemany("INSERT INTO ask_shops VALUES (?)", [(p,) for p in guesses.ask_shops(db)])
     conn.executemany("INSERT INTO set_asides VALUES (?,?,?,?,?,?,?,?,?)", [
-        (b["id"], b["name"], b["amount_cents"], b["due_month"], b["yearly"], b["monthly_cents"], b["saved_cents"],
+        (b["id"], b["name"], b["amount_cents"], b["due_month"], b["every_months"], b["monthly_cents"], b["saved_cents"],
          (b["payment"] or {}).get("transaction_id"), (b["payment"] or {}).get("date"))
         for b in set_asides.month_view(db)["items"]
     ])

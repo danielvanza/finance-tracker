@@ -989,7 +989,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
 
     // A bill that was set aside for in full comes out of that entirely: it counts in no month and not against the pace.
     await app.addRule('sample sweep', 'Home & DIY')
-    await app.post('/set-asides', { name: 'Chimney sweep', amount_cents: 8000, due_month: '2026-11', yearly: false })
+    await app.post('/set-asides', { name: 'Chimney sweep', amount_cents: 8000, due_month: '2026-11', every_months: null })
     const saved = await pace()
     expect(saved.free.set_aside_cents).toBe(18000)
     const diyBefore = (await app.budgetRow(MONTH, 'Home & DIY')).actual_amount_cents
@@ -1018,7 +1018,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await app.json(`/set-asides/${sweep.id}`, { method: 'DELETE' })
 
     // A one-off bill does not come back.
-    await app.post('/set-asides', { name: 'Holiday', amount_cents: 90000, due_month: '2027-01', yearly: false })
+    await app.post('/set-asides', { name: 'Holiday', amount_cents: 90000, due_month: '2027-01', every_months: null })
     expect((await app.json<any>('/set-asides?month=2026-11')).items.find((i: any) => i.name === 'Holiday')).toMatchObject({ monthly_cents: 30000 })
     expect((await app.json<any>('/set-asides?month=2027-02')).items.find((i: any) => i.name === 'Holiday')).toMatchObject({ monthly_cents: 0, over: true })
     expect((await pace()).free.set_aside_cents).toBe(40000)
@@ -1039,7 +1039,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
   })
 
   test('R-018: the bot can make a set-aside and say a payment was its bill, through cards', async () => {
-    app.fakeReply(propose('Set aside for the road tax.', 'set_aside.add', { name: 'Road tax', amount_cents: 24000, due_month: '2027-02', yearly: true }))
+    app.fakeReply(propose('Set aside for the road tax.', 'set_aside.add', { name: 'Road tax', amount_cents: 24000, due_month: '2027-02', every_months: 12 }))
     let count = stub.sent.length
     stub.text(DANIEL, 'set aside 240 for road tax in February')
     const card = await stub.reply_after(count, isCard)

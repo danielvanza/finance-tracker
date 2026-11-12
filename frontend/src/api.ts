@@ -92,7 +92,7 @@ export const api = {
     return apiFetch(`${BASE}/set-asides${q ? '?' + q : ''}`, { method: 'GET' })
   },
 
-  createSetAside: (body: { name: string; amount_cents: number; due_month: string; yearly: boolean }): Promise<import('./types').SetAsides> =>
+  createSetAside: (body: { name: string; amount_cents: number; due_month: string; every_months: number | null }): Promise<import('./types').SetAsides> =>
     apiFetch(`${BASE}/set-asides`, { method: 'POST', body }),
 
   deleteSetAside: (id: number): Promise<import('./types').SetAsides> =>
@@ -155,6 +155,16 @@ export const api = {
 
   deleteRule: (id: number) =>
     apiFetch(`${BASE}/rules/${id}`, { method: 'DELETE' }),
+
+  /** Shops whose payments are always asked about: never sorted by themselves, never a rule. */
+  getAskShops: (): Promise<import('./types').AskShop[]> =>
+    apiFetch(`${BASE}/rules/ask-shops`, { method: 'GET' }),
+
+  alwaysAsk: (transactionId: number): Promise<{ pattern: string; removed_rules: string[] }> =>
+    apiFetch(`${BASE}/rules/ask-shops`, { method: 'POST', body: { transaction_id: transactionId } }),
+
+  deleteAskShop: (pattern: string) =>
+    apiFetch(`${BASE}/rules/ask-shops?pattern=${encodeURIComponent(pattern)}`, { method: 'DELETE' }),
 
   getSettings: (): Promise<import('./types').SettingsMap> =>
     apiFetch(`${BASE}/settings`, { method: 'GET' }),

@@ -115,12 +115,17 @@
         "amount": "NUMERIC(12,2) NOT NULL",
         "start_month": "DATE NOT NULL (1st of the label month setting aside began)",
         "due_month": "DATE NOT NULL (1st of the label month the bill is due)",
-        "yearly": "BOOLEAN NOT NULL DEFAULT 1"
+        "every_months": "INTEGER"
       }
     },
     "ignored_bills": {
       "columns": {
         "key": "VARCHAR PK: the recurring key of a payment a person said is not a fixed bill"
+      }
+    },
+    "ask_shops": {
+      "columns": {
+        "pattern": "VARCHAR PK: a shop whose payments are always asked about (guesses.shop_pattern)"
       }
     }
   },

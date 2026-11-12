@@ -466,12 +466,6 @@
   width: 100%;
 }
 
-.setup-check {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
 .setup-split {
   display: flex;
   flex-wrap: wrap;
@@ -496,4 +490,19 @@
   padding-block: 0.25rem;
   padding-inline: 0.5rem 1.5rem;
   font-size: 0.8125rem;
+}
+
+/* Rules > Always asked about: shops whose payments are never sorted by themselves. */
+.rules-ask {
+  margin-top: 1rem;
+}
+
+.rules-ask h3 {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rules-ask-row {
+  justify-content: space-between;
 }

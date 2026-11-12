@@ -234,6 +234,35 @@
       "frontend_caller": "api.deleteRule"
     },
     {
+      "id": "ask-shops-list",
+      "method": "GET",
+      "path": "/rules/ask-shops",
+      "response": "[{pattern}]: shops whose payments are always asked about, never sorted by themselves",
+      "frontend_caller": "api.getAskShops"
+    },
+    {
+      "id": "ask-shop-create",
+      "method": "POST",
+      "path": "/rules/ask-shops",
+      "request": {
+        "transaction_id": "int: a payment at the shop"
+      },
+      "response": "{pattern, removed_rules: [string]}; rules that sorted the shop are removed",
+      "frontend_caller": "api.alwaysAsk"
+    },
+    {
+      "id": "ask-shop-delete",
+      "method": "DELETE",
+      "path": "/rules/ask-shops",
+      "query": {
+        "pattern": "string"
+      },
+      "response": {
+        "deleted": "string"
+      },
+      "frontend_caller": "api.deleteAskShop"
+    },
+    {
       "id": "dashboard-summary",
       "method": "GET",
       "path": "/dashboard/summary",
@@ -444,7 +473,7 @@
         "name": "string",
         "amount_cents": "int > 0",
         "due_month": "YYYY-MM",
-        "yearly": "bool=true"
+        "every_months": "int 2-60 or null=12"
       },
       "response": "{month, items: [SetAside], set_aside_cents} (201)",
       "frontend_caller": "api.createSetAside"
@@ -453,7 +482,7 @@
       "id": "set-aside-patch",
       "method": "PATCH",
       "path": "/set-asides/{bill_id}",
-      "request": "any of name, amount_cents, due_month, yearly",
+      "request": "any of name, amount_cents, due_month, every_months",
       "response": "{month, items: [SetAside], set_aside_cents}",
       "frontend_caller": null
     },

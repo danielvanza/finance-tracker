@@ -22,7 +22,7 @@ class SetAsideIn(BaseModel):
     name: str
     amount_cents: int = Field(gt=0, le=MAX_CENTS)
     due_month: str = Field(pattern=MONTH)
-    yearly: bool = True
+    every_months: int | None = Field(default=12, ge=2, le=60)  # how often it comes back (3: quarterly); None: once
 
 
 class SetAsidePatch(BaseModel):
@@ -30,7 +30,7 @@ class SetAsidePatch(BaseModel):
     name: str | None = None
     amount_cents: int | None = Field(default=None, gt=0, le=MAX_CENTS)
     due_month: str | None = Field(default=None, pattern=MONTH)
-    yearly: bool | None = None
+    every_months: int | None = Field(default=None, ge=2, le=60)  # sent as null: it comes once
 
 
 class PaymentIn(BaseModel):
@@ -70,7 +70,7 @@ def create_set_aside(body: SetAsideIn, db: Session = Depends(get_db)):
         raise HTTPException(422, "The month a bill is due cannot be in the past")
     bill = SetAside(
         name=_name(body.name), amount=money.to_decimal(body.amount_cents), start_month=_first(now),
-        due_month=_first(due), yearly=body.yearly,
+        due_month=_first(due), every_months=body.every_months,
     )
     db.add(bill)
     db.commit()
@@ -84,8 +84,8 @@ def patch_set_aside(bill_id: int, body: SetAsidePatch, db: Session = Depends(get
         bill.name = _name(body.name)
     if body.amount_cents is not None:
         bill.amount = money.to_decimal(body.amount_cents)
-    if body.yearly is not None:
-        bill.yearly = body.yearly
+    if "every_months" in body.model_fields_set:
+        bill.every_months = body.every_months
     if body.due_month is not None:
         due = set_asides.label_index(body.due_month)
         if due < set_asides.month_index(bill.start_month):

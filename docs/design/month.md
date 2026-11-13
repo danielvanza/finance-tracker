@@ -1,5 +1,9 @@
 # Month
-- **Side stack.** Review, recurring and report rows live in one `.rep-links` column: 17rem beside the kinds panel from 1024 px, top-aligned with it, even gap. Add a row there, not as a new `.side-stack` child.
+- **Side stack.** Review, recurring and report rows live in one `.rep-links` column: 17rem beside the kinds panel from 1024 px, every row at least 3.5rem tall, and from 1024 px the rows share the kinds panel's height (`space-between`) so both blocks start and end on the same lines. Add a row there, not as a new `.side-stack` child.
+- **Kinds panel** is a list of three rows (label and figures on one line, meter under) at every width; never columns, the label cell would shrink to a letter wide.
+- **Month bar.** The Import chip is sized to its words, not the 44px arrow square (`.month-nav .btn:not(.import-link)`). Under 721 px the date takes the first row and the chip stretches beside the arrows, "bank data to" cutting with an ellipsis; from 721 px it is one row. Only bars that hold the chip wrap (`:has(.import-link)`); Trends and the report keep theirs.
+- **Open category payments** (`.cat-tx`) are date, description (wraps), amount (right, never wraps) on one line and the category chip full width under. Keep the three-column grid in step with the three first children.
+- **Small figures** under the headline (fold list sub-lines, the bank date on the chip) read in `--quiet`; the fold's summary is `--text` with an `--ink` caret so it reads as pressable. Never `--muted` for small sans text.
 - **Order is frozen while a row is open.** Never re-sort categories under an open editor; they sort again on close and on a month change.
 - **The end-of-month sentence** ("About €92 a day keeps you in plan…") shows only for status `ok`, the current month, after day 5, and replaces "Spent €X more than planned by now"; the fallback keeps that wording. It extrapolates from finished days only and never from a day with a payment of 10% or more of the plan.
 - **"Paid"** on a row needs only status `ok`. **"Ahead"** follows the projection rules.

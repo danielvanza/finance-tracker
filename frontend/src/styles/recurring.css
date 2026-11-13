@@ -23,55 +23,6 @@
   white-space: nowrap;
 }
 
-/* Two link rows in the side stack sit close together: the stack's own gap less 0.5rem. */
-.link-row + .rc-entry {
-  margin-top: -0.5rem;
-}
-
-@media (min-width: 1024px) {
-  /* Beside the kinds panel the two links stack in the 17rem column, centred on the panel. */
-  .side-stack:has(> .rc-entry) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 17rem;
-    grid-template-rows: 1fr auto auto 1fr;
-    column-gap: 1.1rem;
-    row-gap: 0;
-  }
-
-  .side-stack:has(> .rc-entry) > .panel {
-    grid-column: 1;
-    grid-row: 1 / -1;
-  }
-
-  .side-stack:has(> .rc-entry) > .link-row {
-    grid-column: 2;
-    grid-row: 2;
-    width: auto;
-  }
-
-  .side-stack:has(> .rc-entry) > .rc-entry {
-    grid-row: 3;
-  }
-
-  .link-row + .rc-entry {
-    margin-top: 0.6rem;
-  }
-}
-
-/* With the chat docked the page is laid out as on a narrower screen (chat.css): one column. */
-@media (min-width: 1024px) and (max-width: 1679px) {
-  :root[data-chat-docked] .side-stack:has(> .rc-entry) {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1.1rem;
-  }
-
-  :root[data-chat-docked] .link-row + .rc-entry {
-    margin-top: -0.5rem;
-  }
-}
-
 /* The sheet */
 .rc-sheet .tx-sheet-head {
   margin-bottom: 0;

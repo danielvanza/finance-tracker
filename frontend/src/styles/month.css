@@ -14,9 +14,54 @@
   gap: 0.4rem;
 }
 
-.month-nav .btn {
+.month-nav .btn:not(.import-link) {
   width: var(--tap);
   padding: 0;
+}
+
+/* The Import chip is sized to its words. On a phone the date takes the first row and the chip stretches beside the
+   arrows (its bank date shortens with an ellipsis); from 721px it is one row. Trends and the report keep their bar. */
+.month-bar:has(.import-link) {
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+}
+
+.month-bar:has(.import-link) .lab {
+  flex: 1 0 100%;
+}
+
+.month-bar:has(.import-link) .month-nav {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.month-nav .import-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.import-link > svg,
+.import-link > span {
+  flex: none;
+}
+
+.import-link small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 721px) {
+  .month-bar:has(.import-link) .lab {
+    flex: 1 1 auto;
+  }
+
+  .month-bar:has(.import-link) .month-nav,
+  .month-nav .import-link {
+    flex: none;
+  }
 }
 
 .month-top {
@@ -173,9 +218,9 @@
   gap: 1.1rem;
 }
 
-/* Review, recurring and report rows share one column (.rep-links): one even gap, whichever are shown. */
-.side-stack .rep-links > .rc-entry {
-  margin-top: 0;
+/* Review, recurring and report rows share one column (.rep-links): one even gap, whichever are shown, one height. */
+.side-stack .rep-links > * {
+  min-height: 3.5rem;
 }
 
 .kinds {
@@ -325,8 +370,9 @@
 
 .cat-tx {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.3rem 0.75rem;
+  align-items: baseline;
   padding: 0.6rem 0;
   border-top: 1px solid var(--line);
   font-size: 0.85rem;
@@ -337,6 +383,16 @@
   font-size: 0.78rem;
   color: var(--quiet);
   font-variant-numeric: tabular-nums;
+}
+
+.cat-tx > :nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cat-tx .num {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .cat-tx > :last-child {
@@ -424,7 +480,16 @@
 
   .side-stack {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+
+  /* The rows share the kinds panel's height, so both blocks start and end on the same lines. */
+  .side-stack .rep-links {
+    justify-content: space-between;
+  }
+
+  .side-stack .rep-links > * {
+    flex: 1;
   }
 
   .side-stack > .panel {
@@ -438,9 +503,7 @@
   }
 
   .kinds {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2rem;
+    justify-content: space-between;
   }
 
   .verdict h1 {
@@ -457,16 +520,6 @@
 }
 
 /* Free to spend: the line under the headline, how it is worked out, and the bills it allows for. */
-.verdict-sub {
-  color: var(--muted);
-  margin-top: -0.25rem;
-}
-
-.verdict-caveat {
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
 .free-how {
   margin-top: 0.75rem;
   font-size: 0.875rem;
@@ -474,7 +527,11 @@
 
 .free-how > summary {
   cursor: pointer;
-  color: var(--muted);
+  color: var(--text);
+}
+
+.free-how > summary::marker {
+  color: var(--ink);
 }
 
 .free-list {
@@ -494,7 +551,7 @@
 
 .free-list small {
   display: block;
-  color: var(--muted);
+  color: var(--quiet);
 }
 
 .kind-share {
@@ -502,6 +559,6 @@
 }
 
 .import-link small {
-  color: var(--muted);
+  color: var(--quiet);
   font-weight: 400;
 }

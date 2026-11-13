@@ -1,9 +1,13 @@
 # Transactions
 - **Position Rule.** Select mode adds a first tick column: the phone grid and the 721–1180 px column hiding have `.has-pick` variants, so every cell index shifts by one.
 - **Queue counts** ("N to review", "N remaining") come from the queue's own query, never from the filtered or loading list.
+- **Phone rows:** the name's 44 px tap box starts at the top of its cell (`justify-content: flex-start`), so its first line shares a baseline with the amount; centring it drops the amount 12 px above the name on one-line rows.
 - **A row's description** is the merchant name over at most two lines of bank text (`.mer-raw`); without a merchant provider it falls back to the two-line clamp that opens on tap.
-- **Fixed bars** (the selection bar) clear the chat button: on desktop they stop one button short, on a phone they sit above the tab slab at a higher z-index.
+- **Fixed bars** (the selection bar) clear the chat button: on desktop and on a phone they stop one chat button short on the right; on a phone and from 721 to 1023 px (the tab slab is still shown) they sit above the slab at a higher z-index.
 - **Bulk actions** run one PATCH per row and report "1 of 3 saved", keeping the failed rows ticked. Delete only appears when every ticked row is manual. Confirm stays plain so the page keeps one vermilion mark.
 - **"This month"** uses the pace endpoint's `start_date`/`end_date`, never the calendar. `?q=` sets the search on arrival.
 - **A row's category** is the picker's trigger in plain text with a chevron, so it reads as a value, not a field. Changing it on a row the app sorted by itself (`ai` or `rule`) shows one quiet offer above the layout: always ask about this shop, or "No, just this one".
 - Remember this shop for next time is a tick box under Confirm, unticked by default: a rule is only made when it is ticked. The line under it says the shop's other waiting payments follow either way.
+- **Category column** is 12.5rem with no wrap from 1280 px, so the longest name fits; below that Description keeps the width and a long name wraps.
+- **Sheets with `.tx-sheet-head`** (Add, Split) pin `.sheet-actions` to the sheet's foot on a hairline, scoped here, not in `controls.css`; the sticky offset is the sheet's own padding (`--sheet-pad`, safe area included on a phone).
+- **Split rows:** every control is `--tap` tall at any pointer; up to 480 px the category takes its own line and amount and remove share the next.

@@ -72,17 +72,15 @@ Warm clay neutrals, one vermilion, a little gold and moss, and a validated set o
 ### Neutral
 - **Washi and Charcoal** (`bg`): the page and every well. **Panel and Raised Clay** (`card`, `raised`): panels; rows and chips.
 - **Ink and Text** (`ink`, `text`): headings, figures and controls; running text.
-- **Quiet** (`quiet`): small sans text. **Muted** (`muted`): mono labels and graphic marks.
 - **Meter Parts** (`--fill`, 3:1 against the well; `--tick`, ink): a meter's fill and where today falls.
 ### Named Rules
 - **The Upstream Rule.** Tokens in `base.css` are copied from `life-dashboard/frontend/src/styles/base.css` on purpose and life-dashboard's DESIGN.md is their authority: change a token in life-dashboard first, then here. Finance's own additions are only `--quiet`, `--fill`, `--tick`, `--tap` and the `--series-*` colours. Copied tokens finance doesn't use yet stay as copied.
 - **The One Vermilion Rule.** One vermilion mark per view: the sun or the primary action. When a later step's action appears, the earlier button goes plain. The current-tab underline, focus ring, caret and link hover are wayfinding and don't count.
-- **The Quiet Rule.** `--muted` is only for mono labels, graphic marks and disabled controls. Small sans text uses `--quiet` (4.5:1 on every surface, both themes).
+- **The Quiet Rule.** `--muted` is only for mono labels, graphic marks and disabled controls. Small sans text uses `--quiet` (4.5:1 on every surface, both themes); a summary that opens something reads in `--text`.
 - **The Series Rule.** The `--series-*` colours are derived in `trends.css` and validated for colour-blind separation on the card in both themes. They are not free choices: re-run the validator before changing one. They belong to Trends; Month's meters stay `--fill`.
 
 ## Typography
 **Display Font:** Instrument Serif (with Iowan Old Style, Georgia). **Body Font:** Zen Kaku Gothic New (with system-ui, Segoe UI). **Label/Mono Font:** JetBrains Mono (with ui-monospace, Consolas).
-
 **Character:** A soft italic serif speaks the answer; a typewriter mono labels everything around it.
 ### Hierarchy
 - **Display** (italic): Month's verdict only. `clamp(3rem, 15vw, 3.6rem)` on a phone, 5rem from 1024 px; 2.4rem and 3.4rem when it says it can't tell.
@@ -92,9 +90,8 @@ Warm clay neutrals, one vermilion, a little gold and moss, and a validated set o
 - **The Typewriter Rule.** Never change the mono labels' font or greys; life-dashboard holds that decision.
 
 ## Layout
-A slim clay top row, the page, and a fixed tab slab on a phone; from 1024 px a sticky raised side panel beside the page. Content padding is 1.1rem on a phone and 2.4rem 3.5rem on a desktop, capped at 92rem until 1600 px. `1rem` is 15px here, so check touch sizes in pixels. Breakpoints: 380 px tightens, 720 px is phone against wider (tables, sheets), 1024 px is the desktop shell, 1600 px uses the full width.
-
-- **The Position Rule.** Phone tables and the Setup grid are position-based: each cell or section is placed by its number (`transactions.css`, `setup.css`, `import.css`). Adding, removing or moving one means changing the grid in the same edit; details in the area docs.
+A slim clay top row, the page, and a fixed tab slab on a phone; from 1024 px a sticky raised side panel beside the page. Content padding is 1.1rem on a phone and 2.4rem 3.5rem on a desktop, capped at 92rem until 1600 px. The gap from a page title to its first block is 1.4rem (the first section in a column has no top margin of its own). `1rem` is 15px here, so check touch sizes in pixels. Breakpoints: 380 px tightens, 720 px is phone against wider (tables, sheets), 1024 px is the desktop shell, 1600 px uses the full width.
+- **The Position Rule.** Phone tables and the Setup grid are position-based: each cell or section is placed by its number (`transactions.css`, `setup.css`, `import.css`). Adding, removing or moving one means changing the grid in the same edit; a target made 44 px with a negative block margin keeps the row's height, so never grow a phone row with padding. Details in the area docs.
 ### Areas
 | id | Covers (routes) | Owns (files under frontend/src) |
 | --- | --- | --- |
@@ -106,7 +103,7 @@ A slim clay top row, the page, and a fixed tab slab on a phone; from 1024 px a s
 | merchants | sheet and view in Transactions | components/merchants/*, styles/merchants.css |
 | trends | `/trends` | pages/Trends.tsx, pages/trends/*, styles/trends.css |
 | goals | section on Trends | components/goals/*, styles/goals.css |
-| setup | `/setup` | pages/Setup.tsx, Rules.tsx, Settings.tsx, components/CategoryManager.tsx, SetAsides.tsx, TargetSplit.tsx, RuleSuggestions.tsx, BudgetPlanner.tsx, budget/*, styles/setup.css |
+| setup | `/setup` | pages/Setup.tsx, Rules.tsx, Settings.tsx, components/CategoryManager.tsx, SetAsides.tsx, TargetSplit.tsx, RuleSuggestions.tsx, BudgetPlanner.tsx, budget/*, pages/setup/*, styles/setup.css |
 | import | `/import` | pages/Import.tsx, pages/import/*, styles/import.css |
 | telegram | the bot's messages in the household's group | backend/telegram_bot.py (`render_*`, `rich`) |
 
@@ -140,9 +137,10 @@ Three radii: `r-card` for panels and sheets, `r-row` for rows and wells, `r-chip
 
 ## Do's and Don'ts
 ### Do:
-- **Do** keep anything fixed or floating at the bottom clear of the chat button, on a phone and on desktop.
-- **Do** write plain words in British spelling, neutral about which of the two people is reading.
-- **Do** say spent with "more than planned", always: "Spent €133 more than planned by now."
+- **Do** keep anything fixed or sticky at the bottom clear of the chat button: bottom at `--chat-fab-bottom` and one chat button short on the right wherever the content reaches it; from 721 to 1023 px it also sits above the tab slab.
+- **Do** write plain words in British spelling, neutral about which of the two people is reading, and say spent with "more than planned": "Spent €133 more than planned by now." Error text is the server's sentence alone, never "Server error 422:".
+- **Do** make a sheet modal (`#root` inert, `html` overflow hidden, Tab wrapped, all restored before focus returns to the opener) and pin its header and buttons; a sticky header inside padding needs `top` equal to minus that padding.
+- **Do** give a page's own transient line a persistent `role=status` region above the chat button; an Undo reverts only rows still as the action left them. A panel that appears below the fold scrolls to 1rem from the top and its heading takes focus.
 - **Do** check both themes at 390 px and on a desktop.
 ### Don't:
 - **Don't** add a literal colour, radius or shadow where a token exists.

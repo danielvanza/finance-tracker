@@ -9,7 +9,7 @@ import { MerchantName, useMerchantSheet } from '../../components/merchants'
 interface TransactionsTableProps {
   transactions: Transaction[]
   categories: Category[]
-  /** A person picked another category for this row. */
+  /** A person picked a category for this row: on a waiting row that also confirms it. */
   onCategory: (tx: Transaction, categoryId: number) => void
   setSplitTx: (tx: Transaction) => void
   handleDelete: (tx: Transaction) => void
@@ -147,7 +147,7 @@ export default function TransactionsTable({ transactions, categories, onCategory
                     renderTrigger={({ open, toggle }) => (
                       <button type="button" className="tx-cat-btn" aria-haspopup="listbox" aria-expanded={open} onClick={toggle}
                         aria-label={`Change the category of ${tx.description} (now ${tx.category_name ?? 'none'})`}>
-                        {tx.category_name ?? <span className="muted">Choose…</span>}
+                        {tx.category_name ?? <span className="tx-cat-empty">Pick…</span>}
                         <ChevronDown size={13} aria-hidden="true" />
                       </button>
                     )}

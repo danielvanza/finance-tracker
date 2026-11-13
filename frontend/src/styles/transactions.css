@@ -85,6 +85,11 @@
   color: var(--muted);
 }
 
+/* A payment with no category yet: the same quiet word, in the colour small sans text uses. */
+.tx-cat-empty {
+  color: var(--quiet);
+}
+
 .tx-cat-btn:hover,
 .tx-cat-btn[aria-expanded='true'] {
   text-decoration: underline;
@@ -826,6 +831,12 @@
     background: none;
     box-shadow: none;
   }
+
+  /* The category is how a waiting payment gets answered: a 44 px target, the row keeps its height. */
+  .tx-cat-btn {
+    min-height: var(--tap);
+    margin-block: -0.6rem;
+  }
 }
 
 /* Phone: each row is a card. Which cell goes where is by column position (see COLUMNS in
@@ -1086,4 +1097,45 @@
 .tx-empty-action {
   display: block;
   margin-top: 0.8rem;
+}
+
+/* What the last answer on the review card did, and Undo: one line above the chat button, as the Add
+   confirmation sits (shell-add.css), in the page's persistent status region. */
+.tx-note {
+  position: fixed;
+  z-index: 14;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--chat-fab-bottom, var(--bar-h) + 0.75rem) + var(--chat-fab, 56px) + 0.75rem);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  width: max-content;
+  max-width: calc(100% - 2.2rem);
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
+  border-radius: var(--r-chip);
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--raised);
+  box-shadow: var(--float-pop);
+}
+
+.tx-note:not(:has(.btn)) {
+  padding-block: 0.65rem;
+  padding-right: 1rem;
+}
+
+.tx-note .btn {
+  flex: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (min-width: 1024px) {
+  .tx-note {
+    left: calc(var(--side-w) + 3.5rem);
+    transform: none;
+    bottom: 1.5rem;
+  }
 }

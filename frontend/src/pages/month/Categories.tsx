@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api'
 import { dayLabel } from '../../dates'
@@ -17,9 +18,10 @@ const KINDS = [
 const share = (actual: number, planned: number) => (planned > 0 ? actual / planned : actual > 0 ? Infinity : 0)
 const percent = (actual: number, planned: number) => Math.max(0, Math.min(100, share(actual, planned) * 100))
 
-function Detail({ row, month, categories, onError }: {
+function Detail({ row, month, isCurrent, categories, onError }: {
   row: BudgetRow
   month: string
+  isCurrent: boolean
   categories: Category[]
   onError: (message: string) => void
 }) {
@@ -93,6 +95,12 @@ function Detail({ row, month, categories, onError }: {
             />
           </div>
         ))}
+        {txs.length > 0 && (
+          // Transactions reads these once on arrival: its Category chip, and This month for the current month.
+          <Link className="cat-all" to={`/transactions?category=${row.category_id}${isCurrent ? '&month=1' : ''}`}>
+            All payments
+          </Link>
+        )}
       </div>
     </div>
   )
@@ -107,9 +115,11 @@ const byShare = (a: BudgetRow, b: BudgetRow) =>
  * it sorts again when the row closes (and the page starts fresh when the month changes).
  * `payments` (per category, null when the month is not known) and `elapsed` (share of the month gone) add a word to some rows.
  */
-export default function Categories({ rows, month, categories, todayPct, payments, elapsed, onError }: {
+export default function Categories({ rows, month, isCurrent, categories, todayPct, payments, elapsed, onError }: {
   rows: BudgetRow[]
   month: string
+  /** The month shown is the current financial month. */
+  isCurrent: boolean
   categories: Category[]
   todayPct: number | null
   payments: Record<number, number> | null
@@ -168,7 +178,7 @@ export default function Categories({ rows, month, categories, todayPct, payments
                         <span className="cat-note">On course for about {formatEuros(status.endCents)}, {formatEuros(status.overCents)} over</span>
                       )}
                     </button>
-                    {isOpen && <Detail row={row} month={month} categories={categories} onError={onError} />}
+                    {isOpen && <Detail row={row} month={month} isCurrent={isCurrent} categories={categories} onError={onError} />}
                   </li>
                 )
               })}

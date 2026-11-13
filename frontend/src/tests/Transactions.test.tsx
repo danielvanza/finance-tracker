@@ -204,4 +204,87 @@ describe('Transactions', () => {
     await waitFor(() => expect(rows()).toHaveLength(1))
     expect(chip).toBeEnabled()
   })
+  it('holds the chips in the address: restores them on arrival, writes each one, and Clear takes them out', async () => {
+    show('/transactions?review=1&over=1&category=999&source=zzz')
+    await screen.findByText('115 to review')
+    // An unknown category and an unknown source are ignored; the others apply.
+    expect(await screen.findByText('No transactions match these filters.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Needs review/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Over €100' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^Category/ })).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(screen.getByRole('button', { name: 'Over €100' }))
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/transactions\?review=1&category=999&source=zzz$/)
+    await userEvent.click(screen.getByRole('button', { name: /^This month/ }))
+    expect(screen.getByTestId('where')).toHaveTextContent(/review=1&category=999&source=zzz&month=1$/)
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/transactions$/)
+    await waitFor(() => expect(rows()).toHaveLength(4))
+  })
+
+  it('opens with the category and month chips a link from Month asks for', async () => {
+    show('/transactions?category=2&month=1')
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(screen.getByRole('button', { name: /^Utilities/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^This month/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('1 of 4')).toBeInTheDocument()
+  })
+
+  it('sorts a waiting row from its own cell: it says Pick… and picking confirms it', async () => {
+    show()
+    const user = userEvent.setup()
+    const pick = await screen.findByRole('button', { name: 'Change the category of Etsy.com (now none)' })
+    expect(pick).toHaveTextContent('Pick…')
+    await user.click(pick)
+    await user.click(await screen.findByRole('option', { name: 'Utilities' }))
+    await waitFor(() => expect(api.patchTransaction).toHaveBeenCalledWith(4, { category_id: 2, is_refund: false, confirmed: true }))
+  })
+
+  describe('after an answer on the review card', () => {
+    const asked = tx(10, { description: 'Etos Apotheek', confirmed: false, category_id: null, category_name: null, categorised_by: null })
+    const later = (over: Partial<Transaction> = {}) =>
+      tx(11, { description: 'Etos Apotheek', confirmed: false, category_id: null, category_name: null, categorised_by: null, ...over })
+
+    // The shop has a second waiting payment; answering the first settles it. `afterwards` is how that
+    // second payment stands when Undo looks (changed by someone else, or not).
+    const review = async (afterwards: Partial<Transaction> = {}) => {
+      let answered = false
+      const settled = later({ confirmed: true, category_id: 2, category_name: 'Utilities', categorised_by: 'rule', ...afterwards })
+      vi.mocked(api.getTransactions).mockImplementation(p => {
+        if (p?.confirmed === 'false') return Promise.resolve(answered ? [] : [asked, later()])
+        return Promise.resolve(answered ? [...list, { ...asked, confirmed: true, category_id: 2, category_name: 'Utilities', categorised_by: 'manual' }, settled] : list)
+      })
+      vi.mocked(api.getNextReview).mockImplementation(() => Promise.resolve(answered ? null : asked))
+      vi.mocked(api.patchTransaction).mockImplementation(async (_id, body) => { if (body.confirmed) answered = true; return {} })
+      vi.mocked(api.getCategories).mockResolvedValue(categories)
+      vi.mocked(api.getPace).mockResolvedValue(pace)
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      render(<QueryClientProvider client={qc}><MemoryRouter><Transactions /></MemoryRouter></QueryClientProvider>)
+      const user = userEvent.setup()
+      await screen.findByText('2 to review')
+      await user.click(await screen.findByRole('button', { name: /Select category/ }))
+      await user.click(await screen.findByRole('option', { name: 'Utilities' }))
+      await user.click(screen.getByRole('button', { name: 'Confirm category' }))
+      await screen.findByText('Sorted Etos Apotheek as Utilities. 1 more followed.')
+      return user
+    }
+
+    it('says what was sorted and what followed, and Undo puts back exactly those', async () => {
+      const user = await review()
+      expect(screen.getByText('Sorted Etos Apotheek as Utilities. 1 more followed.').closest('[role="status"]')).not.toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(await screen.findByText('Put Etos Apotheek back in the queue with 1 more.')).toBeInTheDocument()
+      expect(api.patchTransaction).toHaveBeenCalledWith(10, { confirmed: false })
+      expect(api.patchTransaction).toHaveBeenCalledWith(11, { confirmed: false })
+      expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    })
+
+    it('leaves a payment alone when it was changed after the answer, and says so', async () => {
+      const user = await review({ category_id: 1, category_name: 'Food - Essential', categorised_by: 'manual' })
+      await user.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(await screen.findByText('1 of 2 put back in the queue')).toBeInTheDocument()
+      expect(screen.getByText(/1 was changed since/)).toBeInTheDocument()
+      expect(api.patchTransaction).toHaveBeenCalledWith(10, { confirmed: false })
+      expect(api.patchTransaction).not.toHaveBeenCalledWith(11, { confirmed: false })
+    })
+  })
 })

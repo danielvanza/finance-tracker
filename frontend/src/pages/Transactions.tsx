@@ -17,9 +17,14 @@ import {
 import TransactionsToolbar from './transactions/TransactionsToolbar'
 import TransactionsTable from './transactions/TransactionsTable'
 import SelectionBar from './transactions/SelectionBar'
-import { filterTransactions, hasFilters, type ListFilters, type MonthRange } from './transactions/filters'
+import {
+  chipsFromParams, filterTransactions, hasFilters, NO_CHIPS, paramsFromChips, type ListFilters, type MonthRange,
+} from './transactions/filters'
 import { categoriseRows, confirmRows, deleteRows, describeOutcome, type BulkOutcome } from './transactions/bulk'
 import type { Category } from '../types'
+import { answerLine, undoAnswer, undoneLine, type Answer } from './transactions/answer'
+
+const NOTE_MS = 8000
 
 export default function Transactions() {
   const qc = useQueryClient()
@@ -30,9 +35,10 @@ export default function Transactions() {
   const [actionError, setActionError] = useState('')
   const [view, setView] = useState<MerchantView>('transactions')
 
-  // The search lives in the URL (?q=): Back returns to it, and a link or the command palette can open it.
-  // The box keeps its own text so typing never waits on the router; the URL follows it, and a URL
-  // we didn't write (another search link while on this page) replaces it.
+  // The search and the filter chips live in the URL (?q=, review=1, month=1, category=<id>, source=ing,
+  // over=1): Back returns to them, and a link (Month's, the command palette's) can open them. The URL is
+  // the only copy of the chips; the box keeps its own text so typing never waits on the router, the URL
+  // follows it, and a URL we didn't write (another search link while on this page) replaces it.
   const [params, setParams] = useSearchParams()
   const urlQ = params.get('q') ?? ''
   const [q, setQLocal] = useState(urlQ)
@@ -42,19 +48,22 @@ export default function Transactions() {
     else if (!written.current.has(urlQ)) setQLocal(urlQ)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlQ])
+  // One call per change: router updates are not queued, so two in a row would overwrite each other.
+  const writeParams = (patch: Record<string, string | null>) =>
+    setParams(prev => {
+      const next = new URLSearchParams(prev)
+      for (const [key, value] of Object.entries(patch)) {
+        if (value) next.set(key, value)
+        else next.delete(key)
+      }
+      return next
+    }, { replace: true })
   const setQ = (value: string) => {
     setQLocal(value)
     written.current.add(value)
-    setParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (value) next.set('q', value)
-      else next.delete('q')
-      return next
-    }, { replace: true })
+    writeParams({ q: value })
   }
-  const [chips, setChips] = useState({ needsReview: false, thisMonth: false, categoryId: null as number | null, source: 'all', over100: false })
-  const filters: ListFilters = { q, ...chips }
-
+  const urlChips = chipsFromParams(params)
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -85,7 +94,10 @@ export default function Transactions() {
     enabled: showReview,
   })
 
-  const visible = useMemo(() => filterTransactions(transactions, filters, month), [transactions, q, chips, month]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A category that no longer exists (an old address) filters nothing.
+  const known = urlChips.categoryId == null || categories.length === 0 || categories.some(c => c.id === urlChips.categoryId)
+  const filters: ListFilters = { q, ...urlChips, categoryId: known ? urlChips.categoryId : null }
+  const visible = useMemo(() => filterTransactions(transactions, filters, month), [transactions, q, params, month, known]) // eslint-disable-line react-hooks/exhaustive-deps
   const pickedRows = useMemo(() => visible.filter(t => picked.has(t.id)), [visible, picked])
   const narrowed = hasFilters(filters)
 
@@ -94,8 +106,29 @@ export default function Transactions() {
     qc.invalidateQueries({ queryKey: ['review'] })
   }
 
+  // The last answer from the review card, said once above the chat button with an Undo. It goes on the
+  // next answer, on Skip, after a few seconds, and when the page is left.
+  const [note, setNote] = useState<{ line: string; answer: Answer | null; n: number } | null>(null)
+  // Held while focus is inside it (keyed by the line, so a removed button can't leave the next line held).
+  const [heldNote, setHeldNote] = useState<number | null>(null)
+  const noteSeq = useRef(0)
+  const noteHeld = note != null && heldNote === note.n
+  useEffect(() => {
+    if (!note || noteHeld) return
+    const timer = window.setTimeout(() => setNote(null), NOTE_MS)
+    return () => window.clearTimeout(timer)
+  }, [note, noteHeld])
+
   const handleConfirm = async (id: number, decision: ReviewDecision) => {
     setActionError('')
+    setNote(null)
+    const queue = { queryKey: ['transactions', 'to-review'], queryFn: () => api.getTransactions({ confirmed: 'false' }) }
+    // What was waiting before the answer, so what left the queue with it can be told apart afterwards.
+    let before: Transaction[] | null = null
+    try {
+      before = qc.getQueryData<Transaction[]>(queue.queryKey) ?? await qc.fetchQuery(queue)
+    } catch { /* the answer still goes through; there is just no Undo for it */ }
+    const row = reviewTx?.id === id ? reviewTx : before?.find(t => t.id === id)
     try {
       await api.patchTransaction(id, { ...decision, confirmed: true })
     } catch (e) {
@@ -103,11 +136,38 @@ export default function Transactions() {
       return
     }
     setSkippedIds(prev => prev.filter(sid => sid !== id))
+    let followed: number[] | null = null
+    if (before) {
+      try {
+        const after = new Set((await qc.fetchQuery({ ...queue, staleTime: 0 })).map(t => t.id))
+        followed = before.filter(t => t.id !== id && !after.has(t.id)).map(t => t.id)
+      } catch { /* unknown: no Undo, rather than one that might miss rows */ }
+    }
     invalidate()
+    if (row == null) return
+    const split = decision.splits != null
+    const answer: Answer | null = followed == null ? null : {
+      id, description: row.description, categoryId: split ? null : decision.category_id ?? null,
+      followed, remember: decision.remember === true,
+    }
+    const what = split ? 'split' : categories.find(c => c.id === decision.category_id)?.name ?? 'its category'
+    setNote({ line: answerLine(row.description, what, answer), answer, n: ++noteSeq.current })
   }
 
   const handleSkip = (id: number) => {
+    setNote(null)
     setSkippedIds(prev => [...prev, id])
+  }
+
+  const undo = async () => {
+    const answer = note?.answer
+    if (!answer) return
+    setNote(null)
+    setActionError('')
+    const result = await undoAnswer(answer)
+    invalidate()
+    if (result.problem) setBulkError(result.problem)
+    else setNote({ line: undoneLine(answer, result.reverted), answer: null, n: ++noteSeq.current })
   }
 
   const handleDelete = async (tx: Transaction) => {
@@ -122,8 +182,9 @@ export default function Transactions() {
   }
 
   const clearFilters = () => {
-    setQ('')
-    setChips({ needsReview: false, thisMonth: false, categoryId: null, source: 'all', over100: false })
+    setQLocal('')
+    written.current.add('')
+    writeParams({ q: null, ...paramsFromChips(NO_CHIPS) })
   }
 
   const togglePick = (id: number) =>
@@ -302,7 +363,7 @@ export default function Transactions() {
                 counted={!listLoading && !listError}
                 active={narrowed}
                 onSearch={setQ}
-                onChange={patch => setChips(c => ({ ...c, ...patch }))}
+                onChange={patch => writeParams(paramsFromChips(patch))}
                 onClear={clearFilters}
               />
               {listError ? (
@@ -328,6 +389,15 @@ export default function Transactions() {
             </>
           )}
         </section>
+      </div>
+
+      <div role="status" aria-live="polite">
+        {note && (
+          <div className="tx-note" onFocus={() => setHeldNote(note.n)} onBlur={() => setHeldNote(null)}>
+            <span>{note.line}</span>
+            {note.answer && <button type="button" className="btn btn-sm" onClick={undo}>Undo</button>}
+          </div>
+        )}
       </div>
 
       {selecting && pickedRows.length > 0 && (

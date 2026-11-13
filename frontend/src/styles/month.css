@@ -108,6 +108,33 @@
   color: var(--text);
 }
 
+/* The caveat is small text: --quiet. Its link is the one ink-and-underlined way into the payments. */
+.verdict .verdict-caveat {
+  color: var(--quiet);
+}
+
+.verdict-go,
+.cat-all {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.2em;
+}
+
+.verdict-go:hover,
+.cat-all:hover {
+  text-decoration-color: var(--shu);
+}
+
+/* Closes an opened category: a 44 px target of its own, in line with the payments above it. */
+.cat-all {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  min-height: var(--tap);
+  font-size: 0.85rem;
+}
+
 .pace {
   grid-area: pace;
   position: relative;

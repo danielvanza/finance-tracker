@@ -6,7 +6,7 @@ import { api } from '../../api'
 import { dayLabel } from '../../dates'
 import { formatCents } from '../../money'
 import { flipTheme } from '../../theme'
-import { PAGES } from './keys'
+import { PAGES, PLACES } from './keys'
 import './shell-palette.css'
 
 interface Item {
@@ -20,8 +20,9 @@ interface Item {
 }
 
 const MAX_TRANSACTIONS = 5
+const MAX_PLACES = 5
 
-/** Ctrl/Cmd-K: pages, actions and (as you type) transactions, from anywhere. */
+/** Ctrl/Cmd-K: pages and actions, and (as you type) transactions and places such as settings, from anywhere. */
 export default function CommandPalette({ onClose, onAdd }: { onClose: () => void; onAdd: () => void }) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -74,7 +75,15 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
     const matching = [...pages, ...actions].filter(i => i.label.toLowerCase().includes(q))
     // Someone looking for a purchase that is not there may well want to add it.
     if (found.length && !matching.some(i => i.id === 'add')) matching.push(actions[0])
-    return [...found, ...matching]
+    const words = q.split(/\s+/)
+    const places: Item[] = PLACES
+      .filter(p => {
+        const text = `${p.label} ${p.sub} ${p.words}`.toLowerCase()
+        return words.every(w => text.includes(w))
+      })
+      .slice(0, MAX_PLACES)
+      .map(p => ({ id: `place-${p.label}`, group: 'Places', label: p.label, sub: p.sub, run: go(p.to) }))
+    return [...found, ...matching, ...places]
   }, [query, transactions, pace, navigate, onAdd])
 
   const at = Math.min(hi, Math.max(items.length - 1, 0))
@@ -117,8 +126,8 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
             aria-expanded="true"
             aria-controls="pal-list"
             aria-activedescendant={items.length ? `pal-opt-${at}` : undefined}
-            aria-label="Find a page, a transaction or an action"
-            placeholder="Find a page, a transaction or an action"
+            aria-label="Find a page, a setting or a transaction"
+            placeholder="Find a page, a setting or a transaction"
             autoComplete="off"
             spellCheck={false}
             value={query}
@@ -154,7 +163,7 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
           })}
           {!items.length && (
             <p className="empty" role="status">
-              {isLoading ? 'Looking…' : `Nothing matches “${query.trim()}”. Try a shop, a category or a page.`}
+              {isLoading ? 'Looking…' : `Nothing matches “${query.trim()}”. Try a shop, a category, a page or a setting.`}
             </p>
           )}
         </div>

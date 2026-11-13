@@ -7,3 +7,4 @@
 - **A page opens at its top**; tapping the current tab scrolls to the top, except with a `?q=` search, which it clears.
 - **A transient confirmation** sits above the chat button on a phone, in a persistent `role=status` region.
 - **`/report` keeps Month as the current tab.**
+- **Find lists Places once you type**: settings and sheets (`PLACES` in `keys.ts`: label, where it lives, route, hidden search words), after pages and actions, at most five. The empty query is pages and actions only. A place that is a sheet which hides when empty (Recurring, Savings goals) links to its page, never to the sheet.

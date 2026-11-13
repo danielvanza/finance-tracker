@@ -38,6 +38,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
+  margin-top: 1.4rem; /* the page-head gap: title to first block */
+  row-gap: 2.2rem; /* between the stacked columns on a phone, as between sections */
   transition: opacity var(--press-in);
 }
 
@@ -47,6 +49,10 @@
 
 .trends-col {
   min-width: 0;
+}
+
+.trends-col > .section:first-child {
+  margin-top: 0;
 }
 
 .trend-finding {
@@ -137,7 +143,7 @@
 .trend-tip {
   display: grid;
   gap: 0.25rem;
-  min-width: 10.5rem;
+  min-width: 12.5rem;
   padding: 0.6rem 0.75rem;
   border-radius: var(--r-chip);
   background: var(--raised);
@@ -146,10 +152,21 @@
   color: var(--text);
 }
 
+/* Swatch, name, amount: names start together and the digits stack on the right; the markup order is amount then name. */
 .trend-tip > div {
-  display: flex;
+  display: grid;
+  grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+  column-gap: 0.5rem;
   align-items: center;
-  gap: 0.4rem;
+}
+
+.trend-tip > div > span {
+  order: 2;
+}
+
+.trend-tip > div > strong {
+  order: 3;
+  text-align: right;
 }
 
 .trend-tip i {
@@ -165,10 +182,19 @@
   color: var(--ink);
 }
 
-.trend-tip-total {
+.trend-tip > div > span:only-child {
+  grid-column: 1 / -1;
+}
+
+.trend-tip > .trend-tip-total {
+  grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 0.15rem;
   padding-top: 0.3rem;
   border-top: 1px solid var(--line);
+}
+
+.trend-tip-total > span {
+  padding-left: 1.25rem;
 }
 
 .trend-figures {
@@ -206,6 +232,14 @@
 .trend-table td {
   padding: 0.45rem 0.25rem;
   font-size: 0.8rem;
+}
+
+.trend-table :is(th, td):first-child {
+  padding-left: 0;
+}
+
+.trend-table :is(th, td):last-child {
+  padding-right: 0;
 }
 
 .trend-table th {

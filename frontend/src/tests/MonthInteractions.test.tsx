@@ -102,6 +102,25 @@ describe('Month while another month loads', () => {
   })
 })
 
+describe('Month links to the payments behind its figures', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const free = { free_cents: 244200, per_day_cents: 20300, left_in_plan_cents: 300000, bills_cents: 0, bills: [], set_aside_cents: 0, set_asides: [] }
+
+  it('ends the caveat about waiting payments with a link to answer them, and shows neither without any', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free, to_review_in_month: 6 }))
+    const { unmount } = render(wrap(<Month />))
+    const link = await screen.findByRole('link', { name: 'Answer them' })
+    expect(link).toHaveAttribute('href', '/transactions')
+    expect(link.closest('p')).toHaveTextContent('6 payments this month still wait for an answer and are not counted.')
+    unmount()
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free, to_review_in_month: 0 }))
+    render(wrap(<Month />))
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.queryByRole('link', { name: /Answer (it|them)/ })).toBeNull()
+  })
+})
+
 describe('Categories', () => {
   const row = (id: number, name: string, actual: number, planned: number, type: BudgetRow['category_type'] = 'needs'): BudgetRow => ({
     id, category_id: id, category_name: name, category_type: type, month: '2026-11',
@@ -111,7 +130,7 @@ describe('Categories', () => {
     row(1, 'Taxes', 185000, 200000), row(2, 'Food', 22500, 35000), row(3, 'Utilities', 9300, 20000),
     row(4, 'Transportation', 6800, 20000), row(5, 'Insurance', 13400, 40000),
   ]
-  const props = { month: '2026-11', categories: [], todayPct: 50, payments: null, elapsed: null, onError: () => {} }
+  const props = { month: '2026-11', isCurrent: true, categories: [], todayPct: 50, payments: null, elapsed: null, onError: () => {} }
 
   it('keeps the open row where it is when its plan changes, and sorts when it closes', async () => {
     const user = userEvent.setup()
@@ -146,5 +165,22 @@ describe('Categories', () => {
     const rows = [row(10, 'Allowance', 120000, 120000, 'wants')]
     render(wrap(<Categories rows={rows} {...props} todayPct={null} />))
     expect(screen.getByRole('button', { name: /Allowance/ })).not.toHaveTextContent('paid')
+  })
+  it('ends an opened category with a link to all its payments, only when it has some', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.getTransactions).mockImplementation(p => Promise.resolve(p?.category_id === '2'
+      ? [{ id: 9, date: '2026-11-03', amount_cents: -2500, description: 'Albert Heijn', source: 'ing', category_id: 2, category_name: 'Food', confirmed: true,
+        categorised_by: 'rule', ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [] }]
+      : []))
+    const { rerender } = render(wrap(<Categories rows={base} {...props} />))
+    await user.click(screen.getByRole('button', { name: /Taxes/ }))
+    await screen.findByText('No confirmed transactions this month.')
+    expect(screen.queryByRole('link', { name: 'All payments' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /Taxes/ }))
+    await user.click(screen.getByRole('button', { name: /Food/ }))
+    expect(await screen.findByRole('link', { name: 'All payments' })).toHaveAttribute('href', '/transactions?category=2&month=1')
+    // A past month has no "this month" to carry over.
+    rerender(wrap(<Categories rows={base} {...props} isCurrent={false} />))
+    expect(await screen.findByRole('link', { name: 'All payments' })).toHaveAttribute('href', '/transactions?category=2')
   })
 })

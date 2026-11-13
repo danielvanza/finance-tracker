@@ -141,7 +141,8 @@ function Verdict({ p }: { p: Pace }) {
         <p>{paceSentence(p, left)}</p>
         {p.to_review_in_month > 0 && (
           <p className="verdict-caveat">
-            {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.
+            {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.{' '}
+            <Link to="/transactions" className="verdict-go">Answer {p.to_review_in_month === 1 ? 'it' : 'them'}</Link>
           </p>
         )}
         <FreeHow free={p.free} end={p.end_date} />
@@ -294,12 +295,12 @@ export default function Month() {
         {rows.length > 0 && (known ? (
           <section className="section">
             <h2>By category</h2>
-            <Categories key={month} rows={rows} month={month} categories={categories} todayPct={todayPct} payments={payments} elapsed={elapsed} onError={setActionError} />
+            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={todayPct} payments={payments} elapsed={elapsed} onError={setActionError} />
           </section>
         ) : (
           <details className="section plan-fold">
             <summary>The plan</summary>
-            <Categories key={month} rows={rows} month={month} categories={categories} todayPct={null} payments={payments} elapsed={null} onError={setActionError} />
+            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={null} payments={payments} elapsed={null} onError={setActionError} />
           </details>
         ))}
 

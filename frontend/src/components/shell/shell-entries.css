@@ -67,6 +67,7 @@
   .find-well span {
     flex: 1;
     min-width: 0;
+    line-height: 1.3;
     overflow: hidden;
     text-align: left;
     text-overflow: ellipsis;
@@ -82,9 +83,9 @@
     order: 2;
     display: flex;
     justify-content: flex-start;
-    gap: 0.6rem;
+    gap: 0.5rem;
     width: 100%;
-    padding: 0 1rem;
+    padding: 0 0.6rem 0 0.8rem;
   }
 
   .add-row .kbd {

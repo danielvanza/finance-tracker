@@ -38,6 +38,52 @@
   color: var(--moss);
 }
 
+.setup-saved:empty {
+  display: none;
+}
+
+/* A jump to a section leaves the sticky strip clear of its heading. */
+.setup-sections > .section {
+  scroll-margin-top: 5.2rem;
+}
+
+/* One row of chips under the top of the screen; it scrolls sideways when the eight don't fit. */
+.setup-jump {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin: 0 -1.1rem 1rem;
+  padding: calc(0.4rem + env(safe-area-inset-top)) 1.1rem 0.4rem;
+  background: var(--bg);
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  /* Snapping keeps the first chip on the page's left edge, not on the screen's. */
+  scroll-padding-inline: 1.1rem;
+  /* The chips scroll inside the row; they never widen the page. */
+  contain: inline-size;
+}
+
+.setup-jump::-webkit-scrollbar {
+  display: none;
+}
+
+.setup-jump .btn {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 1024px) {
+  /* The row's ground reaches the screen edge on the right, where the page's padding is, so it never ends in a patch. */
+  .setup-jump {
+    margin: 0 -3.5rem 1.2rem 0;
+    padding-inline: 0 3.5rem;
+    scroll-padding-inline: 0;
+  }
+}
+
 /* Rules */
 .setup-rule-form {
   display: grid;
@@ -182,7 +228,7 @@
 }
 
 .setup-start-day {
-  width: 6rem;
+  width: 6.5rem;
 }
 
 .setup-start .setup-saved,
@@ -198,6 +244,7 @@
 .setup-example strong {
   color: var(--ink);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Wide enough for one line: the name shares it with the controls and the detail runs full width beneath. */
@@ -288,6 +335,17 @@
   .setup-sections > :nth-child(n + 4) {
     grid-column: 3;
     grid-row: auto;
+  }
+}
+
+@media (min-width: 721px) {
+  .rules-table th:nth-child(2) { width: 40%; }
+  .rules-table th:nth-child(3) { width: 1%; }
+}
+
+@media (max-width: 720px) {
+  .setup-table-panel {
+    padding-inline: 0.3rem;
   }
 }
 
@@ -413,11 +471,80 @@
   color: var(--quiet);
 }
 
+.bud-options {
+  display: grid;
+  gap: 0.6rem;
+}
+
+/* The two labels share a width, so both rows of chips start on one line. */
+.bud-options .lab {
+  min-width: 4.8rem;
+}
+
 .bud-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
+}
+
+/* While something is changed the count and Save plan stay at the foot of the screen: above the tab slab on a
+   phone, and a chat button short on the right wherever the panel reaches it (the panel spans the page below
+   1100px; beside the categories it ends well before the button). */
+.bud-actions.is-bar {
+  position: sticky;
+  bottom: var(--chat-fab-bottom);
+  z-index: 5;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  margin-inline: -0.6rem;
+  padding: 0.5rem;
+  background: var(--raised);
+  border-radius: var(--r-row);
+  box-shadow: var(--raise);
+}
+
+.bud-actions.is-bar .btn {
+  flex: none;
+  padding-inline: 0.6rem;
+}
+
+.bud-sum {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 0.1rem;
+  padding-left: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.bud-sum small {
+  font-size: 0.78rem;
+  color: var(--quiet);
+}
+
+.bud-sum b {
+  white-space: nowrap;
+}
+
+.bud-actions.is-bar .setup-saved {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 0.4rem;
+}
+
+@media (max-width: 1023.98px) {
+  .bud-actions.is-bar {
+    margin-right: calc(var(--chat-fab) - 0.95rem);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1099.98px) {
+  .bud-actions.is-bar {
+    margin-right: 1.25rem;
+  }
 }
 
 /* Rule suggestions */
@@ -463,7 +590,12 @@
 /* Set-asides and the target split. */
 .setup-pay {
   grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
+}
+
+.setup-pay .setup-form-actions {
+  gap: 0.4rem 0.5rem;
 }
 
 .setup-split {
@@ -473,23 +605,51 @@
   align-items: flex-end;
 }
 
+/* On a phone the three percent fields share one row, a name takes a row of its own and Save fills the row beneath. */
 .setup-split .form-row {
-  width: 6.5rem;
+  width: calc((100% - 1.5rem) / 3);
 }
 
 .setup-split .setup-own-name {
-  flex: 1 1 9rem;
+  flex: 1 1 100%;
   width: auto;
+}
+
+.setup-split > .btn {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 560px) {
+  .setup-split .form-row {
+    width: 6.5rem;
+  }
+
+  .setup-split .setup-own-name {
+    flex: 1 1 9rem;
+    width: auto;
+  }
+
+  .setup-split > .btn {
+    flex: 0 0 auto;
+  }
 }
 
 /* What the category counts as: a fixed, narrow select, so the name gives way first and the row never spills. */
 .setup-cat .setup-type {
-  flex: 0 1 6.75rem;
+  flex: 0 1 5.25rem;
   width: auto;
-  min-width: 4.25rem;
+  min-width: 3.75rem;
+  min-height: 2.25rem;
   padding-block: 0.25rem;
-  padding-inline: 0.5rem 1.5rem;
+  padding-inline: 0.5rem 1.4rem;
+  background-position: calc(100% - 0.85rem) 55%, calc(100% - 0.55rem) 55%;
   font-size: 0.8125rem;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .setup-cat .setup-type {
+    min-height: var(--tap);
+  }
 }
 
 /* Rules > Always asked about: shops whose payments are never sorted by themselves. */

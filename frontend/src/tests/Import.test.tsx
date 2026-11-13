@@ -30,7 +30,7 @@ test('shows preview button after file selected', () => {
 })
 
 describe('failed preview', () => {
-  it('renders an inline error banner with status and detail', async () => {
+  it('renders an inline error banner with the detail in plain words', async () => {
     vi.mocked(api.previewImport).mockRejectedValueOnce(
       new ApiError(500, 'Unrecognised date column', 'Unrecognised date column'),
     )
@@ -41,7 +41,7 @@ describe('failed preview', () => {
     })
     await user.click(screen.getByRole('button', { name: /preview/i }))
     const banner = await screen.findByRole('alert')
-    expect(banner).toHaveTextContent(/500/)
+    expect(banner).not.toHaveTextContent(/Server error/)
     expect(banner).toHaveTextContent(/Unrecognised date column/)
     expect(screen.queryByRole('button', { name: /preview/i })).toBeEnabled()
     vi.mocked(api.previewImport).mockReset()

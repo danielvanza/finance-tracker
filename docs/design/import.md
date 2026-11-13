@@ -4,3 +4,8 @@
 - **The catch-up path** shows only from a snapshot taken when the page opens: a bank at least `CATCHUP_DAYS` (7) behind `pace.today`, or status `gap` or `empty`. Words give dates and "N days ago", never counts of missed days, streaks or red.
 - **One bank.** Only ING files are read (English or Dutch columns), so there is no bank step. A file that is something else gets the server's sentence saying what is accepted.
 - **The Import link** (`components/ImportLink.tsx`) is on Month and Transactions at all times, with the date the bank data runs to.
+- **One measure.** The chooser, preview, banner and result share the path's 72 rem cap and one column; the shared banner's 40 rem cap is lifted in `.import-alert`. Do not bring back a two-column chooser.
+- **Preview tables share columns** from 721 px (`table-layout: fixed`: date 5.75 rem, amount 8 rem, status 6.5 rem), so the folded "already in" table lines up with the new rows; the head and the fold's summary indent 0.75 rem to the cells' text edge. Change a width in both tables or in neither.
+- **Phone rows draw one rule**: the hairline sits on the row (not the first), the cells carry none. The grid areas stay as they are.
+- **A new panel is brought into view**: the preview and the error banner scroll to 1 rem from the top (`scroll-margin-top`, `panel.ts`); the preview's heading takes focus, as the result's does. A phone's page does not scroll by itself, so without this a tap on Preview looks dead.
+- **The error is plain words and goes away**: the server's sentence is shown alone (no "Server error 422:"); choosing another file clears it and the banner has a dismiss button (44 px).

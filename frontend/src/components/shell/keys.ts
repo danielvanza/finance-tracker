@@ -7,6 +7,25 @@ export const PAGES = [
   { to: '/import', label: 'Import', key: 'i' },
 ]
 
+/**
+ * Settings and sheets Find can open when you type for them: what it says, where it lives, the route
+ * (a `/setup#id` opens Setup on that section, ids in pages/Setup.tsx) and words that also find it.
+ * Recurring payments and Savings goals are sheets that hide when empty, so they lead to their page.
+ */
+export const PLACES = [
+  { label: 'Budget plan', sub: 'Setup · Budget', to: '/setup#budget', words: 'plan planned amounts month ahead next' },
+  { label: 'Rules', sub: 'Setup · Rules', to: '/setup#rules', words: 'rule pattern shop sort' },
+  { label: 'Categories', sub: 'Setup · Categories', to: '/setup#categories', words: 'category needs wants savings' },
+  { label: 'Set-asides', sub: 'Setup · Set-asides', to: '/setup#set-asides', words: 'set aside bills yearly' },
+  { label: 'Target split', sub: 'Setup · Target split', to: '/setup#target-split', words: 'aim 50/30/20 needs wants savings percent' },
+  { label: 'Your own accounts', sub: 'Setup · Your own accounts', to: '/setup#own-accounts', words: 'personal names own' },
+  { label: 'Financial month start day', sub: 'Setup · Settings', to: '/setup#month-start', words: 'payday salary period' },
+  { label: 'Your data', sub: 'Setup · Your data', to: '/setup#your-data', words: 'export download csv backup' },
+  { label: 'Month report', sub: 'Month · Report', to: '/report', words: 'summary print pdf' },
+  { label: 'Recurring payments', sub: 'Month · Recurring', to: '/', words: 'subscriptions regular bills' },
+  { label: 'Savings goals', sub: 'Trends · Savings goals', to: '/trends', words: 'goal target saving' },
+]
+
 export const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform) ? '⌘' : 'Ctrl'
 
 /** Single-letter shortcuts stay out of the way of someone typing. */

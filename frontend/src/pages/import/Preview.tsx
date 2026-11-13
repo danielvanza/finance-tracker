@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { dayLabel } from '../../dates'
 import { formatCents } from '../../money'
 import type { ImportPreviewResponse, ImportPreviewRow, Pace } from '../../types'
 import { BANKS, looksLikeIng } from './bank'
 import { lastDates } from './freshness'
+import { showPanel } from './panel'
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -71,6 +72,14 @@ export default function Preview({ preview, source, file, pace, busy, loading, on
     return () => { live = false }
   }, [rows.length, file])
 
+  // The panel is new on the page: bring it up and put focus on its heading, as the result does.
+  const panel = useRef<HTMLElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    showPanel(panel.current)
+    heading.current?.focus({ preventScroll: true })
+  }, [])
+
   let title: string
   let say: React.ReactNode
   let action: React.ReactNode
@@ -115,10 +124,10 @@ export default function Preview({ preview, source, file, pace, busy, loading, on
   }
 
   return (
-    <section className="panel import-preview" aria-labelledby="import-step-confirm">
+    <section ref={panel} className="panel import-preview" aria-labelledby="import-step-confirm">
       <div className="import-preview-head">
         <div>
-          <h2 id="import-step-confirm">{title}</h2>
+          <h2 id="import-step-confirm" ref={heading} tabIndex={-1}>{title}</h2>
           <p className="import-say num">{say}</p>
         </div>
         {action}

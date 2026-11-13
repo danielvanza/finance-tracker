@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from 'react'
+import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, LabelList, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -137,6 +137,18 @@ const COMPACT_BELOW_REM = 14
 
 function SpendingChart({ rows, compact, onResize }: { rows: Row[]; compact: boolean; onResize: (width: number) => void }) {
   const lastIndex = rows.reduce((found, r, i) => (r.hasData ? i : found), -1)
+  const plotRef = useRef<HTMLDivElement>(null)
+  // Room for the names is kept only while some are drawn: the chart decides that from segment heights, so look at what it drew.
+  const [showNames, setShowNames] = useState(true)
+  useEffect(() => {
+    const plot = plotRef.current
+    if (!plot) return
+    const look = () => setShowNames(plot.querySelector('.trend-name') !== null)
+    look()
+    const watch = new MutationObserver(look)
+    watch.observe(plot, { childList: true, subtree: true })
+    return () => watch.disconnect()
+  }, [])
   const topKey = (r: Row): SeriesKey | undefined => [...SERIES].reverse().find(s => r[s.key] > 0)?.key
 
   // Names sit beside the latest column; a segment too thin to hold one relies on the legend.
@@ -158,9 +170,9 @@ function SpendingChart({ rows, compact, onResize }: { rows: Row[]; compact: bool
   }
 
   return (
-    <div className="trend-plot">
+    <div className="trend-plot" ref={plotRef}>
       <ResponsiveContainer width="100%" height="100%" onResize={width => onResize(width)}>
-        <BarChart data={rows} margin={{ top: 22, right: compact ? 20 : 56, bottom: 0, left: 0 }} barCategoryGap="30%">
+        <BarChart data={rows} margin={{ top: 22, right: compact ? 20 : showNames ? 56 : 8, bottom: 0, left: 0 }} barCategoryGap="30%">
           <CartesianGrid vertical={false} stroke="var(--line)" />
           <XAxis dataKey="label" interval={0} axisLine={false} tickLine={false} />
           {compact

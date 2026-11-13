@@ -85,6 +85,11 @@
   color: var(--muted);
 }
 
+/* A payment with no category yet: the same quiet word, in the colour small sans text uses. */
+.tx-cat-empty {
+  color: var(--quiet);
+}
+
 .tx-cat-btn:hover,
 .tx-cat-btn[aria-expanded='true'] {
   text-decoration: underline;
@@ -455,6 +460,17 @@
   min-width: 8rem;
 }
 
+/* Wide enough for the longest category name: Description gives up the width. */
+@media (min-width: 1280px) {
+  .tx-cat {
+    min-width: 12.5rem;
+  }
+
+  .tx-cat-btn {
+    white-space: nowrap;
+  }
+}
+
 .tx-row-actions {
   white-space: nowrap;
 }
@@ -571,6 +587,25 @@
   grid-column: 1 / -1;
   justify-self: start;
   margin: 0;
+}
+
+.split-row .cs-trigger.is-compact,
+.split-row .split-remove,
+.split-foot .btn {
+  min-height: var(--tap);
+}
+
+/* On a phone the category takes a line of its own; amount and remove share the next. */
+@media (max-width: 480px) {
+  .split-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.4rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .split-row .cs {
+    grid-column: 1 / -1;
+  }
 }
 
 .split-foot {
@@ -796,6 +831,12 @@
     background: none;
     box-shadow: none;
   }
+
+  /* The category is how a waiting payment gets answered: a 44 px target, the row keeps its height. */
+  .tx-cat-btn {
+    min-height: var(--tap);
+    margin-block: -0.6rem;
+  }
 }
 
 /* Phone: each row is a card. Which cell goes where is by column position (see COLUMNS in
@@ -823,7 +864,8 @@
 
   .tx-table > tbody > tr > td:nth-child(1):not(:only-child) { grid-area: date; color: var(--quiet); font-size: 0.8rem; }
   .tx-table > tbody > tr > td:nth-child(2) { grid-area: desc; width: auto; overflow: visible; }
-  .tx-desc-text.is-button { min-height: var(--tap); align-content: center; }
+  .tx-desc-text.is-button { min-height: var(--tap); align-content: start; }
+  .tx-desc-merchant .mer-open { justify-content: flex-start; }
   .tx-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }
   .tx-table > tbody > tr > td:nth-child(4) { grid-area: cat; }
   .tx-table > tbody > tr > td:nth-child(5) { grid-area: source; }
@@ -1009,18 +1051,91 @@
   margin: 0;
 }
 
-/* Above the tab slab, and over the chat button while it is open. */
+/* The tab slab is still there: the bar sits above it. */
+@media (min-width: 721px) and (max-width: 1023px) {
+  .tx-bar {
+    bottom: var(--chat-fab-bottom);
+    z-index: 13;
+  }
+}
+
+/* Above the tab slab, and one chat button short on the right. */
 @media (max-width: 720px) {
   .tx-bar {
     z-index: 13;
     position: fixed;
     left: 0.7rem;
-    right: 0.7rem;
+    right: calc(0.7rem + var(--chat-fab) + 0.6rem);
     bottom: calc(5.2rem + env(safe-area-inset-bottom));
   }
+}
+
+/* Add and Split: the buttons stay at the sheet's foot while the form scrolls above them. */
+.sheet:has(> .tx-sheet-head) {
+  --sheet-pad: calc(1.3rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 720px) {
+  .sheet:has(> .tx-sheet-head) {
+    --sheet-pad: 1.3rem;
+  }
+}
+
+.sheet:has(> .tx-sheet-head) > .sheet-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--sheet-pad));
+  margin: 0.8rem 0 0;
+  padding: 0.7rem 0 var(--sheet-pad);
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+
+.sheet:has(> .tx-sheet-head) > .sheet-actions:last-child {
+  margin-bottom: calc(-1 * var(--sheet-pad));
 }
 
 .tx-empty-action {
   display: block;
   margin-top: 0.8rem;
+}
+
+/* What the last answer on the review card did, and Undo: one line above the chat button, as the Add
+   confirmation sits (shell-add.css), in the page's persistent status region. */
+.tx-note {
+  position: fixed;
+  z-index: 14;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--chat-fab-bottom, var(--bar-h) + 0.75rem) + var(--chat-fab, 56px) + 0.75rem);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  width: max-content;
+  max-width: calc(100% - 2.2rem);
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
+  border-radius: var(--r-chip);
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--raised);
+  box-shadow: var(--float-pop);
+}
+
+.tx-note:not(:has(.btn)) {
+  padding-block: 0.65rem;
+  padding-right: 1rem;
+}
+
+.tx-note .btn {
+  flex: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (min-width: 1024px) {
+  .tx-note {
+    left: calc(var(--side-w) + 3.5rem);
+    transform: none;
+    bottom: 1.5rem;
+  }
 }

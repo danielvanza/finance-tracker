@@ -2,7 +2,7 @@
    shared .sheet. Only what is particular to goals lives here. */
 
 .goals-panel {
-  padding-block: 1rem 0.75rem;
+  padding-block: 0.35rem 1.15rem;
 }
 
 .goals-list {

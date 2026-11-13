@@ -38,6 +38,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
+  margin-top: 1.4rem; /* the page-head gap: title to first block */
+  row-gap: 2.2rem; /* between the stacked columns on a phone, as between sections */
   transition: opacity var(--press-in);
 }
 
@@ -47,6 +49,10 @@
 
 .trends-col {
   min-width: 0;
+}
+
+.trends-col > .section:first-child {
+  margin-top: 0;
 }
 
 .trend-finding {

@@ -21,7 +21,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const money = (tx: Transaction) => `${tx.amount_cents > 0 ? '+' : ''}${formatCents(Math.abs(tx.amount_cents))}`
 
 /** What this shop costs and a single rule for it. Open it through MerchantSheetProvider. */
-export default function MerchantSheet({ merchantKey, onClose }: { merchantKey: string; onClose: () => void }) {
+export default function MerchantSheet({ merchantKey, name, onClose }: { merchantKey: string; name?: string; onClose: () => void }) {
   const qc = useQueryClient()
   const sheetRef = useRef<HTMLDivElement>(null)
   const transactions = useQuery({ queryKey: ['transactions', 'all'], queryFn: () => api.getTransactions() })
@@ -36,13 +36,37 @@ export default function MerchantSheet({ merchantKey, onClose }: { merchantKey: s
   const [saved, setSaved] = useState('')
   const [shown, setShown] = useState(FIRST)
 
+  // Modal for real: the page behind can neither take focus nor scroll, Tab wraps inside the sheet,
+  // and on close everything is put back before focus returns to the row that opened it.
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null
-    sheetRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose() }
+    const sheet = sheetRef.current
+    const root = document.getElementById('root')
+    const html = document.documentElement
+    const wasInert = root?.hasAttribute('inert') ?? false
+    const overflow = html.style.overflow
+    sheet?.focus()
+    root?.setAttribute('inert', '')
+    html.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+      if (e.key !== 'Tab' || !sheet) return
+      const active = document.activeElement
+      if (active !== sheet && !sheet.contains(active)) return // a picker open beside the sheet
+      const stops = [...sheet.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), select, input:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      const wrapTo = e.shiftKey
+        ? (active === sheet || active === stops[0] ? stops[stops.length - 1] : null)
+        : (active === stops[stops.length - 1] ? stops[0] : null)
+      if (wrapTo) {
+        e.preventDefault()
+        wrapTo.focus()
+      }
+    }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
+      if (root && !wasInert) root.removeAttribute('inert')
+      html.style.overflow = overflow
       before?.focus?.()
     }
   }, [onClose])
@@ -248,7 +272,7 @@ export default function MerchantSheet({ merchantKey, onClose }: { merchantKey: s
         tabIndex={-1}
         onClick={e => e.stopPropagation()}
       >
-        {head(model?.name ?? merchantKey)}
+        {head(model?.name ?? name ?? merchantKey)}
         {body()}
       </div>
     </div>,

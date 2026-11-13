@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { ChevronRight } from 'lucide-react'
 import { api } from '../../api'
 import { dayLabel } from '../../dates'
 import { formatEuros } from '../../money'
@@ -29,6 +30,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
  */
 export default function MerchantsView({ onView }: { onView: (view: MerchantView) => void }) {
   const { open } = useMerchantSheet()
+  const viewsRef = useRef<HTMLDivElement>(null)
   const [scope, setScope] = useState<MerchantScope>('month')
   const [shown, setShown] = useState(FIRST)
   const transactions = useQuery({ queryKey: ['transactions', 'all'], queryFn: () => api.getTransactions() })
@@ -38,6 +40,15 @@ export default function MerchantsView({ onView }: { onView: (view: MerchantView)
 
   const failed = [transactions, categories, pace, settings].find(q => q.error)
   const ready = transactions.data && categories.data && pace.data && settings.data
+  const loaded = Boolean(ready)
+
+  // On a phone the review card can fill the screen above the switch: once the list is drawn (so the
+  // page is as tall as it will be), bring the switch to the top, as far as the page allows.
+  useEffect(() => {
+    if (!loaded || !window.matchMedia?.('(max-width: 719px)').matches) return
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    viewsRef.current?.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' })
+  }, [loaded])
   const startDay = Number(settings.data?.financial_month_start_day)
     || Number(pace.data?.start_date.slice(8)) || DEFAULT_START_DAY
 
@@ -58,7 +69,7 @@ export default function MerchantsView({ onView }: { onView: (view: MerchantView)
 
   return (
     <>
-      <div className="mer-views">
+      <div className="mer-views" ref={viewsRef}>
         <ViewSwitch value="merchants" onChange={onView} />
         <div className="seg" role="group" aria-label="Period">
           {SCOPES.map(s => (
@@ -91,10 +102,11 @@ export default function MerchantsView({ onView }: { onView: (view: MerchantView)
               <ul>
                 {ranked.slice(0, shown).map(m => (
                   <li className="cat" key={m.key}>
-                    <button type="button" className="cat-row" onClick={() => open(m.sample)}>
+                    <button type="button" className="cat-row mer-row" onClick={() => open(m.sample)}>
                       <span className="cat-name">{m.name}</span>
                       <span className="cat-amount num">
                         {formatEuros(m.cents)}<small> · {plural(m.purchases, 'purchase')}</small>
+                        <ChevronRight className="mer-go" size={14} aria-hidden="true" />
                       </span>
                       <span className="meter" aria-hidden="true">
                         <i style={{ width: `${Math.max(3, Math.round((m.cents / biggest) * 100))}%` }} />

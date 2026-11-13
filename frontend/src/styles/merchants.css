@@ -60,8 +60,10 @@
   }
 }
 
-/* Transactions | Merchants, and the period beside it. */
+/* Transactions | Merchants, and the period beside it. On a phone, choosing Merchants scrolls the
+   switch to the top (MerchantsView), clear of the page's top row. */
 .mer-views {
+  scroll-margin-top: 1rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem 1rem;
@@ -77,9 +79,52 @@
   margin: 0.5rem 0;
 }
 
-/* The sheet */
-.mer .tx-sheet-head {
-  margin-bottom: 0.3rem;
+/* Ranked rows: wider than their text so the lift and the ring have room, with a chevron like a
+   shop's name in the transactions table. .cat-row itself is shared with Month. */
+.mer-row {
+  width: calc(100% + 1.2rem);
+  margin: 0 -0.6rem;
+  padding: 0.75rem 0.6rem;
+  border-radius: var(--r-row);
+}
+
+.mer-row .cat-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@media (hover: hover) {
+  .mer-row:hover {
+    background: var(--raised);
+    box-shadow: var(--raise-sm);
+  }
+}
+
+/* The sheet: modal (MerchantSheet makes the page inert and stops it scrolling), full height from
+   the first frame, no ring on the sheet itself (focus is only parked there), and a pinned header. */
+.scrim:has(> .mer) {
+  overscroll-behavior: contain;
+}
+
+.sheet.mer {
+  min-height: min(28rem, 88svh);
+  overscroll-behavior: contain;
+  scroll-padding-top: 4.5rem;
+}
+
+.sheet.mer:focus {
+  outline: none;
+}
+
+.sheet.mer .tx-sheet-head {
+  position: sticky;
+  top: -1.3rem; /* the sheet's own top padding, so it pins at the sheet's edge */
+  z-index: 1;
+  margin: -1.3rem -1.25rem 0.3rem;
+  padding: 1.3rem 1.25rem 0.6rem;
+  background: var(--card);
+  box-shadow: 0 1px 0 var(--line);
 }
 
 .mer h2 {

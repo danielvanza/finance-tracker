@@ -182,7 +182,7 @@
 }
 
 .setup-start-day {
-  width: 6rem;
+  width: 6.5rem;
 }
 
 .setup-start .setup-saved,
@@ -198,6 +198,7 @@
 .setup-example strong {
   color: var(--ink);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Wide enough for one line: the name shares it with the controls and the detail runs full width beneath. */
@@ -288,6 +289,17 @@
   .setup-sections > :nth-child(n + 4) {
     grid-column: 3;
     grid-row: auto;
+  }
+}
+
+@media (min-width: 721px) {
+  .rules-table th:nth-child(2) { width: 40%; }
+  .rules-table th:nth-child(3) { width: 1%; }
+}
+
+@media (max-width: 720px) {
+  .setup-table-panel {
+    padding-inline: 0.3rem;
   }
 }
 
@@ -463,7 +475,12 @@
 /* Set-asides and the target split. */
 .setup-pay {
   grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
+}
+
+.setup-pay .setup-form-actions {
+  gap: 0.4rem 0.5rem;
 }
 
 .setup-split {
@@ -473,23 +490,51 @@
   align-items: flex-end;
 }
 
+/* On a phone the three percent fields share one row, a name takes a row of its own and Save fills the row beneath. */
 .setup-split .form-row {
-  width: 6.5rem;
+  width: calc((100% - 1.5rem) / 3);
 }
 
 .setup-split .setup-own-name {
-  flex: 1 1 9rem;
+  flex: 1 1 100%;
   width: auto;
+}
+
+.setup-split > .btn {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 560px) {
+  .setup-split .form-row {
+    width: 6.5rem;
+  }
+
+  .setup-split .setup-own-name {
+    flex: 1 1 9rem;
+    width: auto;
+  }
+
+  .setup-split > .btn {
+    flex: 0 0 auto;
+  }
 }
 
 /* What the category counts as: a fixed, narrow select, so the name gives way first and the row never spills. */
 .setup-cat .setup-type {
-  flex: 0 1 6.75rem;
+  flex: 0 1 5.25rem;
   width: auto;
-  min-width: 4.25rem;
+  min-width: 3.75rem;
+  min-height: 2.25rem;
   padding-block: 0.25rem;
-  padding-inline: 0.5rem 1.5rem;
+  padding-inline: 0.5rem 1.4rem;
+  background-position: calc(100% - 0.85rem) 55%, calc(100% - 0.55rem) 55%;
   font-size: 0.8125rem;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  .setup-cat .setup-type {
+    min-height: var(--tap);
+  }
 }
 
 /* Rules > Always asked about: shops whose payments are never sorted by themselves. */

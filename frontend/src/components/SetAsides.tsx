@@ -115,7 +115,7 @@ export default function SetAsides() {
                   Mark as paid
                 </button>
               )}
-              <button type="button" className="btn setup-icon" aria-label={`Delete ${bill.name}`}
+              <button type="button" className="btn btn-sm btn-danger setup-icon" aria-label={`Delete ${bill.name}`}
                 onClick={() => window.confirm(`Delete the set-aside "${bill.name}"?`) && run(() => api.deleteSetAside(bill.id))}>
                 <Trash2 size={15} aria-hidden="true" />
               </button>

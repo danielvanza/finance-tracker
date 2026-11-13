@@ -5,3 +5,6 @@
 - **Rule suggestions** need the same description put in one category by hand at least 3 times with no rule covering it; dismissals live in `localStorage`.
 - **What a category counts as** is a select on its row in Categories. A category in use asks first (a browser confirm), then sends `force`.
 - **Set-asides** reuse the `.setup-adj` row. "Mark as paid" opens a picker of money that went out, newest first. **Target split** is three numbers that must add up to 100; Save is off until they do.
+- **Row controls match their row.** A category's type select is 2.25rem tall (`--tap` on touch) and 5.25rem wide so names keep room; a set-aside's delete is `btn btn-sm btn-danger setup-icon`, quiet until hover, like Rules and Categories.
+- **Rules table on desktop** gives the category column 40% so names stay on one line; on a phone the table panel's side padding is 0.3rem so rows sit on the inset of the other Setup panels.
+- **Small forms (`.setup-split`)**: on a phone the three percent fields share one row (a third each), own-account names take a row each, and Save fills the row; from 560px they sit in one line. Number fields are 6.5rem everywhere. The "which payment" form is one column with Paid and Cancel in a row under the select.

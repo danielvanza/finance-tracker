@@ -13,6 +13,33 @@
   margin-top: 1.1rem;
 }
 
+/* One row of three equal chips on a phone; a chip never gets narrower than its words, so larger text wraps
+   them instead of clipping. Under 380px Print sits above the other two. */
+@media (max-width: 719.98px) {
+  .rep-actions {
+    gap: 0.5rem;
+  }
+
+  .rep-actions .btn {
+    flex: 1 1 0;
+    min-width: max-content;
+    padding: 0 0.4rem;
+  }
+}
+
+@media (max-width: 379.98px) {
+  .rep-actions .btn-primary {
+    flex-basis: 100%;
+  }
+}
+
+/* The label also carries the year, so the day note goes before Month's 380px. */
+@media (max-width: 430px) {
+  .report .month-day {
+    display: none;
+  }
+}
+
 .rep-live {
   position: absolute;
   width: 1px;
@@ -43,6 +70,10 @@
 
 .rep-cols {
   display: none;
+}
+
+.rep-group {
+  container-type: inline-size;
 }
 
 .rep-group ul,
@@ -92,7 +123,8 @@
 
 .rep-moved-grid {
   display: grid;
-  gap: 1.1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1.1rem 1.4rem;
 }
 
 .rep-foot {
@@ -101,7 +133,8 @@
   color: var(--quiet);
 }
 
-@media (min-width: 600px) {
+/* The columns appear when the panel is wide enough for them, whatever the viewport or the text size. */
+@container (min-width: 32rem) {
   .rep-cols,
   .rep-row {
     grid-template-columns: minmax(0, 1fr) 5.2rem 6.5rem 7rem;
@@ -130,16 +163,6 @@
 
   .rep-delta {
     text-align: right;
-  }
-
-  .rep-moved-grid {
-    grid-template-columns: 1fr 1fr;
-    column-gap: 1.4rem;
-  }
-
-  .rep-mrow {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'name spent' 'name plan';
   }
 }
 

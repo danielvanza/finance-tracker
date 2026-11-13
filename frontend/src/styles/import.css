@@ -6,6 +6,7 @@
 
 .import-steps {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.2rem;
   max-width: 72rem;
   margin-bottom: 1.2rem;
@@ -123,6 +124,23 @@
   height: 12rem;
 }
 
+/* The panels below the chooser stop where it stops, and a new one is scrolled to 1rem from the top, clear of the tab slab on a phone. */
+.import-preview,
+.import-alert,
+.import-done {
+  max-width: 72rem;
+}
+
+.import-preview,
+.import-alert {
+  scroll-margin-top: 1rem;
+}
+
+/* The shared banner stops at 40rem; here it runs as wide as the panels around it. */
+.import-alert .notice {
+  max-width: none;
+}
+
 /* Preview: the confirm sits above the rows, which can run to hundreds. */
 .import-preview {
   padding: 1.15rem 0.75rem;
@@ -183,6 +201,7 @@
 
 .import-fold > summary:focus-visible,
 .import-more > summary:focus-visible,
+.import-preview h2:focus-visible,
 .import-done-label:focus-visible {
   outline: 2px solid var(--shu);
   outline-offset: 3px;
@@ -207,10 +226,6 @@
 }
 
 /* What happened: the sentence, the one line that needs a look, the button, the count folded away. */
-.import-done {
-  max-width: 36rem;
-}
-
 .import-done > * + * {
   margin-top: 0.9rem;
 }
@@ -355,13 +370,34 @@
   .import-preview-head .btn {
     width: auto;
   }
+
+  /* Both tables share their columns, so the rows already in line up under the new ones. */
+  .table.card-table.import-table {
+    display: table;
+    table-layout: fixed;
+    overflow: visible;
+  }
+
+  .import-table :is(th, td):nth-child(1) {
+    width: 5.75rem;
+  }
+
+  .import-table :is(th, td):nth-child(3) {
+    width: 8rem;
+  }
+
+  .import-table :is(th, td):nth-child(4) {
+    width: 6.5rem;
+  }
+
+  /* Head and fold start at the text edge of the cells (0.75rem of cell padding). */
+  .import-preview-head,
+  .import-fold > summary {
+    padding-inline: 0.75rem;
+  }
 }
 
 @media (min-width: 900px) {
-  .import-steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .import-path ol {
     grid-template-columns: repeat(var(--steps), minmax(0, 1fr));
     gap: 0.45rem;
@@ -399,7 +435,10 @@
   .import-table > tbody > tr {
     grid-template-columns: 1fr auto;
     grid-template-areas: "desc amount" "date status";
+    border-top: 1px solid var(--line);
   }
+  .import-table > tbody > tr:first-child { border-top: 0; }
+  .import-table > tbody > tr > td { border-top: 0; }
   .import-table > tbody > tr > td:nth-child(1) { grid-area: date; }
   .import-table > tbody > tr > td:nth-child(2) { grid-area: desc; overflow-wrap: anywhere; }
   .import-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }

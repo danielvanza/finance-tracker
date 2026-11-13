@@ -10,10 +10,15 @@ import Catchup from './import/Catchup'
 import Preview from './import/Preview'
 import Result from './import/Result'
 import { BANKS } from './import/bank'
+import { showPanel } from './import/panel'
 import { catchupPath, catchupProgress } from './import/catchup'
 
-// A server rejection already says why the file could not be used and what is accepted.
-const describeFailure = (e: unknown) => describeApiError(e)
+// A server rejection already says why the file could not be used and what is accepted: show that alone.
+const describeFailure = (e: unknown) => {
+  const text = describeApiError(e)
+  if (/^Server error \d+\.$/.test(text)) return 'The server could not read that file. Try again in a moment.'
+  return text.replace(/^Server error \d+: /, '')
+}
 
 export default function Import() {
   const qc = useQueryClient()
@@ -25,6 +30,7 @@ export default function Import() {
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
   const resultHeading = useRef<HTMLHeadingElement>(null)
+  const alertBox = useRef<HTMLDivElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const focusFileNext = useRef(false)
 
@@ -45,8 +51,13 @@ export default function Import() {
     }
   }, [result])
 
+  useEffect(() => {
+    if (error) showPanel(alertBox.current)
+  }, [error])
+
   const choose = (next: File | null) => {
     if (!next && fileInput.current) fileInput.current.value = ''
+    setError('')
     setFile(next)
     setPreview(null)
     setResult(null)
@@ -178,7 +189,11 @@ export default function Import() {
         </div>
       )}
 
-      {error && <ErrorBanner title="Couldn't process that file" message={error} />}
+      {error && (
+        <div ref={alertBox} className="import-alert">
+          <ErrorBanner title="Couldn't process that file" message={error} onDismiss={() => setError('')} />
+        </div>
+      )}
 
       {busy === 'preview' && !preview && (
         <span className="skeleton import-skeleton" aria-busy="true" aria-label="Reading the file" />

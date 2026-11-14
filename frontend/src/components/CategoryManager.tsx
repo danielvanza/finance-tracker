@@ -15,6 +15,7 @@ export default function CategoryManager() {
   })
   const categories = categoriesQuery.data ?? []
 
+  const [listOpen, setListOpen] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState('needs')
@@ -126,10 +127,15 @@ export default function CategoryManager() {
       {categoriesQuery.isError && <ErrorBanner message={describeApiError(categoriesQuery.error)} />}
 
       {categoriesQuery.isSuccess && (
-        <div className="panel setup-panel">
+        <div className={`panel setup-panel cat-panel${listOpen ? ' is-open' : ''}`}>
           <p className="setup-note">Drag to reorder. A category can only be deleted once nothing uses it.</p>
 
           {categories.length === 0 && <p className="empty">No categories yet.</p>}
+          {categories.length > 0 && (
+            <button type="button" className="btn cat-toggle" aria-expanded={listOpen} onClick={() => setListOpen(v => !v)}>
+              {listOpen ? 'Hide categories' : `Show all ${categories.length} categories`}
+            </button>
+          )}
 
           {groups.map(group => (
             <div className="setup-group" key={group.type}>

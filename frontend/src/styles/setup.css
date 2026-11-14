@@ -237,6 +237,8 @@
 }
 
 .setup-example {
+  flex: 1 1 12rem;
+  align-self: center;
   font-size: 0.85rem;
   color: var(--text);
 }
@@ -449,6 +451,78 @@
 
 .bud-group ul {
   list-style: none;
+}
+
+/* A group folds to one line: name, how many, planned total. */
+.bud-fold {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: var(--tap);
+  margin-block: calc((2.25rem - var(--tap)) / 2);
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bud-fold span:first-of-type {
+  flex: 1;
+}
+
+.bud-fold small {
+  font: 400 0.78rem/1.2 var(--sans);
+  color: var(--quiet);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.bud-fold .num {
+  font-size: 0.85rem;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+.bud-fold svg {
+  flex: none;
+  transition: transform 0.16s;
+}
+
+.bud-fold[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bud-fold svg { transition: none; }
+}
+
+/* Rules: the rest of the list unfolds under the first six. */
+.rules-more {
+  margin: 0.4rem 0.5rem 0.5rem;
+}
+
+/* Categories: below 1100px the list opens from one row; beside the other sections it is always shown. */
+.cat-toggle {
+  display: none;
+}
+
+@media (max-width: 1099px) {
+  .cat-toggle {
+    display: inline-flex;
+  }
+
+  .cat-panel:not(.is-open) .setup-group,
+  .cat-panel:not(.is-open) .setup-add-form,
+  .cat-panel:not(.is-open) > .btn:not(.cat-toggle) {
+    display: none;
+  }
 }
 
 .bud-row {

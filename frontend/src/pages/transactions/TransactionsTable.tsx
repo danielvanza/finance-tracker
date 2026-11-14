@@ -24,7 +24,7 @@ interface TransactionsTableProps {
 
 // Phone cards in transactions.css place these columns by position: keep the two in step. Select
 // mode puts a tick column first, which moves every other column up by one (the .has-pick rules).
-const COLUMNS = ['Date', 'Description', 'Amount', 'Category', 'Source', 'AI conf.', 'Status', '']
+const COLUMNS = ['Date', 'Description', 'Amount', 'Category', 'Sorted', '']
 
 const confidenceClass = (c: number) => (c >= 0.8 ? 'tx-conf-high' : c >= 0.5 ? '' : 'tx-conf-low')
 
@@ -154,28 +154,25 @@ export default function TransactionsTable({ transactions, categories, onCategory
                   />
                 )}
               </td>
-              <td><span className="lab">{tx.source}</span></td>
               <td>
-                {tx.categorised_by === 'ai' && tx.ai_confidence != null ? (
-                  <span className={`num ${confidenceClass(tx.ai_confidence)}`}>
-                    {Math.round(tx.ai_confidence * 100)}%
-                  </span>
-                ) : (
-                  <span className="muted">—</span>
-                )}
-              </td>
-              <td>
-                {tx.confirmed ? (
-                  <span className="tx-status is-done">
-                    <Check size={12} aria-hidden="true" />
-                    {tx.categorised_by ?? 'confirmed'}
-                  </span>
-                ) : (
-                  <span className="tx-status is-review">
-                    <CircleAlert size={12} aria-hidden="true" />
-                    review
-                  </span>
-                )}
+                <span className="tx-sorted">
+                  {tx.confirmed ? (
+                    <span className="tx-status is-done">
+                      <Check size={12} aria-hidden="true" />
+                      {tx.categorised_by ?? 'confirmed'}
+                      {tx.categorised_by === 'ai' && tx.ai_confidence != null && (
+                        <span className={`num tx-conf ${confidenceClass(tx.ai_confidence)}`}> {Math.round(tx.ai_confidence * 100)}%</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="tx-status is-review">
+                      <CircleAlert size={12} aria-hidden="true" />
+                      review
+                    </span>
+                  )}
+                  {/* The source, unless it only repeats "manual". */}
+                  {!(tx.source === 'manual' && tx.categorised_by === 'manual') && <span className="tx-src lab">{tx.source}</span>}
+                </span>
               </td>
               <td className="right tx-row-actions">
                 <button
@@ -203,7 +200,7 @@ export default function TransactionsTable({ transactions, categories, onCategory
           ))}
           {transactions.length === 0 && (
             <tr>
-              <td colSpan={selecting ? 9 : 8} className="empty">
+              <td colSpan={selecting ? 7 : 6} className="empty">
                 {filtered ? (
                   <>
                     No transactions match these filters.

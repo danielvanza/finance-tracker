@@ -13,6 +13,7 @@ import { monthName } from './trends/months'
 import { useRem } from './trends/useRem'
 
 const MONTHS_SHOWN = 6
+const CATEGORIES_SHOWN = 5 // the rest, with Other, sit behind a disclosure
 const OTHER_BELOW = 0.02 // categories under 2% of spending fold into "Other"
 
 // Fixed order, one colour per kind of spending, on every chart and in every month.
@@ -226,8 +227,8 @@ function LastMonths({ rows }: { rows: Row[] }) {
             ))}
           </ul>
         )}
-        <Legend kinds={SERIES.map(s => s.kind)} />
         <SpendingChart rows={shown} compact={compact} onResize={setPlotWidth} />
+        <Legend kinds={SERIES.map(s => s.kind)} />
         {rows.some(r => r.hasData && !r.finished) && <p className="trend-note">Paler months are not finished yet.</p>}
         <Figures rows={rows} />
       </div>
@@ -265,6 +266,23 @@ function Figures({ rows }: { rows: Row[] }) {
   )
 }
 
+function CategoryList({ items, largest }: { items: CategoryItem[]; largest: number }) {
+  return (
+    <ul className="trend-cats">
+      {items.map(item => (
+        <li key={item.name}>
+          <span className="trend-cat-name">{item.name}</span>
+          <span className="num">{formatCents(item.value)}</span>
+          <span className="num muted trend-cat-pct">{item.pct}%</span>
+          <span className="meter" aria-hidden="true">
+            <i className={`is-${item.kind}`} style={{ width: `${(item.value / largest) * 100}%` }} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Categories({ summary }: { summary: DashboardSummary }) {
   const items = categoryItems(summary)
   if (items.length === 0) return <p className="empty">No spending recorded for this month.</p>
@@ -276,18 +294,13 @@ function Categories({ summary }: { summary: DashboardSummary }) {
       <p className="trend-finding">{top.name} took the most: {Math.round(Number(top.pct))}% of the month's spending.</p>
       <p className="trend-note">Share of all spending · {items.length} categor{items.length === 1 ? 'y' : 'ies'}</p>
       <Legend kinds={kinds} />
-      <ul className="trend-cats">
-        {items.map(item => (
-          <li key={item.name}>
-            <span className="trend-cat-name">{item.name}</span>
-            <span className="num">{formatCents(item.value)}</span>
-            <span className="num muted trend-cat-pct">{item.pct}%</span>
-            <span className="meter" aria-hidden="true">
-              <i className={`is-${item.kind}`} style={{ width: `${(item.value / largest) * 100}%` }} />
-            </span>
-          </li>
-        ))}
-      </ul>
+      <CategoryList items={items.slice(0, CATEGORIES_SHOWN)} largest={largest} />
+      {items.length > CATEGORIES_SHOWN && (
+        <details className="trend-more">
+          <summary>{items.length - CATEGORIES_SHOWN} more categor{items.length - CATEGORIES_SHOWN === 1 ? 'y' : 'ies'}<ChevronDown size={16} aria-hidden="true" /></summary>
+          <CategoryList items={items.slice(CATEGORIES_SHOWN)} largest={largest} />
+        </details>
+      )}
     </>
   )
 }
@@ -335,8 +348,8 @@ export default function Trends() {
 
   return (
     <>
-      <div className="month-bar">
-        <span className="lab">{dayLabel(p.start_date)} – {dayLabel(p.end_date)}</span>
+      <div className="month-bar trend-bar">
+        <h1>Trends</h1>
         <div className="month-nav">
           <button type="button" className="btn" aria-label="Previous month" onClick={() => setPicked(shiftMonth(month, -1))}>
             <ChevronLeft size={16} aria-hidden="true" />
@@ -352,8 +365,7 @@ export default function Trends() {
           </button>
         </div>
       </div>
-
-      <h1>Trends</h1>
+      <span className="lab trend-range">{dayLabel(p.start_date)} – {dayLabel(p.end_date)}</span>
 
       {!anyData ? (
         <p className="empty">No months of spending yet. Bring in a file from a bank to see the trend.</p>

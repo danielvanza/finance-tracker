@@ -1,6 +1,8 @@
 # Trends
 - **Figures beside text** (amount and share, a delta) sit in wrapping flex rows with the text given at least 8rem; never fixed grid columns, which let the text go to zero at large text.
-- **Title to first heading is 21px, as in `.page-head`**: `.trends-grid` carries the 1.4rem top margin (the h1 is bare) and each column's first `.section` has none, so both columns start level. The phone's gap between stacked columns is the grid's `row-gap` (2.2rem), not a section margin.
+- **Title and arrows share one row, the date range sits under the title** (`.trend-bar` is Month's `.month-bar` with no bottom margin; `.trend-range` follows it). Range to first heading is 21px: `.trends-grid` carries the 1.4rem top margin and each column's first `.section` has none, so both columns start level. The phone's gap between stacked columns is the grid's `row-gap` (2.2rem).
+- **The chart's sentence leads**: 1.45rem; the movers and category sentences are 1.15rem.
+- **The legend sits under the chart** (above the paler-months note and Figures). **By category shows the five largest**; the rest, with Other, are behind an "N more categories" disclosure styled like Figures.
 - **The chart is compact** when the plot is narrower than 14rem: no axis, no series names, three-letter months, leading empty months dropped. Sizes are decided in rem via `useRem`, not px or breakpoints.
 - **The chart's right margin is 56px only while a series name is drawn beside the latest column** (some segment 12px or taller), 8px otherwise, so the grid reaches the panel text edge; `SpendingChart` reads what the chart drew.
 - **Tooltip rows are a grid** (swatch, name, right-aligned amount); the total row has no swatch and its name is indented to line up. Markup stays amount-then-name, ordered by CSS.

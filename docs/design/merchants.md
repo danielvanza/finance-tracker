@@ -8,3 +8,4 @@
 - **The header is pinned.** `.sheet.mer .tx-sheet-head` is sticky at `top: -1.3rem` (the sheet's own top padding; `top: 0` would pin it 1.3rem down) on `--card` with a `--line` hairline. `scroll-padding-top` keeps a focused control from hiding under it.
 - **Ranked rows are `.cat-row.mer-row`.** Rules for the row (wider than its text so the lift and ring have room, `--r-row`, `--raised` + `--raise-sm` lift on hover devices only, chevron after the amount) live on `.mer-row`; `.cat-row` is shared with Month.
 - **Merchants scrolls the switch up on a phone**, once the list is drawn (`scroll-margin-top` on `.mer-views`; smooth unless reduced motion). It goes only as far as the page's height allows: with few rows it stops short of the top, which still shows the list.
+- An existing rule's well (`.mer-rule.is-set`) puts the sentence left and "Change in Setup" right; the new-rule form well stays stacked.

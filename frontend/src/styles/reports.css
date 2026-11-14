@@ -13,23 +13,21 @@
   margin-top: 1.1rem;
 }
 
-/* One row of three equal chips on a phone; a chip never gets narrower than its words, so larger text wraps
-   them instead of clipping. Under 380px Print sits above the other two. */
+/* One row of three equal chips on a phone, never wrapped, down to 320px. */
 @media (max-width: 719.98px) {
   .rep-actions {
     gap: 0.5rem;
   }
 
+  .rep-actions {
+    flex-wrap: nowrap;
+  }
+
   .rep-actions .btn {
     flex: 1 1 0;
-    min-width: max-content;
+    min-width: 0;
     padding: 0 0.4rem;
-  }
-}
-
-@media (max-width: 379.98px) {
-  .rep-actions .btn-primary {
-    flex-basis: 100%;
+    gap: 0.3rem;
   }
 }
 
@@ -119,6 +117,52 @@
 
 .rep-mrow {
   grid-template-areas: 'name spent' 'name plan';
+}
+
+.rep-fold,
+.rep-quiet {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: var(--tap);
+  text-align: left;
+  color: inherit;
+}
+
+.rep-fold {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.rep-fold::after,
+.rep-quiet::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--quiet);
+}
+
+.rep-fold[aria-expanded='true']::after,
+.rep-quiet[aria-expanded='true']::after {
+  content: '\2212';
+}
+
+.rep-quiet {
+  justify-content: space-between;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--quiet);
+}
+
+.rep-quiet > span:first-child {
+  flex: 1;
+}
+
+.rep-quiet-list:not(.is-open),
+.rep-moved:not(.is-open) .rep-moved-grid {
+  display: none;
 }
 
 .rep-moved-grid {
@@ -325,6 +369,23 @@
   .report .meter i {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* The statement lists everything: the folds are screen-only. */
+  .report .rep-quiet {
+    display: none;
+  }
+
+  .report .rep-quiet-list:not(.is-open) {
+    display: block;
+  }
+
+  .report .rep-moved:not(.is-open) .rep-moved-grid {
+    display: grid;
+  }
+
+  .report .rep-fold::after {
+    content: none;
   }
 
   .rep-group,

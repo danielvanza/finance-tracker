@@ -112,7 +112,7 @@ describe('ReportPage', () => {
   it('says what moved, including a category with nothing this month', async () => {
     wire()
     show()
-    const moved = (await screen.findByRole('heading', { name: 'What moved' })).closest('section')!
+    const moved = (await screen.findByRole('heading', { name: 'What moved since September' })).closest('section')!
     expect(within(moved).getByRole('heading', { name: 'More than September' })).toBeInTheDocument()
     expect(within(moved).getByText('Transportation').closest('li')).toHaveTextContent('€58 more€94 to €152')
     expect(within(moved).getByRole('heading', { name: 'Less than September' })).toBeInTheDocument()

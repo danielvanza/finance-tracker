@@ -7,7 +7,7 @@ import { formatCents, formatEuros } from '../../money'
 import ErrorBanner, { describeApiError } from '../ErrorBanner'
 import { csvFilename, downloadCsv } from './csv'
 import {
-  buildReport, footerText, longDate, meterPct, moveRange, moveText, planText, reportText, shiftMonth, sinceText, spentText,
+  buildReport, footerText, isQuiet, longDate, meterPct, moveRange, moveText, planText, reportText, shiftMonth, sinceText, spentText,
 } from './model'
 import type { CsvTransaction, Report, ReportGroup } from './types'
 import '../../styles/reports.css'
@@ -19,6 +19,7 @@ import '../../styles/reports.css'
  */
 export default function ReportPage() {
   const [params, setParams] = useSearchParams()
+  const [moved, setMoved] = useState(false)
   const asked = params.get('month') ?? undefined
   const previous = asked ? shiftMonth(asked, -1) : undefined
 
@@ -119,9 +120,13 @@ export default function ReportPage() {
       )}
 
       {report.compare && (report.more.length > 0 || report.less.length > 0) && (
-        <section className="section rep-moved">
-          <h2>What moved</h2>
-          <div className="panel rep-moved-grid">
+        <section className={`section rep-moved${moved ? ' is-open' : ''}`}>
+          <h2>
+            <button type="button" className="rep-fold" aria-expanded={moved} aria-controls="rep-moved-grid" onClick={() => setMoved(o => !o)}>
+              What moved since {report.compare.long}
+            </button>
+          </h2>
+          <div className="panel rep-moved-grid" id="rep-moved-grid">
             {report.more.length > 0 && <Moves title={`More than ${report.compare.long}`} moves={report.more} />}
             {report.less.length > 0 && <Moves title={`Less than ${report.compare.long}`} moves={report.less} />}
           </div>
@@ -188,6 +193,18 @@ function Actions({ report, rows }: { report: Report; rows: readonly CsvTransacti
 }
 
 function Group({ group, since }: { group: ReportGroup; since: string | null }) {
+  const [open, setOpen] = useState(false)
+  const quiet = group.rows.filter(isQuiet)
+  const fold = quiet.length > 1
+  const row = (r: ReportGroup['rows'][number], hidden: boolean) => (
+    <li className={`rep-row${hidden ? ' is-quiet' : ''}`} key={r.id}>
+      <span className="rep-name">{r.name}</span>
+      <span className="rep-spent num">{spentText(r)}</span>
+      <span className="rep-plan num">{planText(r)}</span>
+      <span className="rep-delta num">{since ? sinceText(r, since) : ''}</span>
+    </li>
+  )
+  const live = fold ? group.rows.filter(r => !isQuiet(r)) : group.rows
   return (
     <section className="panel rep-group" aria-label={group.label}>
       <h3 className="rep-ghead">
@@ -198,15 +215,19 @@ function Group({ group, since }: { group: ReportGroup; since: string | null }) {
         <span>Category</span><span>Spent</span><span>Plan</span><span>{since ? `Since ${since}` : ''}</span>
       </div>
       <ul>
-        {group.rows.map(r => (
-          <li className="rep-row" key={r.id}>
-            <span className="rep-name">{r.name}</span>
-            <span className="rep-spent num">{spentText(r)}</span>
-            <span className="rep-plan num">{planText(r)}</span>
-            <span className="rep-delta num">{since ? sinceText(r, since) : ''}</span>
-          </li>
-        ))}
+        {live.map(r => row(r, false))}
       </ul>
+      {fold && (
+        <>
+          <button type="button" className="rep-quiet" aria-expanded={open} aria-controls={`rep-quiet-${group.kind}`} onClick={() => setOpen(o => !o)}>
+            <span>Nothing spent in {quiet.length} categories</span>
+            <span className="num">{formatEuros(quiet.reduce((a, r) => a + r.plan, 0))} planned</span>
+          </button>
+          <ul id={`rep-quiet-${group.kind}`} className={`rep-quiet-list${open ? ' is-open' : ''}`}>
+            {quiet.map(r => row(r, true))}
+          </ul>
+        </>
+      )}
     </section>
   )
 }

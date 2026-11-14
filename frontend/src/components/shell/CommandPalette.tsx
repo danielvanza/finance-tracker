@@ -6,7 +6,7 @@ import { api } from '../../api'
 import { dayLabel } from '../../dates'
 import { formatCents } from '../../money'
 import { flipTheme } from '../../theme'
-import { PAGES, PLACES } from './keys'
+import { PAGES, PLACES, SHORTCUTS } from './keys'
 import './shell-palette.css'
 
 interface Item {
@@ -23,10 +23,11 @@ const MAX_TRANSACTIONS = 5
 const MAX_PLACES = 5
 
 /** Ctrl/Cmd-K: pages and actions, and (as you type) transactions and places such as settings, from anywhere. */
-export default function CommandPalette({ onClose, onAdd }: { onClose: () => void; onAdd: () => void }) {
+export default function CommandPalette({ onClose, onAdd, startHelp = false }: { onClose: () => void; onAdd: () => void; startHelp?: boolean }) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [hi, setHi] = useState(0)
+  const [help, setHelp] = useState(startHelp)
   const input = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLDivElement>(null)
 
@@ -59,6 +60,7 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
         ? [{ id: 'review', group: q ? 'Actions' : 'Do', label: `Review ${review} transaction${review === 1 ? '' : 's'}`, run: go('/transactions') }]
         : []),
       { id: 'theme', group: q ? 'Actions' : 'Do', label: night ? 'Switch to day' : 'Switch to night', run: () => void flipTheme(night ? 'night' : 'day') },
+      { id: 'help', group: q ? 'Actions' : 'Do', label: 'Keyboard shortcuts', hint: '?', run: () => setHelp(true) },
     ]
     if (!q) return [...pages, ...actions]
 
@@ -94,6 +96,7 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
 
   const choose = (item: Item | undefined) => {
     if (!item) return
+    if (item.id === 'help') return item.run()
     onClose()
     item.run()
   }
@@ -131,10 +134,21 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
             autoComplete="off"
             spellCheck={false}
             value={query}
-            onChange={e => { setQuery(e.target.value); setHi(0) }}
+            onChange={e => { setQuery(e.target.value); setHi(0); setHelp(false) }}
             onKeyDown={onKeyDown}
           />
         </div>
+        {help ? (
+          <div className="cs-list" id="pal-list">
+            <div className="cs-group lab" role="presentation">Keyboard shortcuts</div>
+            <dl className="pal-keys">
+              {SHORTCUTS.map(k => (
+                <div key={k.keys}><dt><kbd className="kbd">{k.keys}</kbd></dt><dd>{k.does}</dd></div>
+              ))}
+            </dl>
+            <p className="sub pal-keys-note">Single letters wait while you type or a sheet is open. Type to search again.</p>
+          </div>
+        ) : (
         <div className="cs-list" id="pal-list" role="listbox" aria-label="Results" ref={list}>
           {items.map((item, i) => {
             const header = item.group !== lastGroup
@@ -167,6 +181,7 @@ export default function CommandPalette({ onClose, onAdd }: { onClose: () => void
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   )

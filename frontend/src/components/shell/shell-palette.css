@@ -81,3 +81,32 @@
     border-radius: var(--r-card);
   }
 }
+
+/* Keyboard shortcuts: the keys on the left, what they do beside them. */
+.pal-keys {
+  margin: 0;
+}
+
+.pal-keys > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.pal-keys dt {
+  flex: none;
+  min-width: 6.5rem;
+}
+
+.pal-keys dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.pal-keys-note {
+  margin: 0.3rem 0.8rem 0.2rem;
+  font-size: 0.72rem;
+  color: var(--quiet);
+}

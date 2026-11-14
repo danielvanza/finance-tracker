@@ -141,8 +141,9 @@
   }
 }
 
-/* With Find and Add beside it the top row is full: the way back keeps its chevron only. */
-@media (max-width: 359.98px) {
+/* With Find and Add beside it the top row is full: the way back keeps its chevron only (every
+   screen under the side panel's). */
+@media (max-width: 1023.98px) {
   .back {
     justify-content: center;
     min-width: var(--tap);
@@ -151,6 +152,33 @@
 
   .back-label {
     display: none;
+  }
+}
+
+/* Large text on a phone (about 130% and up): the top row may wrap and the four tabs make two rows
+   of two, so no label overprints another; --bar-h is the slab's height (content and the chat button
+   clear it). */
+@media (max-width: 19em) {
+  .side {
+    flex-wrap: wrap;
+  }
+
+  :root:root {
+    --bar-h: 5.6rem;
+  }
+
+  .tabbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tabbar a {
+    height: 2.8rem;
+    letter-spacing: 0.06em;
+  }
+
+  .tabbar a::before {
+    inset: 0.25rem 0.3rem;
   }
 }
 
@@ -221,12 +249,18 @@
     justify-content: flex-start;
     gap: 1.4rem;
     padding: 2.1rem 1.1rem 1.6rem;
+    overflow-y: auto;
     border-radius: var(--r-card);
     box-shadow: var(--raise-lg);
   }
 
   /* One left edge: the brand sits on the tab labels, the way back on the tab chips, and the
      way back rests at the foot of the panel. */
+  /* At large text the panel scrolls inside, its rows keep their size. */
+  .side > * {
+    flex-shrink: 0;
+  }
+
   .side > .brand {
     align-self: flex-start;
     margin-left: 0.8rem;

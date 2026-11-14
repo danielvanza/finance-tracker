@@ -226,3 +226,34 @@ def test_money_is_integer_cents(ctx):
     for value in [body["due_cents"], body["expected_cents"], *[i["amount_cents"] for i in body["items"]]]:
         assert isinstance(value, int)
     assert body["items"][0]["amount_cents"] == 2999
+
+
+def _income(client, month=None):
+    from db import get_db  # noqa: F401 - the client already carries the override
+    return recurring_router.expected_income(month, client.app.dependency_overrides[get_db]())
+
+
+def test_a_salary_still_to_arrive_is_expected_income(ctx):
+    db, client = ctx
+    _monthly(db, "Salary ACME", 4200, [date(2026, 8, 12), date(2026, 9, 12), date(2026, 10, 12)], category="Salary")
+    _files_to_today(db)
+    body = _income(client)
+    assert body["expected_cents"] == 420000
+    assert [(i["name"], i["next_date"], i["amount_cents"]) for i in body["items"]] == [("Salary ACME", "2026-11-12", 420000)]
+    assert _get(client)["items"] == []  # an income is never a bill
+
+
+def test_a_salary_already_in_this_month_is_not_expected_again(ctx):
+    db, client = ctx
+    # 25 Oct is in the month that started 24 Oct, so the next one belongs to December's month
+    _monthly(db, "Salary ACME", 4200, [date(2026, 8, 25), date(2026, 9, 25), date(2026, 10, 25)], category="Salary")
+    _files_to_today(db)
+    assert _income(client)["expected_cents"] == 0
+
+
+def test_two_payments_or_refunds_are_not_a_regular_income(ctx):
+    db, client = ctx
+    _monthly(db, "Gift", 100, [date(2026, 9, 5), date(2026, 10, 5)], category="Salary")
+    _monthly(db, "Refunder", 20, [date(2026, 8, 5), date(2026, 9, 5), date(2026, 10, 5)], category="Salary", is_refund=True)
+    _files_to_today(db)
+    assert _income(client)["items"] == []

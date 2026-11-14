@@ -67,7 +67,7 @@
   .find-well span {
     flex: 1;
     min-width: 0;
-    line-height: 1.3;
+    line-height: 1.4;
     overflow: hidden;
     text-align: left;
     text-overflow: ellipsis;
@@ -90,5 +90,24 @@
 
   .add-row .kbd {
     margin-left: auto;
+  }
+}
+
+/* The key hints rest hidden in the side panel and show while the pointer or focus is in it. */
+@media (min-width: 1024px) {
+  .side .kbd {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .side:hover .kbd,
+  .side:focus-within .kbd {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side .kbd {
+    transition: none;
   }
 }

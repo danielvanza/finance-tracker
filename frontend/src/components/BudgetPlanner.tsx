@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronRight } from 'lucide-react'
 import { api } from '../api'
 import { centsToInputString, formatEuros, parseToCents } from '../money'
 import { dayLabel } from '../dates'
@@ -25,6 +26,7 @@ export default function BudgetPlanner() {
   const [saved, setSaved] = useState('')
   const [error, setError] = useState('')
   const [ahead, setAhead] = useState(false)
+  const [opened, setOpened] = useState<Record<string, boolean>>({})
 
   const paceQuery = useQuery({ queryKey: ['pace', 'current'], queryFn: () => api.getPace() })
   const pace = paceQuery.data
@@ -231,10 +233,19 @@ export default function BudgetPlanner() {
       {loaded && KINDS.map(k => {
         const group = values.filter(x => x.r.kind === k.kind)
         if (group.length === 0) return null
+        const isOpen = opened[k.kind] ?? group.some(x => x.v === null)
         return (
           <div className="bud-group" key={k.kind}>
-            <h3>{k.label}</h3>
-            <ul>
+            <h3>
+              <button type="button" className="bud-fold" aria-expanded={isOpen} aria-controls={`bud-list-${k.kind}`}
+                onClick={() => setOpened(o => ({ ...o, [k.kind]: !isOpen }))}>
+                <ChevronRight size={15} aria-hidden="true" />
+                <span>{k.label}</span>
+                <small>{group.length} {group.length === 1 ? 'category' : 'categories'}</small>
+                <span className="num">{formatEuros(kindTotal(k.kind))} planned</span>
+              </button>
+            </h3>
+            <ul id={`bud-list-${k.kind}`} hidden={!isOpen}>
               {group.map(({ r, v }) => {
                 const avg = averages.get(r.id)
                 const was = v !== null && v !== r.savedCents ? `was ${formatEuros(r.savedCents)}` : ''

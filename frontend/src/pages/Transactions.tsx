@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
 import { api } from '../api'
 import { formatCents } from '../money'
 import type { Transaction } from '../types'
 import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
-import AddTransactionModal from '../components/AddTransactionModal'
 import SplitModal from '../components/SplitModal'
 import ImportLink from '../components/ImportLink'
 import CsvChip from '../components/reports/CsvChip'
@@ -30,7 +28,6 @@ export default function Transactions() {
   const qc = useQueryClient()
   const [showReview, setShowReview] = useState(true)
   const [skippedIds, setSkippedIds] = useState<number[]>([])
-  const [showAdd, setShowAdd] = useState(false)
   const [splitTx, setSplitTx] = useState<Transaction | null>(null)
   const [actionError, setActionError] = useState('')
   const [view, setView] = useState<MerchantView>('transactions')
@@ -119,7 +116,11 @@ export default function Transactions() {
     return () => window.clearTimeout(timer)
   }, [note, noteHeld])
 
+  // After Confirm or Skip the next card takes focus on its category, so the keyboard carries on.
+  const focusNext = useRef(false)
+
   const handleConfirm = async (id: number, decision: ReviewDecision) => {
+    focusNext.current = true
     setActionError('')
     setNote(null)
     const queue = { queryKey: ['transactions', 'to-review'], queryFn: () => api.getTransactions({ confirmed: 'false' }) }
@@ -155,6 +156,7 @@ export default function Transactions() {
   }
 
   const handleSkip = (id: number) => {
+    focusNext.current = true
     setNote(null)
     setSkippedIds(prev => [...prev, id])
   }
@@ -268,16 +270,15 @@ export default function Transactions() {
       <div className="page-head">
         <div>
           <h1>Transactions</h1>
-          <p className="num">
-            {reviewCount == null ? '\u00a0' : reviewCount > 0 ? `${reviewCount} to review` : 'Nothing to review'}
-          </p>
+          {/* While the queue is open its header says the count; the line is back when it is closed. */}
+          {!reviewVisible && (
+            <p className="num">
+              {reviewCount == null ? '\u00a0' : reviewCount > 0 ? `${reviewCount} to review` : 'Nothing to review'}
+            </p>
+          )}
         </div>
         <div className="page-actions">
           <ImportLink />
-          <button type="button" className="btn" onClick={() => setShowAdd(true)}>
-            <Plus size={15} aria-hidden="true" />
-            Add transaction
-          </button>
           <button type="button" className="btn" onClick={() => (selecting ? leaveSelecting() : setSelecting(true))}>
             {selecting ? 'Done' : 'Select'}
           </button>
@@ -333,6 +334,7 @@ export default function Transactions() {
                   categories={categories}
                   onConfirm={handleConfirm}
                   onSkip={() => handleSkip(reviewTx.id)}
+                  focusCategory={focusNext.current}
                 />
               </>
             )}
@@ -347,7 +349,7 @@ export default function Transactions() {
           </section>
         )}
 
-        <section className="tx-list" aria-label="All transactions">
+        <section className={`tx-list${view === 'transactions' ? ' is-transactions' : ''}`} aria-label="All transactions">
           {view === 'merchants' ? (
             <MerchantsView onView={setView} />
           ) : (
@@ -412,13 +414,6 @@ export default function Transactions() {
         />
       )}
 
-      {showAdd && (
-        <AddTransactionModal
-          categories={categories}
-          onClose={() => setShowAdd(false)}
-          onSaved={invalidate}
-        />
-      )}
       {splitTx && (
         <SplitModal
           transaction={splitTx}

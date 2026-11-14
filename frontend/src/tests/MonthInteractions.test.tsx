@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Month from '../pages/Month'
 import Categories from '../pages/month/Categories'
 import { api } from '../api'
-import type { BudgetRow, Pace } from '../types'
+import type { BudgetRow, FreeToSpend, Pace } from '../types'
 
 const spentPerDay = [99.35, 0, 1868.14, 92.5, 212.64, 14.69, 32.37, 40.64, 1217.99, 31.3, 109.67, 82.75, 0, 67.63, 57.86, 35.68]
 let sum = 0
@@ -20,7 +20,7 @@ const pace = (over: Partial<Pace> = {}): Pace => ({
   actual_cents: { needs: 237800, wants: 158500, savings: 30000 },
   spendable_plan_cents: 535000, spendable_actual_cents: daily[daily.length - 1].cumulative_cents,
   pace_delta_cents: 120200, daily, data_through: '2026-11-08',
-  last_import_by_bank: [{ source: 'ing', last_date: '2026-11-08' }], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
+  last_import_by_bank: [{ source: 'ing', last_date: '2026-11-08' }], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null, ...over,
 })
 
 vi.mock('../api', () => ({
@@ -48,21 +48,83 @@ const wrap = (ui: React.ReactElement, client = new QueryClient({ defaultOptions:
   </QueryClientProvider>
 )
 
-describe('Month verdict sentence', () => {
+const free = (over: Partial<FreeToSpend> = {}): FreeToSpend => ({
+  free_cents: 168800, per_day_cents: 16880, left_in_plan_cents: 168800, bills_cents: 0, bills: [], set_aside_cents: 0, set_asides: [],
+  money_in_cents: 550000, income_expected_cents: 0, income_expected: [], spent_cents: 246200, saved_cents: 0, to_save_cents: 40000,
+  cash_left_cents: 263800, outside_plan_cents: 95000, still_to_come_cents: 40000,
+  avg_day_cents: 4700, avg_day_days: 21, avg_day_spent_cents: 98800, days_ahead: 9, month_end_cents: 221000, ...over,
+})
+
+describe('Month top block: money left to spend', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('compares the daily allowance with ordinary days and says where the month ends', async () => {
-    vi.mocked(api.getPace).mockResolvedValue(pace())
-    render(wrap(<Month />))
-    expect(await screen.findByText(/About €\d+ a day keeps you in plan; ordinary days have cost about €\d+\. At this pace you will finish about €\d+ (over|under)\./)).toBeInTheDocument()
-    expect(screen.queryByText(/than planned by now/)).toBeNull()
+  it('leads with the money left and shows the average day, the month end and the daily budget', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
+    const { container } = render(wrap(<Month />))
+    const top = () => within(container.querySelector('.four') as HTMLElement)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Left to spend€2.638' })).toBeInTheDocument()
+    expect(screen.getByText('After €400 still to come, until payday, 23 Nov')).toBeInTheDocument()
+    expect(top().getByText('€47')).toBeInTheDocument()
+    expect(top().getByText('€2.210')).toBeInTheDocument()
+    expect(screen.getByText('left on 23 Nov')).toBeInTheDocument()
+    expect(top().getByText('€169')).toBeInTheDocument()
+    expect(screen.getByText('a day, for 15 days')).toBeInTheDocument()
+    expect(screen.queryByText(/free to spend/)).toBeNull()
   })
 
-  it('keeps the plain sentence for an earlier month', async () => {
-    vi.mocked(api.getPace).mockResolvedValue(pace({ day_number: null, days_left: null }))
+  it('keeps every part of the working in one fold, with the bills and the Not a fixed bill buttons', async () => {
+    const bills = [{ key: 'zilveren kruis', name: 'Zilveren Kruis', amount_cents: 26800, next_date: '2026-11-20', category_name: 'Insurance' }]
+    vi.mocked(api.getPace).mockResolvedValue(pace({
+      free: free({ bills, bills_cents: 26800, set_aside_cents: 4500, set_asides: [{ id: 1, name: 'Car insurance', monthly_cents: 4500 }],
+        income_expected_cents: 210000, income_expected: [{ key: 'salary', name: 'Salary', amount_cents: 210000, next_date: '2026-11-12' }] }),
+    }))
     render(wrap(<Month />))
-    expect(await screen.findByText(/spent of €5\.350 planned\./)).toBeInTheDocument()
-    expect(screen.queryByText(/At this pace/)).toBeNull()
+    const fold = (await screen.findByText('How this is worked out')).closest('details')!
+    for (const text of ['Money in so far', 'Still expected in', 'Spent so far', 'Fixed bills still to come', 'Set aside this month', 'Still to save, as planned']) {
+      expect(within(fold).getAllByText(text).length).toBeGreaterThan(0)
+    }
+    expect(within(fold).getByText(/Salary, 12 Nov/)).toBeInTheDocument()
+    expect(within(fold).getByRole('button', { name: 'Zilveren Kruis is not a fixed bill' })).toBeInTheDocument()
+    expect(within(fold).getByText('Car insurance')).toBeInTheDocument()
+    expect(fold.textContent).toContain('€988 over 21 ordinary days = €47')
+    expect(fold.textContent).toContain('over 15 days, today included = €169 a day')
+    expect(within(fold).getByText(/€950 of what is left to spend lies outside the plan/)).toBeInTheDocument()
+  })
+
+  it("early in the month the average day and the month end read Can't tell yet and say when", async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ day_number: 3, days_left: 28, free: free({ avg_day_cents: null, avg_day_days: null, avg_day_spent_cents: null, month_end_cents: null }) }))
+    const { container } = render(wrap(<Month />))
+    const top = () => within(container.querySelector('.four') as HTMLElement)
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.getAllByText("Can't tell yet")).toHaveLength(2)
+    expect(screen.getAllByText('shows after day 5')).toHaveLength(2)
+    expect(top().getByText('€2.638')).toBeInTheDocument()
+  })
+
+  it('says the plan is used up, and short, when the plan and the money run out', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({
+      free: free({ free_cents: -24000, per_day_cents: null, cash_left_cents: 71000, month_end_cents: -54000 }),
+    }))
+    const { container } = render(wrap(<Month />))
+    const top = () => within(container.querySelector('.four') as HTMLElement)
+    expect(await screen.findByText('plan used up')).toBeInTheDocument()
+    expect(top().getByText('€240 over')).toBeInTheDocument()
+    expect(top().getByText('€540 short')).toBeInTheDocument()
+    expect(screen.getByText('short on 23 Nov')).toBeInTheDocument()
+  })
+
+  it('shows a finished month as left over with its average day and the plan result', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({
+      day_number: null, days_left: null, money_in_cents: 700000, ordinary_day: { avg_cents: 7800, days: 25, spent_cents: 195000 },
+      actual_cents: { needs: 300000, wants: 78000, savings: 190000 }, spendable_actual_cents: 378000, spendable_plan_cents: 415000,
+    }))
+    const { container } = render(wrap(<Month />))
+    const top = () => within(container.querySelector('.four') as HTMLElement)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Left over€1.320' })).toBeInTheDocument()
+    expect(top().getByText('€78')).toBeInTheDocument()
+    expect(screen.getByText('€370 under')).toBeInTheDocument()
+    expect(screen.getByText('spent €3.780 of €4.150')).toBeInTheDocument()
+    expect(screen.queryByText('How this is worked out')).toBeNull()
   })
 })
 
@@ -105,16 +167,15 @@ describe('Month while another month loads', () => {
 describe('Month links to the payments behind its figures', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  const free = { free_cents: 244200, per_day_cents: 20300, left_in_plan_cents: 300000, bills_cents: 0, bills: [], set_aside_cents: 0, set_asides: [] }
 
   it('ends the caveat about waiting payments with a link to answer them, and shows neither without any', async () => {
-    vi.mocked(api.getPace).mockResolvedValue(pace({ free, to_review_in_month: 6 }))
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review_in_month: 6 }))
     const { unmount } = render(wrap(<Month />))
     const link = await screen.findByRole('link', { name: 'Answer them' })
     expect(link).toHaveAttribute('href', '/transactions')
     expect(link.closest('p')).toHaveTextContent('6 payments this month still wait for an answer and are not counted.')
     unmount()
-    vi.mocked(api.getPace).mockResolvedValue(pace({ free, to_review_in_month: 0 }))
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review_in_month: 0 }))
     render(wrap(<Month />))
     await screen.findByRole('heading', { level: 1 })
     expect(screen.queryByRole('link', { name: /Answer (it|them)/ })).toBeNull()

@@ -10,10 +10,11 @@ const G_MS = 1200
 export function useShellTools() {
   const navigate = useNavigate()
   const [finding, setFinding] = useState(false)
+  const [help, setHelp] = useState(false)
   const [adding, setAdding] = useState(false)
   const pendingG = useRef(0)
 
-  const openFind = useCallback(() => setFinding(true), [])
+  const openFind = useCallback(() => { setHelp(false); setFinding(true) }, [])
   const closeFind = useCallback(() => setFinding(false), [])
   const openAdd = useCallback(() => setAdding(true), [])
   const closeAdd = useCallback(() => setAdding(false), [])
@@ -23,6 +24,7 @@ export function useShellTools() {
       if (e.isComposing || e.repeat) return
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        setHelp(false)
         setFinding(open => (open ? false : !dialogOpen()))
         return
       }
@@ -38,6 +40,12 @@ export function useShellTools() {
         }
       }
       pendingG.current = key === 'g' ? Date.now() : 0
+      if (e.key === '?') {
+        e.preventDefault()
+        setHelp(true)
+        setFinding(true)
+        return
+      }
       if (key === 'n') {
         e.preventDefault()
         setAdding(true)
@@ -49,7 +57,7 @@ export function useShellTools() {
 
   const overlays = (
     <>
-      {finding && <CommandPalette onClose={closeFind} onAdd={openAdd} />}
+      {finding && <CommandPalette startHelp={help} onClose={closeFind} onAdd={openAdd} />}
       <AddHost open={adding} onClose={closeAdd} />
     </>
   )

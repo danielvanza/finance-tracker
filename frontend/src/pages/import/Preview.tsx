@@ -18,7 +18,7 @@ function coverage(rows: ImportPreviewRow[]) {
   return a.split(' ')[1] === b.split(' ')[1] ? `${a.split(' ')[0]} – ${b}` : `${a} – ${b}`
 }
 
-function Rows({ rows, label }: { rows: ImportPreviewRow[]; label: string }) {
+function Rows({ rows }: { rows: ImportPreviewRow[] }) {
   return (
     <table className="table card-table import-table">
       <thead>
@@ -26,7 +26,6 @@ function Rows({ rows, label }: { rows: ImportPreviewRow[]; label: string }) {
           <th>Date</th>
           <th>Description</th>
           <th className="right">Amount</th>
-          <th>Status</th>
         </tr>
       </thead>
       <tbody>
@@ -37,7 +36,6 @@ function Rows({ rows, label }: { rows: ImportPreviewRow[]; label: string }) {
             <td className={`right strong num import-amount${r.amount_cents < 0 ? '' : ' is-in'}`}>
               {r.amount_cents < 0 ? '-' : '+'}{formatCents(Math.abs(r.amount_cents))}
             </td>
-            <td className="import-status">{label}</td>
           </tr>
         ))}
       </tbody>
@@ -132,11 +130,11 @@ export default function Preview({ preview, source, file, pace, busy, loading, on
         </div>
         {action}
       </div>
-      {fresh.length > 0 && <Rows rows={fresh} label="new" />}
+      {fresh.length > 0 && <Rows rows={fresh} />}
       {seen.length > 0 && (
         <details className="import-fold">
           <summary>Show the {plural(seen.length, 'row')} already in</summary>
-          <Rows rows={seen} label="already in" />
+          <Rows rows={seen} />
         </details>
       )}
     </section>

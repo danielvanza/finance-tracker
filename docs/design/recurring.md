@@ -4,3 +4,4 @@
 - The link row and sheet hide themselves while loading, on error, when nothing repeats, when bank files are behind, and for a month that has ended. There is no dismiss action.
 - **Not a fixed bill.** An open row offers it; the payment then sits under "Not counted as fixed bills" and is left out of "still to pay" and of free to spend, until counted again.
 - The link row is one of the `.rep-links` rows on Month (height and gap are set in `month.css`); `recurring.css` styles only its two lines. Never margin it against its siblings.
+- Paid rows are one line (name, date, amount) with `.rc-when` placed by number in column 2; the other states keep the two-line grid.

@@ -28,6 +28,14 @@ export const PLACES = [
 
 export const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform) ? '⌘' : 'Ctrl'
 
+/** What the keys do, as the palette's "Keyboard shortcuts" lists it; useShellTools.tsx is where they are handled. */
+export const SHORTCUTS = [
+  { keys: `${MOD} K`, does: 'Find a page, a transaction or an action' },
+  { keys: 'N', does: 'Add a transaction' },
+  ...PAGES.map(p => ({ keys: `G then ${p.key.toUpperCase()}`, does: `Go to ${p.label}` })),
+  { keys: '?', does: 'Show these shortcuts' },
+]
+
 /** Single-letter shortcuts stay out of the way of someone typing. */
 export function isTyping(target: EventTarget | null) {
   return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')

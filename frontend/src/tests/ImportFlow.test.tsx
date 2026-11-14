@@ -71,7 +71,6 @@ describe('the preview', () => {
     const fold = screen.getByText('Show the 1 row already in').closest('details')!
     expect(fold).not.toHaveAttribute('open')
     expect(within(fold).getByText('Spotify')).toBeInTheDocument()
-    expect(within(fold).getByText('already in')).toBeInTheDocument()
     // Amounts never wrap after the minus.
     expect(screen.getAllByText(/^-€|^\+€/).every(c => c.classList.contains('import-amount'))).toBe(true)
     expect(api.previewImport).toHaveBeenLastCalledWith(expect.any(File))
@@ -150,7 +149,6 @@ describe('picking up after a gap', () => {
     const steps = within(screen.getByRole('list')).getAllByRole('listitem')
     expect(steps.map(li => li.textContent)).toEqual(['1ING' + 'to 28 Oct', '2Review12 to look at', '3The monthwhere you stand'])
     expect(steps[0]).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByText(/One bank stops before today/)).toBeInTheDocument()
   })
 
   it('moves on to the review once the file is in', async () => {

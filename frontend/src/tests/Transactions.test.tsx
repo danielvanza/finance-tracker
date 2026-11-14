@@ -260,7 +260,7 @@ describe('Transactions', () => {
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
       render(<QueryClientProvider client={qc}><MemoryRouter><Transactions /></MemoryRouter></QueryClientProvider>)
       const user = userEvent.setup()
-      await screen.findByText('2 to review')
+      await screen.findByText('2 remaining')
       await user.click(await screen.findByRole('button', { name: /Select category/ }))
       await user.click(await screen.findByRole('option', { name: 'Utilities' }))
       await user.click(screen.getByRole('button', { name: 'Confirm category' }))

@@ -152,6 +152,9 @@ export function sinceText(r: ReportRow, short: string) {
   return `${formatEuros(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'}`
 }
 
+/** Nothing spent here and nothing different from the month before: the rows the report folds into one line. */
+export const isQuiet = (r: ReportRow) => r.spent < NEGLIGIBLE && (r.before === null || r.before < NEGLIGIBLE)
+
 export const moveText = (m: ReportMove) => `${formatEuros(Math.abs(m.diff))} ${m.diff > 0 ? 'more' : 'less'}`
 
 export const moveRange = (m: ReportMove) => `${formatEuros(m.before)} to ${formatEuros(m.spent)}`

@@ -217,7 +217,7 @@ export default function MerchantSheet({ merchantKey, name, onClose }: { merchant
         )}
 
         {rule ? (
-          <div className="well mer-rule" role="group" aria-label="Rule">
+          <div className="well mer-rule is-set" role="group" aria-label="Rule">
             <span className="lab">Rule</span>
             <p className="mer-rule-text">Anything with “{rule.pattern}” goes to <strong>{rule.category_name}</strong>.</p>
             {saved && <p className="tx-hint" role="status">{saved}</p>}

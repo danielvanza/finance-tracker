@@ -67,7 +67,7 @@ export default function Settings() {
 
       {settings && (
         <div className="panel setup-panel">
-          <p className="setup-note">The day the salary arrives. Each financial month starts here.</p>
+          <p className="setup-note">The day the salary arrives; each financial month starts here. Between 1 and 28. Changing it redefines every past financial month too.</p>
 
           <div className="setup-start">
             <div className="form-row setup-start-day">
@@ -87,15 +87,13 @@ export default function Settings() {
             </button>
             {saved && <span className="setup-saved">Saved</span>}
             {saveError && <span role="alert" className="setup-error">{saveError}</span>}
+            {exampleText && (
+              <p className="setup-example">
+                Example period for {now.toLocaleString('en', { month: 'long', year: 'numeric' })}: <strong className="num">{exampleText}</strong>
+              </p>
+            )}
           </div>
 
-          {exampleText && (
-            <p className="well setup-example">
-              Example period for {now.toLocaleString('en', { month: 'long', year: 'numeric' })}: <strong className="num">{exampleText}</strong>
-            </p>
-          )}
-
-          <p className="setup-note">Between 1 and 28. Changing it redefines every past financial month too.</p>
         </div>
       )}
     </section>

@@ -58,6 +58,21 @@ export interface FreeToSpend {
   bills: Array<{ key: string; name: string; amount_cents: number; next_date: string | null; category_name: string }>
   set_aside_cents: number
   set_asides: Array<{ id: number; name: string; monthly_cents: number }>
+  // The money's view: in + still expected in - out - saved - still to save - bills - set-asides.
+  money_in_cents: number
+  income_expected_cents: number
+  income_expected: Array<{ key: string; name: string; amount_cents: number; next_date: string | null }>
+  spent_cents: number
+  saved_cents: number
+  to_save_cents: number
+  cash_left_cents: number
+  outside_plan_cents: number           // cash_left less free: income above the plan
+  still_to_come_cents: number          // bills + set-asides + still to save
+  avg_day_cents: number | null         // null: too early, or no ordinary day yet
+  avg_day_days: number | null
+  avg_day_spent_cents: number | null
+  days_ahead: number                   // days the average is carried over, today's part day included only if unseen
+  month_end_cents: number | null
 }
 
 export interface Category {
@@ -119,6 +134,8 @@ export interface Pace {
   spendable_plan_cents: number
   spendable_actual_cents: number
   free: FreeToSpend | null            // the current month with bank data only
+  money_in_cents: number              // confirmed income in the month
+  ordinary_day: { avg_cents: number; days: number; spent_cents: number } | null  // finished days only
   newest_bank_date: string | null
   pace_delta_cents: number | null
   daily: Array<{ date: string; cumulative_cents: number }>

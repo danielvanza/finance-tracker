@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
 import type { Category } from '../types'
 import { api } from '../api'
@@ -21,8 +21,15 @@ interface Props {
   onSaved: () => void
 }
 
+/** The device's own calendar day (toISOString would give the UTC day, yesterday just after midnight). */
+function today() {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 export default function AddTransactionModal({ categories, onClose, onSaved }: Props) {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(today)
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [kind, setKind] = useState<Kind>('expense')
@@ -44,7 +51,7 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
 
   const parsedCents = parseToCents(amount || '0')
 
-  const handleSave = async () => {
+  const handleSave = async (another = false) => {
     setError('')
     if (!description.trim()) { setError('Description is required'); return }
     if (!parsedCents || parsedCents <= 0) { setError('Enter a positive amount'); return }
@@ -59,16 +66,33 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
         is_refund: kind === 'refund',
       })
       onSaved()
-      onClose()
+      if (another) {
+        // Keeps the date, type and category; the next entry starts at its description.
+        setAmount('')
+        setDescription('')
+        setSaving(false)
+        document.getElementById('add-tx-description')?.focus()
+      } else {
+        onClose()
+      }
     } catch (e) {
       setError(describeApiError(e))
       setSaving(false)
     }
   }
 
+  // Enter in a field, or Ctrl/Cmd+Enter anywhere, saves; the category list keeps its own Enter.
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.altKey || saving || (e.target as HTMLElement).closest('.cs-panel')) return
+    const inField = (e.target as HTMLElement).tagName === 'INPUT'
+    if (!inField && !(e.ctrlKey || e.metaKey)) return
+    e.preventDefault()
+    handleSave()
+  }
+
   return (
     <div className="scrim" onClick={onClose}>
-      <div className="sheet" onClick={e => e.stopPropagation()}>
+      <div className="sheet" onClick={e => e.stopPropagation()} onKeyDown={onKeyDown}>
         <div className="tx-sheet-head">
           <h2>Add transaction</h2>
           <button type="button" className="tx-close" onClick={onClose} aria-label="Close">
@@ -137,9 +161,12 @@ export default function AddTransactionModal({ categories, onClose, onSaved }: Pr
 
         {error && <p role="alert" className="tx-error">{error}</p>}
 
+        <p className="tx-hint tx-keys">Press <kbd className="kbd">Enter</kbd> to add</p>
+
         <div className="sheet-actions">
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary tx-sheet-main" onClick={handleSave} disabled={saving}>
+          <button type="button" className="btn" onClick={() => handleSave(true)} disabled={saving}>Save and add another</button>
+          <button type="button" className="btn btn-primary tx-sheet-main" onClick={() => handleSave()} disabled={saving}>
             {saving ? 'Saving…' : 'Add transaction'}
           </button>
         </div>

@@ -20,7 +20,7 @@ const toInput = (g: Goal): GoalInput => ({
 const percent = (cents: number, of: number) => Math.max(0, Math.min(100, (cents / of) * 100))
 
 function Row({ goal, onOpen }: { goal: Goal; onOpen: () => void }) {
-  const { says, facts } = describeGoal(goal)
+  const { says } = describeGoal(goal)
   return (
     <li className="goal">
       <button type="button" className="goal-btn" aria-haspopup="dialog" onClick={onOpen}>
@@ -35,7 +35,6 @@ function Row({ goal, onOpen }: { goal: Goal; onOpen: () => void }) {
           {goal.tick_pct !== null && <b style={{ left: `${goal.tick_pct}%` }} />}
         </span>
         <span className="goal-says">{says}</span>
-        <span className="goal-facts">{facts}</span>
       </button>
     </li>
   )
@@ -59,6 +58,12 @@ export default function GoalsSection() {
     close()
   }
 
+  const canAdd = !!data && data.goals.length < data.max_goals
+    && data.savings_categories.some(c => !data.goals.some(g => g.category_id === c.id))
+  const addButton = canAdd && (
+    <button type="button" className="btn btn-sm" onClick={() => setEditing('new')}>Add a goal</button>
+  )
+
   let body
   if (goalsQuery.error) {
     body = <ErrorBanner message={describeApiError(goalsQuery.error)} />
@@ -69,11 +74,6 @@ export default function GoalsSection() {
     const taken = (except?: Goal) => new Set(goals.filter(g => g !== except).map(g => g.category_id))
     const free = (except?: Goal) => cats.filter(c => !taken(except).has(c.id))
     const editedGoal = typeof editing === 'number' ? goals[editing] : undefined
-    const canAdd = goals.length < max && free().length > 0
-
-    const addButton = canAdd && (
-      <button type="button" className="btn btn-sm" onClick={() => setEditing('new')}>Add a goal</button>
-    )
     const limit = !canAdd && (
       <p className="goal-hint">
         {goals.length >= max ? `${max} goals is the most.` : cats.length === 0 ? 'Mark a category as savings in Setup to add a goal.' : 'Every savings category has a goal.'}
@@ -85,7 +85,6 @@ export default function GoalsSection() {
         {goals.length === 0 ? (
           <div className="panel goal-empty">
             <p>No goals yet. Give money you are setting aside a name and a target, and it shows how long it will take.</p>
-            {addButton}
             {limit}
           </div>
         ) : (
@@ -93,7 +92,7 @@ export default function GoalsSection() {
             <ul className="goals-list">
               {goals.map((g, i) => <Row key={g.category_id} goal={g} onOpen={() => setEditing(i)} />)}
             </ul>
-            <div className="goals-foot">{addButton}{limit}</div>
+            {limit && <div className="goals-foot">{limit}</div>}
           </div>
         )}
 
@@ -108,6 +107,7 @@ export default function GoalsSection() {
           <GoalSheet
             key={editedGoal.category_id}
             goal={editedGoal}
+            summary={describeGoal(editedGoal)}
             categories={free(editedGoal)}
             onClose={close}
             onSave={input => replace(goals.map(g => (g === editedGoal ? input : toInput(g))))}
@@ -120,7 +120,10 @@ export default function GoalsSection() {
 
   return (
     <section className="section">
-      <h2>Savings goals</h2>
+      <div className="goals-head">
+        <h2>Savings goals</h2>
+        {addButton}
+      </div>
       {body}
     </section>
   )

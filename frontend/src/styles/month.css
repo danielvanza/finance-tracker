@@ -250,28 +250,22 @@
   min-height: 3.5rem;
 }
 
-.kinds {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.kind {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.35rem 0.5rem;
-  font-size: 0.875rem;
-  color: var(--ink);
-}
-
-.kind small,
+.kh-fig,
 .cat-amount small {
   font-size: 0.8rem;
   color: var(--quiet);
   font-variant-numeric: tabular-nums;
 }
 
-.kind .meter,
+.kh-fig {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.kh-meter {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
 .cat-row .meter {
   grid-column: 1 / -1;
 }
@@ -369,6 +363,62 @@
   text-align: left;
   font-size: 0.9rem;
   color: var(--ink);
+}
+
+.untouched {
+  border-top: 1px solid var(--line);
+}
+
+.untouched:first-child {
+  border-top: 0;
+}
+
+.untouched > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.untouched > summary {
+  list-style: none;
+}
+
+.untouched > summary::-webkit-details-marker {
+  display: none;
+}
+
+.untouched > summary::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.25rem;
+  border-right: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: rotate(-45deg);
+}
+
+.untouched[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.untouched > summary small {
+  margin-left: auto;
+}
+
+.untouched > summary small {
+  font-size: 0.8rem;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.untouched[open] > summary {
+  border-bottom: 1px solid var(--line);
 }
 
 .cat-note {
@@ -510,11 +560,6 @@
     align-items: stretch;
   }
 
-  /* The rows share the kinds panel's height, so both blocks start and end on the same lines. */
-  .side-stack .rep-links {
-    justify-content: space-between;
-  }
-
   .side-stack .rep-links > * {
     flex: 1;
   }
@@ -527,10 +572,6 @@
   .side-stack > .link-row {
     flex: none;
     width: 17rem;
-  }
-
-  .kinds {
-    justify-content: space-between;
   }
 
   .verdict h1 {
@@ -588,4 +629,132 @@
 .import-link small {
   color: var(--quiet);
   font-weight: 400;
+}
+
+/* The top block: four equal figures in one raised panel, 2 by 2 on a phone. The first is the page heading. */
+.verdict .four {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem 1rem;
+  margin-top: 0.6rem;
+  padding: 1.15rem 1.25rem;
+}
+
+.four .cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.four .lab,
+.four h1 .fig {
+  display: block;
+}
+
+.four h1,
+.four b {
+  font: italic 400 2rem/1 var(--serif);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: normal;
+}
+
+.verdict .four h1 {
+  font-size: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.four small {
+  font-size: 0.8rem;
+  color: var(--quiet);
+}
+
+/* A figure that cannot be said yet: plain words, not a number. */
+.four .is-unsure b {
+  font: 400 0.95rem/1.3 var(--sans);
+  color: var(--quiet);
+  padding: 0.3rem 0;
+}
+
+/* Three cells (a finished month): the last one takes the second row's width on a phone. */
+.four.has-three .cell:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 720px) {
+  .verdict .four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0 1.25rem;
+  }
+
+  .verdict .four.has-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .four.has-three .cell:last-child {
+    grid-column: auto;
+  }
+
+  .four b,
+  .verdict .four h1 {
+    font-size: 2.4rem;
+  }
+
+  .four .is-unsure b {
+    font-size: 1.05rem;
+    padding: 0.55rem 0;
+  }
+}
+
+/* How this is worked out: the sums, then the bills they allow for. */
+.ledger h3 {
+  margin: 1rem 0 0.3rem;
+}
+
+.ledger p {
+  margin: 0.2rem 0;
+  color: var(--text);
+}
+
+.ledger b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.ledger dl {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ledger dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ledger dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ledger dt small {
+  display: block;
+  color: var(--quiet);
+}
+
+.ledger .sum {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.35rem;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.ledger .free-list {
+  margin-top: 0.75rem;
 }

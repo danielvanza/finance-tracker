@@ -245,6 +245,24 @@
   margin-bottom: 0.4rem;
 }
 
+.mer-rule.is-set {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.8rem;
+}
+
+.mer-rule.is-set > .lab,
+.mer-rule.is-set > .mer-rule-text,
+.mer-rule.is-set > .tx-hint {
+  grid-column: 1;
+}
+
+.mer-rule.is-set > .mer-rule-row {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+
 .mer-rule-row {
   display: flex;
   flex-wrap: wrap;

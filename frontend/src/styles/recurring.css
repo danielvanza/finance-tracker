@@ -103,6 +103,23 @@
   color: var(--text);
 }
 
+.rc-row.is-paid {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0.25rem 0;
+}
+
+.rc-row.is-paid .rc-when {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-end;
+  font-size: 0.75rem;
+}
+
+.rc-row.is-paid .rc-amt {
+  grid-row: 1;
+  grid-column: 3;
+}
+
 .rc-tick {
   flex: none;
   color: var(--moss);

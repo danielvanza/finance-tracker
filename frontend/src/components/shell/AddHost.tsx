@@ -59,6 +59,8 @@ export default function AddHost({ open, onClose }: { open: boolean; onClose: () 
     const rows = await qc.fetchQuery(LIST).catch(() => null)
     qc.invalidateQueries({ queryKey: ['transactions'] })
     const added = known && rows ? rows.filter(r => !known.has(r.id)) : []
+    // "Save and add another" keeps the form open: the next save is told apart from this one.
+    if (rows) before.current = new Set(rows.map(r => r.id))
     setNote(prev => ({ text: said(added), n: (prev?.n ?? 0) + 1 }))
   }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { dayLabel } from '../dates'
 import { Sparkles } from 'lucide-react'
 import type { Transaction, Category, SplitInput } from '../types'
@@ -20,6 +20,8 @@ interface Props {
   categories: Category[]
   onConfirm: (id: number, decision: ReviewDecision) => void
   onSkip: () => void
+  /** Put focus on the category control when the card appears (after the last one was answered). */
+  focusCategory?: boolean
 }
 
 const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
@@ -28,7 +30,11 @@ const KIND_META: Record<PositiveKind, { label: string; hint: string }> = {
   transfer: { label: 'Transfer', hint: "Between the household's own accounts: left out of totals." },
 }
 
-export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip }: Props) {
+export default function ReviewCard({ transaction: tx, categories, onConfirm, onSkip, focusCategory = false }: Props) {
+  const catRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focusCategory) catRef.current?.querySelector<HTMLElement>('.cs-trigger')?.focus({ preventScroll: true })
+  }, [focusCategory])
   const isPositive = tx.amount_cents > 0
 
   const initialKind: PositiveKind = useMemo(() => {
@@ -155,11 +161,13 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
               seededRefunds={tx.splits.map(s => s.is_refund)}
             />
           ) : (
-            <CategorySelect
-              categories={filteredCategories}
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-            />
+            <div ref={catRef}>
+              <CategorySelect
+                categories={filteredCategories}
+                value={selectedCategory}
+                onChange={setSelectedCategory}
+              />
+            </div>
           )}
         </div>
 

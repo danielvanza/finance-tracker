@@ -83,8 +83,8 @@ Warm clay neutrals, one vermilion, a little gold and moss, and a validated set o
 **Display Font:** Instrument Serif (with Iowan Old Style, Georgia). **Body Font:** Zen Kaku Gothic New (with system-ui, Segoe UI). **Label/Mono Font:** JetBrains Mono (with ui-monospace, Consolas).
 **Character:** A soft italic serif speaks the answer; a typewriter mono labels everything around it.
 ### Hierarchy
-- **Display** (italic): Month's verdict only. `clamp(3rem, 15vw, 3.6rem)` on a phone, 5rem from 1024 px; 2.4rem and 3.4rem when it says it can't tell.
-- **Headline** (italic): page titles, 3.4rem from 1024 px. **Title** (upright): the finding above a Trends chart.
+- **Display** (italic): Month's verdict when it stands alone (a past month, can't tell yet); the current month's four top figures share one smaller size, equal. `clamp(3rem, 15vw, 3.6rem)` on a phone, 5rem from 1024 px; 2.4rem and 3.4rem when it says it can't tell.
+- **Headline** (italic): page titles, 3.4rem from 1024 px. **Title** (upright): the finding above a Trends chart, 1.45rem; the movers and category findings are 1.15rem so the chart leads.
 - **Body**: running text; figures in lists use tabular numbers.
 - **Section / Label** (uppercase): section headings and field or period labels. Tabs go down to 0.6rem on a phone.
 - **The Typewriter Rule.** Never change the mono labels' font or greys; life-dashboard holds that decision.
@@ -125,6 +125,7 @@ Three radii: `r-card` for panels and sheets, `r-row` for rows and wells, `r-chip
 - **Segmented choice:** a row of raised chips; the chosen one is pressed in, ink, weight 700.
 ### Cards / Containers
 - Panels are raised `card`; wells are pressed-in `bg`. Hairlines (`--line`) separate rows inside a panel, never around it.
+- Folds that hide what the printed report needs stay in the DOM and are hidden by an `.is-open` class that print forces on; never `<details>` or conditional rendering there.
 ### Inputs / Fields
 - Pressed-in wells with chip radius at tap height; figures right-aligned and tabular. Focus is the vermilion ring and caret. Inputs are 16px on a coarse pointer so iOS doesn't zoom.
 ### Navigation
@@ -133,7 +134,7 @@ Three radii: `r-card` for panels and sheets, `r-row` for rows and wells, `r-chip
 - Meter: a pressed-in track with a `--fill` bar and an ink tick where today falls; no tick when the month isn't known.
 - Pace line: dashed `muted` plan, solid `ink` spending, full width, 6.5rem tall on a phone rising to 11rem. Hover or drag shows the day, spent and plan by then.
 - **The Sun and Moon Rule.** Today's dot is a raised vermilion sun by day and a hollow gold moon by night, and hollow in both themes whenever spending doesn't reach today.
-- **The No Guessing Rule.** Nothing compares, projects or flags a month that isn't finished and imported, and Month never guesses after a gap. With status `gap` or `empty` it says so ("Can't tell yet", "No bank files yet"), shows no meters or today tick, folds the plan away, and offers the import as the one vermilion button.
+- **The No Guessing Rule.** Every figure that projects or compares (left to spend, average day, if it goes on, per day) reads "Can't tell yet" instead of a guess. Nothing compares, projects or flags a month that isn't finished and imported, and Month never guesses after a gap. With status `gap` or `empty` it says so ("Can't tell yet", "No bank files yet"), shows no meters or today tick, folds the plan away, and offers the import as the one vermilion button.
 
 ## Do's and Don'ts
 ### Do:

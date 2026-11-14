@@ -12,6 +12,7 @@ export default function Rules() {
   const [newCategory, setNewCategory] = useState<number | null>(null)
   const [editing, setEditing] = useState<Record<number, { pattern: string; category_id: number }>>({})
   const [error, setError] = useState('')
+  const [showAll, setShowAll] = useState(false)
 
   const rulesQuery = useQuery({ queryKey: ['rules'], queryFn: api.getRules })
   const rules = rulesQuery.data ?? []
@@ -68,6 +69,9 @@ export default function Rules() {
     setEditing(prev => { const n = { ...prev }; delete n[id]; return n })
   }
 
+  const FOLD = 6
+  const folded = !showAll && rules.length > FOLD + 1
+  const shown = folded ? rules.filter((r, i) => i < FOLD || editing[r.id]) : rules
   const canCreate = Boolean(newPattern && newCategory)
 
   return (
@@ -118,7 +122,7 @@ export default function Rules() {
               </tr>
             </thead>
             <tbody>
-              {rules.map(rule => {
+              {shown.map(rule => {
                 const e = editing[rule.id]
                 return (
                   <tr key={rule.id} className={e ? 'is-editing' : undefined}>
@@ -192,6 +196,11 @@ export default function Rules() {
               )}
             </tbody>
           </table>
+          {rules.length > FOLD + 1 && (
+            <button type="button" className="btn rules-more" aria-expanded={!folded} onClick={() => setShowAll(v => !v)}>
+              {folded ? `Show all ${rules.length} rules` : 'Show fewer rules'}
+            </button>
+          )}
         </div>
       )}
 

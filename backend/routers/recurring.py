@@ -75,7 +75,12 @@ def _cadence_of(gap: int):
     return best if abs(gap - best[1]) <= min(4, round(best[1] * 0.15)) else None
 
 
-def _regular_run(txs: list[Transaction]):
+def _cents(tx: Transaction, income: bool = False) -> int:
+    """What a payment is worth, positive: expenses are stored negative, income positive."""
+    return money.to_cents(tx.amount) if income else -money.to_cents(tx.amount)
+
+
+def _regular_run(txs: list[Transaction], income: bool = False):
     """The newest unbroken run of payments on one cadence, (cadence, payments), or None."""
     if len(txs) < MIN_PAYMENTS:
         return None
@@ -89,7 +94,7 @@ def _regular_run(txs: list[Transaction]):
             break
         run.append(tx)
     run.reverse()
-    cents = lambda t: -money.to_cents(t.amount)  # noqa: E731 - expenses are negative
+    cents = lambda t: _cents(t, income)  # noqa: E731
     # Weekly and fortnightly payments must cost the same each time; shopping trips that happen to
     # land a week apart vary.
     spread = AMOUNT_SPREAD if cadence[1] >= 30 else STEADY_SPREAD
@@ -137,6 +142,24 @@ def _parse_month(db: Session, month: str | None, today: date) -> tuple[int, int]
 @router.get("")
 def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
     """Repeating payments for one financial month (default: the current one), as of today or the month's end."""
+    return _scan(month, db, income=False)
+
+
+def expected_income(month: str | None, db: Session) -> dict:
+    """The same scan for money coming in (a salary): what is still to arrive this financial month.
+
+    Only confirmed positive rows in income categories count, on a regular cadence and a similar amount.
+    A person's "not a fixed bill" does not apply to it.
+    """
+    scan = _scan(month, db, income=True)
+    waiting = [i for i in scan["items"] if i["state"] in ("due", "expected")]
+    return {
+        "items": waiting,
+        "expected_cents": sum(i["amount_cents"] * i["remaining"] for i in waiting),
+    }
+
+
+def _scan(month: str | None, db: Session, income: bool) -> dict:
     today = _today()
     year, mo = _parse_month(db, month, today)
     start, end = spend_service.financial_month_bounds(db, year, mo)
@@ -155,9 +178,10 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
         if tx.source in BANK_SOURCES:
             bank_reach[tx.source] = tx.date  # rows run oldest first
         category = tx.category
+        kinds = ("income",) if income else ("needs", "wants", "savings")
         if (
-            tx.amount >= 0 or tx.is_refund or tx.splits or tx.set_aside_id is not None
-            or category is None or category.type.value not in ("needs", "wants", "savings")
+            (tx.amount <= 0 if income else tx.amount >= 0) or tx.is_refund or tx.splits
+            or tx.set_aside_id is not None or category is None or category.type.value not in kinds
         ):
             continue
         key = _key(tx.description)
@@ -167,16 +191,16 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
     latest = max(bank_reach.values(), default=None)
     behind = latest is None or (asof - latest).days > BEHIND_DAYS
 
-    ignored = {row.key for row in db.query(IgnoredBill).all()}
+    ignored = set() if income else {row.key for row in db.query(IgnoredBill).all()}
     items = []
     for key, txs in groups.items():
-        found = _regular_run(txs)
+        found = _regular_run(txs, income)
         if found is None:
             continue
         cadence, run = found
         last = run[-1]
         reach = bank_reach.get(last.source, latest)
-        amount, price_change = _price([-money.to_cents(t.amount) for t in run])
+        amount, price_change = _price([_cents(t, income) for t in run])
         item = {
             "key": key,
             "name": _name(last.description),
@@ -190,7 +214,7 @@ def recurring(month: str | None = Query(None), db: Session = Depends(get_db)):
             "remaining": 0,
             "price_change": price_change,
             "history": [
-                {"date": t.date.isoformat(), "amount_cents": -money.to_cents(t.amount)}
+                {"date": t.date.isoformat(), "amount_cents": _cents(t, income)}
                 for t in reversed(run[-4:])
             ],
         }

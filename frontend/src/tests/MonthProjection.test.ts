@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryStatus, elapsedShare, paymentsByCategory, projectMonthEnd } from '../pages/month/projection'
+import { categoryStatus, elapsedShare, paymentsByCategory } from '../pages/month/projection'
 import type { Pace, Transaction } from '../types'
 
 // Day 17 of 31, plan 5.350, files reach yesterday. Rent (1.868) and a second big payment sit in the first days.
@@ -18,35 +18,9 @@ const pace = (over: Partial<Pace> = {}): Pace => {
     actual_cents: { needs: 0, wants: 0, savings: 0 },
     spendable_plan_cents: 535000, spendable_actual_cents: daily[daily.length - 1].cumulative_cents,
     pace_delta_cents: 0, daily, data_through: '2026-11-08',
-    last_import_by_bank: [], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
+    last_import_by_bank: [], behind_months: [], to_review: 0, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null, ...over,
   }
 }
-
-describe('projectMonthEnd', () => {
-  it('leaves big payments out of the average and does not repeat them', () => {
-    const p = pace()
-    const ordinary = spentPerDay.filter(a => a < 535)
-    const rate = ordinary.reduce((s, a) => s + a, 0) / ordinary.length
-    const result = projectMonthEnd(p)!
-    expect(result.ordinaryDayCents).toBe(Math.round(rate * 100))
-    const end = p.spendable_actual_cents + rate * 100 * 15
-    expect(result.gapCents).toBe(Math.round((end - 535000) / 1000) * 1000)
-    expect(Math.abs(result.gapCents) % 1000).toBe(0)
-  })
-
-  it('says nothing in the first five days, after a gap, in another month, or with nothing to project', () => {
-    expect(projectMonthEnd(pace({ day_number: 5 }))).toBeNull()
-    expect(projectMonthEnd(pace({ status: 'gap' }))).toBeNull()
-    expect(projectMonthEnd(pace({ day_number: null, days_left: null }))).toBeNull()
-    expect(projectMonthEnd(pace({ spendable_plan_cents: 0 }))).toBeNull()
-    expect(projectMonthEnd(pace({ daily: [] }))).toBeNull()
-    expect(projectMonthEnd(pace({ daily: cumulative(Array(31).fill(10)) }))).toBeNull()
-  })
-
-  it('has no ordinary day to go by when every day was a big one', () => {
-    expect(projectMonthEnd(pace({ daily: cumulative([900, 800, 700, 600, 560, 570]), day_number: 8 }))).toBeNull()
-  })
-})
 
 describe('elapsedShare', () => {
   it('counts the days that are over, and only once the month is known and past the first days', () => {

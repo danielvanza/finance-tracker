@@ -12,6 +12,8 @@ const euroField = (cents: number) => (cents % 100 === 0 ? String(cents / 100) : 
 interface Props {
   /** The goal being edited; leave out to add one. */
   goal?: Goal
+  /** The goal's verdict and its needs-and-pace line, shown quietly at the top. */
+  summary?: { says: string; facts: string }
   /** Savings categories that no other goal has taken. */
   categories: SavingsCategory[]
   onSave: (input: GoalInput) => Promise<void>
@@ -19,7 +21,7 @@ interface Props {
   onClose: () => void
 }
 
-export default function GoalSheet({ goal, categories, onSave, onRemove, onClose }: Props) {
+export default function GoalSheet({ goal, summary, categories, onSave, onRemove, onClose }: Props) {
   const [name, setName] = useState(goal?.name ?? '')
   const [categoryId, setCategoryId] = useState(goal?.category_id ?? categories[0]?.id ?? 0)
   const [target, setTarget] = useState(goal ? euroField(goal.target_cents) : '')
@@ -84,6 +86,13 @@ export default function GoalSheet({ goal, categories, onSave, onRemove, onClose 
           </button>
         </div>
 
+        {summary && (
+          <p className="goal-summary">
+            <span>{summary.says}</span>
+            <span>{summary.facts}</span>
+          </p>
+        )}
+
         <form className="tx-form" onSubmit={e => { e.preventDefault(); save() }} noValidate>
           <div className="form-row">
             <label className="lab" htmlFor="goal-name">Name</label>
@@ -91,11 +100,13 @@ export default function GoalSheet({ goal, categories, onSave, onRemove, onClose 
               onChange={e => setName(e.target.value)} />
           </div>
           <div className="form-row">
-            <label className="lab" htmlFor="goal-category">Saved into</label>
-            <select id="goal-category" className="field" value={categoryId} onChange={e => setCategoryId(Number(e.target.value))}>
+            <div className="goal-labline">
+              <label className="lab" htmlFor="goal-category">Saved into</label>
+              <span className="goal-hint" id="goal-category-hint">one goal each</span>
+            </div>
+            <select id="goal-category" aria-describedby="goal-category-hint" className="field" value={categoryId} onChange={e => setCategoryId(Number(e.target.value))}>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <span className="goal-hint">Money moved into this category counts. One goal for each.</span>
           </div>
           <div className="tx-form-two">
             <div className="form-row">
@@ -110,10 +121,12 @@ export default function GoalSheet({ goal, categories, onSave, onRemove, onClose 
             </div>
           </div>
           <div className="form-row">
-            <label className="lab" htmlFor="goal-start">Already saved (€)</label>
-            <input id="goal-start" className="field field-num" inputMode="decimal" value={start} placeholder="0"
+            <div className="goal-labline">
+              <label className="lab" htmlFor="goal-start">Already saved (€)</label>
+              <span className="goal-hint" id="goal-start-hint">at the start</span>
+            </div>
+            <input id="goal-start" aria-describedby="goal-start-hint" className="field field-num" inputMode="decimal" value={start} placeholder="0"
               onChange={e => setStart(e.target.value)} />
-            <span className="goal-hint">What was in the pot when the goal started. Later savings in the category are added to it.</span>
           </div>
         </form>
 

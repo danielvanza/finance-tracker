@@ -128,3 +128,98 @@ def test_past_month_has_no_today_position(db, client):
 
 def test_bad_month_is_rejected(client):
     assert client.get("/dashboard/pace?month=April").status_code == 422
+
+
+def _plan_only(db, client, label, amounts):
+    """A plan of exactly these amounts: the seeded defaults for the month are zeroed first."""
+    client.get("/dashboard/pace", params={"month": f"{label[0]}-{label[1]:02d}"})
+    db.query(Budget).filter_by(month=date(*label, 1)).update({"planned_amount": Decimal("0")})
+    db.commit()
+    _set_plan(db, label, amounts)
+
+
+def _spread(db, start, daily_euros, category):
+    """One payment a day from `start`, one amount per day."""
+    from datetime import timedelta
+    for i, euros in enumerate(daily_euros):
+        _tx(db, start + timedelta(days=i), euros, category, key=f"spread-{i}-{category.name}")
+
+
+def test_cash_left_counts_money_in_out_expected_bills_and_savings(db, client, monkeypatch):
+    # today 8 Apr = day 16 of the month 24 Mar - 23 Apr (31 days)
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00", "Miscellaneous": "100.00", "DEGIRO": "50.00"})
+    salary, needs, wants = _cat(db, "Salary"), _cat(db, "Utilities"), _cat(db, "Miscellaneous")
+    _tx(db, date(2026, 3, 24), "1000.00", salary, key="pay")
+    _spread(db, date(2026, 3, 24), ["-10.00"] * 15, needs)  # through 7 Apr: finished days
+    _tx(db, date(2026, 4, 8), "-30.00", wants, key="today")  # today's part day
+    for when in (date(2026, 1, 24), date(2026, 2, 24), date(2026, 3, 24)):  # a salary due 24 Apr: next month
+        _tx(db, when, "1000.00", salary, key=f"s{when}")
+    free = client.get("/dashboard/pace").json()["free"]
+    assert free["money_in_cents"] == 200000  # the 24 Mar payment and the new one, both in this month
+    assert free["spent_cents"] == 15000 + 3000
+    assert free["to_save_cents"] == 5000 and free["saved_cents"] == 0
+    assert free["income_expected_cents"] == 0
+    expect = 200000 - 18000 - 5000 - free["bills_cents"] - free["set_aside_cents"]
+    assert free["cash_left_cents"] == expect
+    assert free["outside_plan_cents"] == free["cash_left_cents"] - free["free_cents"]
+    assert free["still_to_come_cents"] == free["bills_cents"] + free["set_aside_cents"] + 5000
+
+
+def test_saved_money_has_left_the_pot_and_replaces_the_planned_savings(db, client):
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00", "DEGIRO": "50.00"})
+    _tx(db, date(2026, 3, 24), "500.00", _cat(db, "Salary"), key="pay")
+    _tx(db, date(2026, 3, 25), "-80.00", _cat(db, "DEGIRO"), key="sv")  # saved more than planned
+    free = client.get("/dashboard/pace").json()["free"]
+    assert (free["saved_cents"], free["to_save_cents"]) == (8000, 0)
+    assert free["cash_left_cents"] == 50000 - 8000 - free["bills_cents"] - free["set_aside_cents"]
+
+
+def test_average_day_uses_finished_days_and_skips_big_payment_days(db, client):
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00", "Miscellaneous": "100.00"})  # plan 500: big is 50 or more
+    needs = _cat(db, "Utilities")
+    _spread(db, date(2026, 3, 24), ["-10.00", "-20.00", "-300.00", "-10.00", "-20.00", "-10.00", "-20.00", "-10.00",
+                                     "-10.00", "-20.00", "-10.00", "-20.00", "-10.00", "-20.00", "-10.00"], needs)  # 24 Mar - 7 Apr
+    _tx(db, date(2026, 4, 8), "-45.00", needs, key="today")  # today's part day must not count
+    body = client.get("/dashboard/pace").json()
+    assert body["data_through"] == "2026-04-08"
+    day = body["ordinary_day"]
+    assert (day["days"], day["spent_cents"], day["avg_cents"]) == (14, 20000, 1429)
+    free = body["free"]
+    assert (free["avg_day_cents"], free["avg_day_days"], free["avg_day_spent_cents"]) == (1429, 14, 20000)
+    assert free["days_ahead"] == 15  # 9 Apr .. 23 Apr; today's spending is already in
+    assert free["month_end_cents"] == free["cash_left_cents"] - 1429 * 15
+
+
+def test_days_the_files_do_not_reach_count_as_still_ahead(db, client, monkeypatch):
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00"})
+    _spread(db, date(2026, 3, 24), ["-10.00"] * 10, _cat(db, "Utilities"))  # files stop 2 Apr
+    free = client.get("/dashboard/pace").json()["free"]
+    assert free["avg_day_cents"] == 1000
+    assert free["days_ahead"] == 21  # 3 Apr .. 23 Apr
+
+
+def test_early_month_says_nothing_about_the_average_day(db, client, monkeypatch):
+    monkeypatch.setattr(dashboard_router, "_today", lambda: date(2026, 3, 28))  # day 5
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00"})
+    _spread(db, date(2026, 3, 24), ["-10.00"] * 4, _cat(db, "Utilities"))
+    body = client.get("/dashboard/pace").json()
+    assert body["ordinary_day"] is None
+    assert body["free"]["avg_day_cents"] is None and body["free"]["month_end_cents"] is None
+    assert body["free"]["cash_left_cents"] is not None
+
+
+def test_a_past_month_has_its_average_day_and_money_in(db, client, monkeypatch):
+    monkeypatch.setattr(dashboard_router, "_today", lambda: date(2026, 5, 10))
+    _plan_only(db, client, (2026, 4), {"Utilities": "400.00"})
+    _tx(db, date(2026, 3, 24), "900.00", _cat(db, "Salary"), key="pay")
+    _spread(db, date(2026, 3, 25), ["-10.00"] * 30, _cat(db, "Utilities"))
+    _tx(db, date(2026, 5, 9), "-1.00", _cat(db, "Utilities"), key="later")
+    body = client.get("/dashboard/pace", params={"month": "2026-04"}).json()
+    assert body["free"] is None
+    assert body["money_in_cents"] == 90000
+    assert (body["ordinary_day"]["avg_cents"], body["ordinary_day"]["days"]) == (968, 31)
+
+
+def test_gap_and_empty_have_no_average_day(db, client):
+    assert client.get("/dashboard/pace").json()["ordinary_day"] is None
+    assert client.get("/dashboard/pace").json()["money_in_cents"] == 0

@@ -13,7 +13,7 @@ import RecurringLink from '../components/recurring/RecurringLink'
 import ReportLink from '../components/reports/ReportLink'
 import PaceLine from './month/PaceLine'
 import Categories, { type KindFigures } from './month/Categories'
-import { elapsedShare, paymentsByCategory, projectMonthEnd } from './month/projection'
+import { elapsedShare, paymentsByCategory } from './month/projection'
 
 const monthName = (label: string) =>
   new Date(`${label}-15T12:00:00`).toLocaleDateString('en-GB', { month: 'short' })
@@ -24,81 +24,108 @@ function shiftMonth(label: string, by: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** What can be spent a day, and how the month is going: where it ends when we can say, how far from plan it is otherwise. */
-function paceSentence(p: Pace, left: number) {
-  const parts: string[] = []
-  const projection = projectMonthEnd(p)
-  // Today can still be spent, so it counts. With fixed bills and set-asides allowed for, it is the free amount a day.
-  const perDay = p.free
-    ? (p.free.per_day_cents !== null ? formatEuros(p.free.per_day_cents) : null)
-    : p.days_left !== null && left > 0 ? formatEuros(Math.floor(left / (p.days_left + 1))) : null
-  if (projection) {
-    const { ordinaryDayCents, gapCents } = projection
-    const ordinary = formatEuros(ordinaryDayCents)
-    parts.push(perDay
-      ? `About ${perDay} a day ${p.free ? 'until payday' : 'keeps you in plan'}; ordinary days have cost about ${ordinary}.`
-      : `Ordinary days have cost about ${ordinary}.`)
-    parts.push(gapCents === 0
-      ? 'At this pace you will finish right on plan.'
-      : `At this pace you will finish about ${formatEuros(Math.abs(gapCents))} ${gapCents > 0 ? 'over' : 'under'}.`)
-  } else {
-    if (perDay) parts.push(p.free ? `About ${perDay} a day until payday.` : `About ${perDay} a day.`)
-    const delta = p.pace_delta_cents ?? 0
-    if (p.days_left === null) {
-      parts.push(`${formatEuros(p.spendable_actual_cents)} spent of ${formatEuros(p.spendable_plan_cents)} planned.`)
-    } else if (Math.abs(delta) < p.spendable_plan_cents / 100) {
-      parts.push('Right on plan so far.')
-    } else {
-      parts.push(`Spent ${formatEuros(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than planned by now.`)
-    }
-  }
-  if (p.day_number !== null && p.daily.length < p.day_number - 1) {
-    parts.push(`Bank files run to ${dayLabel(p.data_through!)}.`)
-  }
-  return parts.join(' ')
+const UNSURE = "Can't tell yet"
+
+/** One of the figures in the top panel. A figure that cannot be said reads "Can't tell yet" and says when. */
+function Cell({ label, figure, note, unsure }: { label: string; figure: string; note: string; unsure?: boolean }) {
+  return (
+    <div className={`cell${unsure ? ' is-unsure' : ''}`}>
+      <span className="lab">{label}</span>
+      <b>{unsure ? UNSURE : figure}</b>
+      <small>{note}</small>
+    </div>
+  )
 }
 
-/** How the headline is worked out: what is left in the plan, the fixed bills still to come, and what is set aside. */
-function FreeHow({ free, end }: { free: FreeToSpend; end: string }) {
+const eurosOrShort = (cents: number) => (cents < 0 ? `${formatEuros(-cents)} short` : formatEuros(cents))
+
+/** One sum per line, the last one the total. */
+function Sum({ lines, total }: { lines: Array<[string, string, string?]>; total: [string, string] }) {
+  return (
+    <dl>
+      {lines.map(([name, amount, note]) => (
+        <div key={name}><dt>{name}{note && <small>{note}</small>}</dt><dd>{amount}</dd></div>
+      ))}
+      <div className="sum"><dt>{total[0]}</dt><dd>{total[1]}</dd></div>
+    </dl>
+  )
+}
+
+/** How the four figures are worked out, with the fixed bills still to come and the set-asides inside. */
+function Ledger({ free, end, daysToPayday }: { free: FreeToSpend; end: string; daysToPayday: number }) {
   const qc = useQueryClient()
   const leaveOut = async (key: string) => {
     await api.ignoreBill(key)
     qc.invalidateQueries({ queryKey: ['pace'] })
     qc.invalidateQueries({ queryKey: ['recurring'] })
   }
+  const e = formatEuros
+  const lines: Array<[string, string, string?]> = [
+    ['Money in so far', e(free.money_in_cents)],
+    ['Still expected in', `+ ${e(free.income_expected_cents)}`,
+      free.income_expected.map(i => `${i.name}${i.next_date ? `, ${dayLabel(i.next_date)}` : ''}`).join(' · ') || undefined],
+    ['Spent so far', `- ${e(free.spent_cents)}`],
+  ]
+  if (free.saved_cents > 0) lines.push(['Saved so far', `- ${e(free.saved_cents)}`])
+  lines.push(
+    ['Fixed bills still to come', `- ${e(free.bills_cents)}`],
+    ['Set aside this month', `- ${e(free.set_aside_cents)}`],
+    ['Still to save, as planned', `- ${e(free.to_save_cents)}`],
+  )
+  const days = free.days_ahead
   return (
-    <details className="free-how">
-      <summary>
-        {formatEuros(free.left_in_plan_cents)} left in the plan
-        {free.bills_cents > 0 && <>, less {formatEuros(free.bills_cents)} of fixed bills still to come</>}
-        {free.set_aside_cents > 0 && <>, less {formatEuros(free.set_aside_cents)} set aside</>}
-      </summary>
-      {free.bills.length === 0 && free.set_asides.length === 0 && (
-        <p className="muted">No fixed bills are still to come before {dayLabel(end)}, and nothing is set aside this month.</p>
-      )}
-      {free.bills.length > 0 && (
-        <ul className="free-list" aria-label="Fixed bills still to come">
-          {free.bills.map(bill => (
-            <li key={bill.key}>
-              <span>{bill.name}<small>{bill.next_date ? `due ${dayLabel(bill.next_date)}` : ''} · {bill.category_name}</small></span>
-              <span className="num">{formatEuros(bill.amount_cents)}</span>
-              <button type="button" className="btn btn-sm" onClick={() => leaveOut(bill.key)} aria-label={`${bill.name} is not a fixed bill`}>
-                Not a fixed bill
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {free.set_asides.length > 0 && (
-        <ul className="free-list" aria-label="Set aside this month">
-          {free.set_asides.map(bill => (
-            <li key={bill.id}>
-              <span>{bill.name}<small>set aside this month</small></span>
-              <span className="num">{formatEuros(bill.monthly_cents)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <details className="free-how how-ledger">
+      <summary>How this is worked out</summary>
+      <div className="ledger">
+        <h3>Left to spend</h3>
+        <Sum lines={lines} total={['Left to spend', eurosOrShort(free.cash_left_cents)]} />
+        {free.bills.length === 0 && free.set_asides.length === 0 && (
+          <p className="muted">No fixed bills are still to come before {dayLabel(end)}, and nothing is set aside this month.</p>
+        )}
+        {free.bills.length > 0 && (
+          <ul className="free-list" aria-label="Fixed bills still to come">
+            {free.bills.map(bill => (
+              <li key={bill.key}>
+                <span>{bill.name}<small>{bill.next_date ? `due ${dayLabel(bill.next_date)}` : ''} · {bill.category_name}</small></span>
+                <span className="num">{e(bill.amount_cents)}</span>
+                <button type="button" className="btn btn-sm" onClick={() => leaveOut(bill.key)} aria-label={`${bill.name} is not a fixed bill`}>
+                  Not a fixed bill
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {free.set_asides.length > 0 && (
+          <ul className="free-list" aria-label="Set aside this month">
+            {free.set_asides.map(bill => (
+              <li key={bill.id}>
+                <span>{bill.name}<small>set aside this month</small></span>
+                <span className="num">{e(bill.monthly_cents)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3>Average day</h3>
+        {free.avg_day_cents !== null ? (
+          <p>{e(free.avg_day_spent_cents!)} over {free.avg_day_days} ordinary days = <b>{e(free.avg_day_cents)}</b>. Only finished days count, and days with a payment of a tenth of the plan or more, like rent, are left out.</p>
+        ) : (
+          <p>Shows once five days of the month are over and have an ordinary day in them.</p>
+        )}
+        <h3>If it goes on</h3>
+        {free.month_end_cents !== null && free.avg_day_cents !== null ? (
+          <p>{eurosOrShort(free.cash_left_cents)} less {days} more day{days === 1 ? '' : 's'} at {e(free.avg_day_cents)} = <b>{eurosOrShort(free.month_end_cents)}</b> left on {dayLabel(end)}.</p>
+        ) : (
+          <p>Needs the average day.</p>
+        )}
+        <h3>To stay in budget</h3>
+        <p>
+          {e(free.left_in_plan_cents)} left in the plan{free.bills_cents + free.set_aside_cents > 0 && ' (less fixed bills and set-asides)'}
+          {free.per_day_cents !== null
+            ? <> over {daysToPayday} days, today included = <b>{e(free.per_day_cents)}</b> a day.</>
+            : <>, so the plan is used up.</>}
+          {free.outside_plan_cents > 0 && <> {e(free.outside_plan_cents)} of what is left to spend lies outside the plan: income above it.</>}
+        </p>
+      </div>
     </details>
   )
 }
@@ -114,12 +141,14 @@ function Verdict({ p }: { p: Pace }) {
   }
   if (p.status === 'gap') {
     const last = p.last_import_by_bank.map(b => b.last_date).filter(Boolean).sort().pop()
+    const current = p.month === p.current_month
     return (
       <div className="verdict">
         <h1 className="is-unknown">Can't tell yet</h1>
-        <p>{p.month === p.current_month
+        <p>{current
           ? `The last bank file stops on ${dayLabel(last!)}, so this month has no bank transactions in it.`
           : 'No bank files reach this month.'}</p>
+        {current && <p className="verdict-caveat">Money left, the average day and the month end show once files reach this month.</p>}
       </div>
     )
   }
@@ -131,28 +160,60 @@ function Verdict({ p }: { p: Pace }) {
       </div>
     )
   }
-  const left = p.spendable_plan_cents - p.spendable_actual_cents
+  const caveats = (
+    <>
+      {p.to_review_in_month > 0 && (
+        <p className="verdict-caveat">
+          {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.{' '}
+          <Link to="/transactions" className="verdict-go">Answer {p.to_review_in_month === 1 ? 'it' : 'them'}</Link>
+        </p>
+      )}
+      {p.day_number !== null && p.daily.length < p.day_number - 1 && (
+        <p className="verdict-caveat">Bank files run to {dayLabel(p.data_through!)}.</p>
+      )}
+    </>
+  )
+  const end = dayLabel(p.end_date)
   if (p.free) {
-    const free = p.free.free_cents
+    const f = p.free
+    const early = f.avg_day_cents === null
+    const why = p.day_number !== null && p.day_number <= 5 ? 'shows after day 5' : 'no ordinary day yet'
+    const inBudget = f.free_cents > 0 ? f.per_day_cents! : null
     return (
       <div className="verdict">
-        <h1>{free >= 0 ? `${formatEuros(free)} free to spend` : `${formatEuros(-free)} over`}</h1>
-        <p className="verdict-sub">{free >= 0 ? `until payday, ${dayLabel(p.end_date)}` : 'what was free to spend this month'}</p>
-        <p>{paceSentence(p, left)}</p>
-        {p.to_review_in_month > 0 && (
-          <p className="verdict-caveat">
-            {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.{' '}
-            <Link to="/transactions" className="verdict-go">Answer {p.to_review_in_month === 1 ? 'it' : 'them'}</Link>
-          </p>
-        )}
-        <FreeHow free={p.free} end={p.end_date} />
+        <p className="verdict-sub">{f.still_to_come_cents > 0 ? `After ${formatEuros(f.still_to_come_cents)} still to come, until payday, ${end}` : `Until payday, ${end}`}</p>
+        <div className="panel four">
+          <div className="cell">
+            <h1><span className="lab">Left to spend</span><span className="fig">{eurosOrShort(f.cash_left_cents)}</span></h1>
+            <small>money in less money out</small>
+          </div>
+          <Cell label="Average day" figure={formatEuros(f.avg_day_cents ?? 0)} note={early ? why : 'ordinary days so far'} unsure={early} />
+          <Cell label="If it goes on" figure={eurosOrShort(f.month_end_cents ?? 0)}
+            note={f.month_end_cents !== null && f.month_end_cents < 0 ? `short on ${end}` : early ? why : `left on ${end}`} unsure={f.month_end_cents === null} />
+          <Cell label="To stay in budget"
+            figure={inBudget !== null ? formatEuros(inBudget) : f.free_cents < 0 ? `${formatEuros(-f.free_cents)} over` : formatEuros(0)}
+            note={inBudget !== null ? `a day, for ${p.days_left! + 1} days` : 'plan used up'} />
+        </div>
+        {caveats}
+        <Ledger free={f} end={p.end_date} daysToPayday={p.days_left! + 1} />
       </div>
     )
   }
+  const over = p.spendable_actual_cents - p.spendable_plan_cents
+  const leftOver = p.money_in_cents - p.actual_cents.needs - p.actual_cents.wants - p.actual_cents.savings
+  const avg = p.ordinary_day
   return (
     <div className="verdict">
-      <h1>{left >= 0 ? `${formatEuros(left)} left` : `${formatEuros(-left)} over`}</h1>
-      <p>{paceSentence(p, left)}</p>
+      <div className="panel four has-three">
+        <div className="cell">
+          <h1><span className="lab">{p.day_number === null ? 'Left over' : 'Left to spend'}</span><span className="fig">{eurosOrShort(leftOver)}</span></h1>
+          <small>{p.day_number === null ? 'this month is finished' : 'money in less money out'}</small>
+        </div>
+        <Cell label="Average day" figure={formatEuros(avg?.avg_cents ?? 0)} note="ordinary days" unsure={!avg} />
+        <Cell label="Against the plan" figure={over > 0 ? `${formatEuros(over)} over` : `${formatEuros(-over)} under`}
+          note={`spent ${formatEuros(p.spendable_actual_cents)} of ${formatEuros(p.spendable_plan_cents)}`} />
+      </div>
+      {caveats}
     </div>
   )
 }

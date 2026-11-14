@@ -18,6 +18,8 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 EXPENSE_TYPES = ("needs", "wants", "savings")
 SPENDABLE_TYPES = ("needs", "wants")
+EARLY_DAYS = 5  # before this many days have passed there is too little to say where anything is heading
+BIG_PAYMENT = Decimal("0.1")  # a day with a payment this share of the spendable plan is rent or an allowance
 BANK_SOURCES = (TransactionSource.ing,)
 
 
@@ -138,9 +140,12 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
     ).all()
     actual = {kind: Decimal("0") for kind in EXPENSE_TYPES}
     spent_on: dict[date, Decimal] = {}
+    money_in = Decimal("0")  # as the whole month's Income counts it
     for tx in confirmed:
         for category_id, amount, is_refund in set_asides.counted_parts(tx, start_day):
             kind = types.get(category_id)
+            if category_id is not None and kind != "exclude" and amount > 0 and not is_refund:
+                money_in += amount
             if kind not in EXPENSE_TYPES or not is_spend_part(amount, is_refund):
                 continue
             contribution = spend_contribution(amount, is_refund)
@@ -185,8 +190,15 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
 
     is_current = (year, mo) == current_label
     spendable_actual = money.to_cents(sum(actual[k] for k in SPENDABLE_TYPES))
-    free = _free_to_spend(db, f"{year}-{mo:02d}", spendable_plan - spendable_actual, (end - today).days) \
-        if is_current and data_through is not None else None
+    early = is_current and (today - start).days + 1 <= EARLY_DAYS
+    ordinary = _ordinary_days(daily, spendable_plan, today, days_total, start) if data_through is not None else None
+    free = _free_to_spend(
+        db, f"{year}-{mo:02d}", spendable_plan - spendable_actual, (end - today).days,
+        money_in_cents=money.to_cents(money_in), spent_cents=spendable_actual,
+        saved_cents=money.to_cents(actual["savings"]), savings_plan_cents=money.to_cents(plan["savings"]),
+        ordinary=ordinary, remaining_days=(end - min(data_through, today)).days if data_through else 0,
+        early=early,
+    ) if is_current and data_through is not None else None
     waiting = db.query(Transaction).filter(Transaction.confirmed == False).all()  # noqa: E712
     return {
         "month": f"{year}-{mo:02d}",
@@ -203,6 +215,8 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
         "spendable_plan_cents": spendable_plan,
         "spendable_actual_cents": spendable_actual,
         "free": free,
+        "money_in_cents": money.to_cents(money_in),
+        "ordinary_day": None if early else ordinary,
         "newest_bank_date": last_any.isoformat() if last_any else None,
         "pace_delta_cents": pace_delta_cents,
         "daily": daily,
@@ -217,19 +231,71 @@ def pace(month: str | None = Query(None), db: Session = Depends(get_db)):
     }
 
 
-def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int) -> dict:
-    """What can still be spent freely this month: what is left in the plan, less the fixed bills that
-    have not been debited yet and less what this month sets aside for later bills."""
+def _ordinary_days(daily: list[dict], plan_cents: int, today: date, days_total: int, start: date) -> dict | None:
+    """The average day over finished days only (before today), leaving out days with a big payment.
+
+    `daily` runs through the last day the bank files reach, which can be today's part day; that day is
+    not finished and is not averaged. None when nothing can be said (no plan, no ordinary day yet).
+    """
+    if plan_cents <= 0:
+        return None
+    limit = plan_cents * BIG_PAYMENT
+    spent, previous = [], 0
+    for day in daily:
+        if date.fromisoformat(day["date"]) < today:
+            spent.append(day["cumulative_cents"] - previous)
+        previous = day["cumulative_cents"]
+    ordinary = [c for c in spent if c < limit]
+    if not ordinary:
+        return None
+    total = sum(ordinary)
+    return {"avg_cents": max(0, round(total / len(ordinary))), "days": len(ordinary), "spent_cents": total}
+
+
+def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int, *, money_in_cents: int, spent_cents: int,
+                   saved_cents: int, savings_plan_cents: int, ordinary: dict | None,
+                   remaining_days: int, early: bool) -> dict:
+    """What can still be spent freely this month.
+
+    `free_cents` (the plan's view): what is left in the plan, less the fixed bills that have not been
+    debited yet and less what this month sets aside for later bills.
+    `cash_left_cents` (the money's view): money in so far + income still expected - spent so far (needs and
+    wants) - saved so far - savings still to put aside as planned - the same bills and set-asides.
+    """
     bills = [
         {"key": i["key"], "name": i["name"], "amount_cents": i["amount_cents"] * i["remaining"],
          "next_date": i["next_date"], "category_name": i["category_name"]}
         for i in recurring_router.recurring(label, db)["items"]
         if i["state"] in ("due", "expected") and i["category_type"] in SPENDABLE_TYPES
     ]
+    expected = recurring_router.expected_income(label, db)
     kept = set_asides.month_view(db, label)
     bills_cents = sum(b["amount_cents"] for b in bills)
     free = left_cents - bills_cents - kept["set_aside_cents"]
+    to_save = max(0, savings_plan_cents - saved_cents)
+    cash = (money_in_cents + expected["expected_cents"] - spent_cents - saved_cents
+            - to_save - bills_cents - kept["set_aside_cents"])
+    average = None if early or ordinary is None else ordinary["avg_cents"]
     return {
+        "money_in_cents": money_in_cents,
+        "income_expected_cents": expected["expected_cents"],
+        "income_expected": [
+            {"key": i["key"], "name": i["name"], "amount_cents": i["amount_cents"] * i["remaining"],
+             "next_date": i["next_date"]}
+            for i in expected["items"]
+        ],
+        "spent_cents": spent_cents,
+        "saved_cents": saved_cents,
+        "to_save_cents": to_save,
+        "cash_left_cents": cash,
+        # What the plan leaves out: income above it, or a plan that is not fully spent.
+        "outside_plan_cents": cash - free,
+        "still_to_come_cents": bills_cents + kept["set_aside_cents"] + to_save,
+        "avg_day_cents": average,
+        "avg_day_days": None if average is None else ordinary["days"],
+        "avg_day_spent_cents": None if average is None else ordinary["spent_cents"],
+        "days_ahead": remaining_days,
+        "month_end_cents": None if average is None else cash - average * remaining_days,
         "free_cents": free,
         # Today can still be spent, so it counts.
         "per_day_cents": free // (days_left + 1) if free > 0 else None,

@@ -23,7 +23,7 @@ const pace = (month: string, over: Partial<Pace> = {}): Pace => ({
   actual_cents: { needs: 247800, wants: 65300, savings: 30000 },
   spendable_plan_cents: 535000, spendable_actual_cents: 313100,
   pace_delta_cents: null, daily: [], data_through: '2026-10-23',
-  last_import_by_bank: [], behind_months: [], to_review: 5, to_review_in_month: 0, free: null, newest_bank_date: null, ...over,
+  last_import_by_bank: [], behind_months: [], to_review: 5, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null, ...over,
 })
 
 const row = (id: number, name: string, type: 'needs' | 'wants' | 'savings', planned: number, actual: number): BudgetRow => ({

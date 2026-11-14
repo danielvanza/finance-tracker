@@ -19,7 +19,7 @@ const okPace: Pace = {
   last_import_by_bank: [
     { source: 'ing', last_date: '2026-11-08' }, { source: 'manual', last_date: null },
   ],
-  behind_months: ['2026-11'], to_review: 14, to_review_in_month: 0, free: null, newest_bank_date: null,
+  behind_months: ['2026-11'], to_review: 14, to_review_in_month: 0, free: null, money_in_cents: 586026, ordinary_day: null, newest_bank_date: null,
 }
 
 vi.mock('../api', () => ({
@@ -50,10 +50,12 @@ const show = (pace: Pace) => {
 describe('Month', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leads with what is left and how that compares to the plan', async () => {
+  it('leads with the money left, and compares spending with the plan beside it', async () => {
     show(okPace)
-    expect(await screen.findByRole('heading', { level: 1, name: '€1.725 left' })).toBeInTheDocument()
-    expect(screen.getByText(/€133 more than planned by now/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Left to spend€3.265' })).toBeInTheDocument()
+    expect(screen.getByText('Against the plan')).toBeInTheDocument()
+    expect(screen.getByText('€1.725 under')).toBeInTheDocument()
+    expect(screen.getByText('spent €2.115 of €3.840')).toBeInTheDocument()
     expect(screen.getByText('14 transactions to review').closest('a')).toHaveAttribute('href', '/transactions')
     expect(screen.queryByRole('link', { name: 'Bring in bank files' })).toBeNull()
   })
@@ -66,7 +68,7 @@ describe('Month', () => {
   })
 
   it('offers the month report with no review row and no bank files', async () => {
-    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null })
+    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null })
     expect(await screen.findByRole('link', { name: 'Month report' })).toBeInTheDocument()
     expect(screen.queryByText(/to review/)).toBeNull()
   })
@@ -79,26 +81,27 @@ describe('Month', () => {
     expect(screen.getByText(/Retained Salary/)).toBeInTheDocument()
   })
 
-  it('says when spending ran under plan and how far the files reach', async () => {
-    show({ ...okPace, pace_delta_cents: -9000, daily: okPace.daily.slice(0, 1), data_through: '2026-10-24' })
-    expect(await screen.findByText(/€90 less than planned by now\. Bank files run to 24 Oct\./)).toBeInTheDocument()
+  it('says how far the files reach when they stop short of yesterday', async () => {
+    show({ ...okPace, daily: okPace.daily.slice(0, 1), data_through: '2026-10-24' })
+    expect(await screen.findByText('Bank files run to 24 Oct.')).toBeInTheDocument()
   })
 
   it('does not guess after a gap: it names the gap and offers the import', async () => {
     show({
-      ...okPace, status: 'gap', daily: [], data_through: null, pace_delta_cents: null, to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null,
+      ...okPace, status: 'gap', daily: [], data_through: null, pace_delta_cents: null, to_review: 0, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null,
       last_import_by_bank: [{ source: 'ing', last_date: '2026-08-12' }, { source: 'manual', last_date: null }],
       behind_months: ['2026-08', '2026-09', '2026-10', '2026-11'],
     })
     expect(await screen.findByRole('heading', { level: 1, name: "Can't tell yet" })).toBeInTheDocument()
     expect(screen.getByText(/stops on 12 Aug/)).toBeInTheDocument()
+    expect(screen.getByText(/Money left, the average day and the month end show once files reach this month/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Bring in bank files' })).toHaveAttribute('href', '/import')
     expect(screen.getByText('4 months')).toBeInTheDocument()
     expect(screen.queryByText(/ left$/)).toBeNull()
   })
 
   it('tells a first run it needs a bank file', async () => {
-    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, newest_bank_date: null,
+    show({ ...okPace, status: 'empty', daily: [], data_through: null, pace_delta_cents: null, behind_months: [], to_review: 0, to_review_in_month: 0, free: null, money_in_cents: 0, ordinary_day: null, newest_bank_date: null,
       last_import_by_bank: okPace.last_import_by_bank.map(b => ({ ...b, last_date: null })) })
     expect(await screen.findByRole('heading', { level: 1, name: 'No bank files yet' })).toBeInTheDocument()
   })

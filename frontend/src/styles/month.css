@@ -250,28 +250,22 @@
   min-height: 3.5rem;
 }
 
-.kinds {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.kind {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.35rem 0.5rem;
-  font-size: 0.875rem;
-  color: var(--ink);
-}
-
-.kind small,
+.kh-fig,
 .cat-amount small {
   font-size: 0.8rem;
   color: var(--quiet);
   font-variant-numeric: tabular-nums;
 }
 
-.kind .meter,
+.kh-fig {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.kh-meter {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
 .cat-row .meter {
   grid-column: 1 / -1;
 }
@@ -369,6 +363,62 @@
   text-align: left;
   font-size: 0.9rem;
   color: var(--ink);
+}
+
+.untouched {
+  border-top: 1px solid var(--line);
+}
+
+.untouched:first-child {
+  border-top: 0;
+}
+
+.untouched > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.untouched > summary {
+  list-style: none;
+}
+
+.untouched > summary::-webkit-details-marker {
+  display: none;
+}
+
+.untouched > summary::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.25rem;
+  border-right: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: rotate(-45deg);
+}
+
+.untouched[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.untouched > summary small {
+  margin-left: auto;
+}
+
+.untouched > summary small {
+  font-size: 0.8rem;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.untouched[open] > summary {
+  border-bottom: 1px solid var(--line);
 }
 
 .cat-note {
@@ -510,11 +560,6 @@
     align-items: stretch;
   }
 
-  /* The rows share the kinds panel's height, so both blocks start and end on the same lines. */
-  .side-stack .rep-links {
-    justify-content: space-between;
-  }
-
   .side-stack .rep-links > * {
     flex: 1;
   }
@@ -527,10 +572,6 @@
   .side-stack > .link-row {
     flex: none;
     width: 17rem;
-  }
-
-  .kinds {
-    justify-content: space-between;
   }
 
   .verdict h1 {

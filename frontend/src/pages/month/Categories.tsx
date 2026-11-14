@@ -15,6 +15,9 @@ const KINDS = [
   { type: 'savings', label: 'Savings' },
 ] as const
 
+/** A group's figures for the heading: spent against planned, and its share of the month's income against the aim. */
+export type KindFigures = Record<(typeof KINDS)[number]['type'], { actual: number; plan: number; incomePct: number | null; aim: number }>
+
 const share = (actual: number, planned: number) => (planned > 0 ? actual / planned : actual > 0 ? Infinity : 0)
 const percent = (actual: number, planned: number) => Math.max(0, Math.min(100, share(actual, planned) * 100))
 
@@ -115,13 +118,15 @@ const byShare = (a: BudgetRow, b: BudgetRow) =>
  * it sorts again when the row closes (and the page starts fresh when the month changes).
  * `payments` (per category, null when the month is not known) and `elapsed` (share of the month gone) add a word to some rows.
  */
-export default function Categories({ rows, month, isCurrent, categories, todayPct, payments, elapsed, onError }: {
+export default function Categories({ rows, month, isCurrent, categories, todayPct, kinds, payments, elapsed, onError }: {
   rows: BudgetRow[]
   month: string
   /** The month shown is the current financial month. */
   isCurrent: boolean
   categories: Category[]
   todayPct: number | null
+  /** Figures shown in each group's heading; null where the month is not known. */
+  kinds?: KindFigures | null
   payments: Record<number, number> | null
   elapsed: number | null
   onError: (message: string) => void
@@ -142,47 +147,73 @@ export default function Categories({ rows, month, isCurrent, categories, todayPc
   const order = (a: BudgetRow, b: BudgetRow) =>
     frozen ? (frozen.get(a.category_id) ?? Infinity) - (frozen.get(b.category_id) ?? Infinity) || byShare(a, b) : byShare(a, b)
 
+  const renderRow = (row: BudgetRow) => {
+    const actual = row.actual_amount_cents ?? 0
+    const isOpen = open === row.category_id
+    const over = actual > row.planned_amount_cents
+    const status = payments ? categoryStatus(actual, row.planned_amount_cents, payments[row.category_id] ?? 0, elapsed) : null
+    return (
+      <li className="cat" key={row.id}>
+        <button
+          type="button"
+          className="cat-row"
+          aria-expanded={isOpen}
+          onClick={() => toggle(row.category_id)}
+        >
+          <span className="cat-name">{row.category_name}</span>
+          <span className="cat-amount num">
+            {over
+              ? <>{formatEuros(actual - row.planned_amount_cents)} over<small> · {formatEuros(actual)} of {formatEuros(row.planned_amount_cents)}</small></>
+              : <>{formatEuros(actual)}<small> of {formatEuros(row.planned_amount_cents)}{status?.kind === 'paid' && ' · paid'}</small></>}
+          </span>
+          <span className="meter" aria-hidden="true">
+            <i style={{ width: `${percent(actual, row.planned_amount_cents)}%` }} />
+            {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
+          </span>
+          {status?.kind === 'ahead' && (
+            <span className="cat-note">On course for about {formatEuros(status.endCents)}, {formatEuros(status.overCents)} over</span>
+          )}
+        </button>
+        {isOpen && <Detail row={row} month={month} isCurrent={isCurrent} categories={categories} onError={onError} />}
+      </li>
+    )
+  }
+
   return (
     <div className="cat-groups">
       {KINDS.map(kind => {
         const group = rows.filter(r => r.category_type === kind.type).sort(order)
         if (group.length === 0) return null
+        // Rows with nothing spent fold into one line at the end of the group (two or more; one row costs no space).
+        const untouched = group.filter(r => (r.actual_amount_cents ?? 0) === 0)
+        const fold = untouched.length >= 2
+        const shown = fold ? group.filter(r => !untouched.includes(r)) : group
+        const figures = kinds?.[kind.type]
         return (
           <section className="panel cat-group" key={kind.type} aria-label={kind.label}>
             <h3>{kind.label}</h3>
-            <ul>
-              {group.map(row => {
-                const actual = row.actual_amount_cents ?? 0
-                const isOpen = open === row.category_id
-                const over = actual > row.planned_amount_cents
-                const status = payments ? categoryStatus(actual, row.planned_amount_cents, payments[row.category_id] ?? 0, elapsed) : null
-                return (
-                  <li className="cat" key={row.id}>
-                    <button
-                      type="button"
-                      className="cat-row"
-                      aria-expanded={isOpen}
-                      onClick={() => toggle(row.category_id)}
-                    >
-                      <span className="cat-name">{row.category_name}</span>
-                      <span className="cat-amount num">
-                        {over
-                          ? <>{formatEuros(actual - row.planned_amount_cents)} over<small> · {formatEuros(actual)} of {formatEuros(row.planned_amount_cents)}</small></>
-                          : <>{formatEuros(actual)}<small> of {formatEuros(row.planned_amount_cents)}{status?.kind === 'paid' && ' · paid'}</small></>}
-                      </span>
-                      <span className="meter" aria-hidden="true">
-                        <i style={{ width: `${percent(actual, row.planned_amount_cents)}%` }} />
-                        {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
-                      </span>
-                      {status?.kind === 'ahead' && (
-                        <span className="cat-note">On course for about {formatEuros(status.endCents)}, {formatEuros(status.overCents)} over</span>
-                      )}
-                    </button>
-                    {isOpen && <Detail row={row} month={month} isCurrent={isCurrent} categories={categories} onError={onError} />}
-                  </li>
-                )
-              })}
-            </ul>
+            {figures && (
+              <>
+                <p className="kh-fig">
+                  {formatEuros(figures.actual)} of {formatEuros(figures.plan)}
+                  {figures.incomePct !== null && <span className="kind-share"> · {figures.incomePct}% of income, aim {figures.aim}%</span>}
+                </p>
+                <span className="meter kh-meter" aria-hidden="true">
+                  <i style={{ width: `${percent(figures.actual, figures.plan)}%` }} />
+                  {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
+                </span>
+              </>
+            )}
+            {shown.length > 0 && <ul>{shown.map(renderRow)}</ul>}
+            {fold && (
+              <details className="untouched" open={untouched.some(r => r.category_id === open) || undefined}>
+                <summary>
+                  {untouched.length} untouched
+                  <small>{formatEuros(untouched.reduce((sum, r) => sum + r.planned_amount_cents, 0))} planned</small>
+                </summary>
+                <ul>{untouched.map(renderRow)}</ul>
+              </details>
+            )}
           </section>
         )
       })}

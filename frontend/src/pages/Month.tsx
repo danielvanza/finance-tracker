@@ -12,7 +12,7 @@ import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import RecurringLink from '../components/recurring/RecurringLink'
 import ReportLink from '../components/reports/ReportLink'
 import PaceLine from './month/PaceLine'
-import Categories from './month/Categories'
+import Categories, { type KindFigures } from './month/Categories'
 import { elapsedShare, paymentsByCategory, projectMonthEnd } from './month/projection'
 
 const monthName = (label: string) =>
@@ -176,8 +176,6 @@ function GapToFill({ p }: { p: Pace }) {
   )
 }
 
-const KIND_LABELS = { needs: 'Needs', wants: 'Wants', savings: 'Savings' } as const
-
 export default function Month() {
   const [picked, setPicked] = useState<string | undefined>()
   const [actionError, setActionError] = useState('')
@@ -226,9 +224,12 @@ export default function Month() {
   const elapsed = elapsedShare(p)
   const shownMonth = picked ?? month
 
-  const kinds = (Object.keys(KIND_LABELS) as Array<keyof typeof KIND_LABELS>)
-    .map(k => ({ key: k, actual: p.actual_cents[k], plan: p.plan_cents[k] }))
-    .sort((a, b) => (b.plan ? b.actual / b.plan : 0) - (a.plan ? a.actual / a.plan : 0))
+  const income = summary?.total_income_cents ?? 0
+  const kinds: KindFigures = {
+    needs: { actual: p.actual_cents.needs, plan: p.plan_cents.needs, incomePct: income > 0 ? Math.round((p.actual_cents.needs / income) * 100) : null, aim: aims.needs },
+    wants: { actual: p.actual_cents.wants, plan: p.plan_cents.wants, incomePct: income > 0 ? Math.round((p.actual_cents.wants / income) * 100) : null, aim: aims.wants },
+    savings: { actual: p.actual_cents.savings, plan: p.plan_cents.savings, incomePct: income > 0 ? Math.round((p.actual_cents.savings / income) * 100) : null, aim: aims.savings },
+  }
 
   return (
     <>
@@ -261,25 +262,6 @@ export default function Month() {
 
           <div className="side-stack">
             {!known && isCurrent && <GapToFill p={p} />}
-            {known && (
-              <div className="panel kinds">
-                {kinds.map(k => (
-                  <div className="kind" key={k.key}>
-                    <span>{KIND_LABELS[k.key]}</span>
-                    <small>
-                      {formatEuros(k.actual)} of {formatEuros(k.plan)}
-                      {summary && summary.total_income_cents > 0 && (
-                        <span className="kind-share"> · {Math.round((k.actual / summary.total_income_cents) * 100)}% of income, aim {aims[k.key]}%</span>
-                      )}
-                    </small>
-                    <span className="meter" aria-hidden="true">
-                      <i style={{ width: `${k.plan > 0 ? Math.max(0, Math.min(100, (k.actual / k.plan) * 100)) : 0}%` }} />
-                      {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
             <ReportLink month={month}>
               {p.to_review > 0 && (
                 <Link to="/transactions" className="link-row">
@@ -291,18 +273,6 @@ export default function Month() {
             </ReportLink>
           </div>
         </div>
-
-        {rows.length > 0 && (known ? (
-          <section className="section">
-            <h2>By category</h2>
-            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={todayPct} payments={payments} elapsed={elapsed} onError={setActionError} />
-          </section>
-        ) : (
-          <details className="section plan-fold">
-            <summary>The plan</summary>
-            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={null} payments={payments} elapsed={null} onError={setActionError} />
-          </details>
-        ))}
 
         {summary && known && (
           <section className="section">
@@ -331,6 +301,19 @@ export default function Month() {
             </dl>
           </section>
         )}
+
+        {rows.length > 0 && (known ? (
+          <section className="section">
+            <h2>By category</h2>
+            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={todayPct} kinds={kinds} payments={payments} elapsed={elapsed} onError={setActionError} />
+          </section>
+        ) : (
+          <details className="section plan-fold">
+            <summary>The plan</summary>
+            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={null} kinds={null} payments={payments} elapsed={null} onError={setActionError} />
+          </details>
+        ))}
+
       </div>
     </>
   )

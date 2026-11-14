@@ -1,6 +1,8 @@
 # Month
-- **Side stack.** Review, recurring and report rows live in one `.rep-links` column: 17rem beside the kinds panel from 1024 px, every row at least 3.5rem tall, and from 1024 px the rows share the kinds panel's height (`space-between`) so both blocks start and end on the same lines. Add a row there, not as a new `.side-stack` child.
-- **Kinds panel** is a list of three rows (label and figures on one line, meter under) at every width; never columns, the label cell would shrink to a letter wide.
+- **Side stack.** Review, recurring and report rows live in one `.rep-links` column, every row at least 3.5rem tall. Add a row there, not as a new `.side-stack` child.
+- **Needs, wants and savings are said once**, in each group's heading in By category: figures line (`.kh-fig`) and the meter with the today mark. There is no separate kinds panel.
+- **Untouched rows fold.** In each group, rows with nothing spent (two or more) sit behind one "N untouched · €X planned" line (`.untouched`) after the rest; it opens by itself while one of its rows is open.
+- **The whole month** sits between the top block and By category, not below the categories.
 - **Month bar.** The Import chip is sized to its words, not the 44px arrow square (`.month-nav .btn:not(.import-link)`). Under 721 px the date takes the first row and the chip stretches beside the arrows, "bank data to" cutting with an ellipsis; from 721 px it is one row. Only bars that hold the chip wrap (`:has(.import-link)`); Trends and the report keep theirs.
 - **Open category payments** (`.cat-tx`) are date, description (wraps), amount (right, never wraps) on one line and the category chip full width under. Keep the three-column grid in step with the three first children.
 - **Small figures** under the headline (fold list sub-lines, the bank date on the chip) read in `--quiet`; the fold's summary is `--text` with an `--ink` caret so it reads as pressable. Never `--muted` for small sans text.
@@ -9,5 +11,5 @@
 - **"Paid"** on a row needs only status `ok`. **"Ahead"** follows the projection rules.
 - **A month change keeps the last month dimmed** (`aria-busy`) under a stable month bar; never swap the page for a skeleton.
 - **The headline** on the current month is free to spend (`pace.free`): the figure, "until payday", the per-day sentence, a caveat when payments in the month still wait, and a fold that lists the fixed bills still to come and this month's set-asides. A past month keeps "left" or "over". The Import link sits in the month bar at all times.
-- **Needs, wants, savings** each add their share of the month's income and the household's aim from the target split.
+- **Needs, wants, savings** headings each add their share of the month's income and the household's aim from the target split.
 - **Ways into Transactions** are quiet links in the text, ink and underlined: the waiting-payments caveat ends with "Answer them" (`/transactions`, which opens on the review card) and an opened category ends with "All payments" (`?category=<id>`, plus `&month=1` only for the current financial month). Neither shows when nothing waits or the category has no payments. The caveat is small sans text, so `--quiet`.

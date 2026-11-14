@@ -35,20 +35,10 @@ export default function Catchup({ path, pace, imported }: Props) {
       : doneNames.length === 0
         ? (path.from ? `From ${dayLabel(path.from)}` : 'Picking up')
         : left === 1 ? 'One bank to go' : `${WORDS[left] ?? left} banks to go`
-  const nextName = !path.empty && left > 0 ? BANKS[path.banks[done.indexOf(false)]] : null
-  const line = left === 0
-    ? `${path.empty ? 'The file is in.' : 'Every bank is in.'} ${review > 0 ? 'Last, a look at what needs sorting.' : 'Nothing left to sort. Last, see where the month stands.'}`
-    : path.empty
-      ? 'Bring in a file from each bank you use, sort what needs a look, then see the month.'
-      : doneNames.length > 0
-        ? `${doneNames.join(' and ')} ${doneNames.length === 1 ? 'is' : 'are'} in. ${nextName} next.`
-        : `${WORDS[left] ?? left} ${left === 1 ? 'bank stops' : 'banks stop'} before today. Bring in each file, sort what needs a look, then see the month.`
 
   return (
     <section className="panel import-path" aria-labelledby="import-path-title">
-      <h2 id="import-path-title" className="lab">Picking up</h2>
-      <p className="import-path-title">{title}</p>
-      <p className="import-path-line">{line}</p>
+      <h2 id="import-path-title" className="import-path-title">{title}</h2>
       <ol style={{ '--steps': steps.length } as React.CSSProperties}>
         {steps.map((s, i) => (
           <li key={s.name} className={s.done ? 'is-done' : undefined} aria-current={i === current ? 'step' : undefined}>

@@ -63,6 +63,35 @@ export default function Import() {
     setResult(null)
   }
 
+  // The whole page takes a dropped CSV; a file let go outside the well must not replace the app with the raw file.
+  const chooseDropped = useRef(choose)
+  chooseDropped.current = choose
+  useEffect(() => {
+    let depth = 0
+    const hasFile = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+    const enter = (e: DragEvent) => { if (hasFile(e)) { depth++; setDragOver(true) } }
+    const over = (e: DragEvent) => { if (hasFile(e)) e.preventDefault() }
+    const leave = (e: DragEvent) => { if (hasFile(e) && --depth <= 0) { depth = 0; setDragOver(false) } }
+    const drop = (e: DragEvent) => {
+      if (!hasFile(e)) return
+      e.preventDefault()
+      depth = 0
+      setDragOver(false)
+      const dropped = e.dataTransfer?.files[0]
+      if (dropped && /\.csv$/i.test(dropped.name)) chooseDropped.current(dropped)
+    }
+    window.addEventListener('dragenter', enter)
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter)
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+    }
+  }, [])
+
   const handlePreview = async () => {
     if (!file) return
     setBusy('preview')
@@ -133,15 +162,6 @@ export default function Import() {
 
             <div
               className={`well import-drop${dragOver ? ' is-over' : ''}`}
-              onDragEnter={() => setDragOver(true)}
-              onDragLeave={() => setDragOver(false)}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => {
-                e.preventDefault()
-                setDragOver(false)
-                const dropped = e.dataTransfer.files[0]
-                if (dropped) choose(dropped)
-              }}
             >
               {file ? (
                 <>

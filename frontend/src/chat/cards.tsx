@@ -145,13 +145,13 @@ export function ClarifyCard({ text, options, disabled, onChoose }: {
 }) {
   return (
     <div className="chat-reply">
-      <p>{text}</p>
+      <p><Rich text={text} /></p>
       {options.length > 0 && (
         <div className="chat-options">
           {options.map(option => (
             <button key={option.id} type="button" className="btn" disabled={disabled} onClick={() => onChoose(option.id)}>
-              <span>{option.date_label} · {option.amount_label}</span>
               <span>{option.description}</span>
+              <span className="chat-option-when">{option.date_label} · {option.amount_label}</span>
             </button>
           ))}
         </div>

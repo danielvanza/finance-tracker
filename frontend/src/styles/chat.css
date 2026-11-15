@@ -139,7 +139,7 @@
 }
 
 .chat-empty p {
-  color: var(--muted);
+  color: var(--quiet);
   line-height: 1.5;
 }
 
@@ -215,7 +215,7 @@
 }
 
 .chat-quiet {
-  color: var(--muted);
+  color: var(--quiet);
 }
 
 .chat-error,
@@ -242,7 +242,7 @@
 
 .chat-note {
   margin-top: 0.35rem;
-  color: var(--muted);
+  color: var(--quiet);
 }
 
 .chat-change {
@@ -292,10 +292,24 @@
 
 .chat-options .btn {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: stretch;
   justify-items: start;
-  gap: 0.1rem;
+  column-gap: 0.8rem;
   padding: 0.45rem 0.9rem;
   text-align: left;
+}
+
+.chat-option-when {
+  justify-self: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.chat-options .btn:disabled .chat-option-when {
+  color: inherit;
 }
 
 .chat-foot {
@@ -515,12 +529,15 @@
   padding: 0;
   display: grid;
   gap: 0.25rem;
+  color: var(--ink);
+  font-weight: 500;
 }
 
 .chat-effect {
   margin-top: 0.5rem;
-  color: var(--muted);
+  color: var(--quiet);
   font-size: 0.875rem;
+  font-weight: 400;
 }
 
 .chat-all {
@@ -530,5 +547,5 @@
 
 .chat-all > summary {
   cursor: pointer;
-  color: var(--muted);
+  color: var(--quiet);
 }

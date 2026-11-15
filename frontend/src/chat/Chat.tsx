@@ -134,6 +134,8 @@ export default function Chat() {
   const queryClient = useQueryClient()
   const dialog = useRef<HTMLDialogElement>(null)
   const bottom = useRef<HTMLLIElement>(null)
+  // Whether the reader is at the end of the thread; new steps only scroll it for someone who is.
+  const following = useRef(true)
   const fileInput = useRef<HTMLInputElement>(null)
   const textBox = useRef<HTMLTextAreaElement>(null)
   const [open, setOpen] = useState(false)
@@ -199,6 +201,10 @@ export default function Chat() {
   useEffect(() => {
     if (open) bottom.current?.scrollIntoView({ block: 'end' })
   }, [open, lastId, pendingCount])
+  const stepsShown = messages.filter(isInFlight).reduce((n, m) => n + (workOf(m).steps?.length ?? 0), 0)
+  useEffect(() => {
+    if (open && following.current) bottom.current?.scrollIntoView({ block: 'end' })
+  }, [open, stepsShown])
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: CHAT_KEY })
 
@@ -350,7 +356,13 @@ export default function Chat() {
             </div>
           )}
 
-          <div className="chat-body">
+          <div
+            className="chat-body"
+            onScroll={event => {
+              const el = event.currentTarget
+              following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+            }}
+          >
             {messages.length === 0 && data && (
               <div className="chat-empty">
                 <p>{EXPLAIN}</p>

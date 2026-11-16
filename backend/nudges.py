@@ -17,7 +17,7 @@ from sqlalchemy import func
 
 import clock
 import spend_service
-from assistant import actions, queries, service
+from assistant import actions, queries, questions
 from db import SessionLocal
 from financial_month import get_financial_month_range, label_month_for_date
 from models import Setting, Transaction, TransactionSource
@@ -173,7 +173,7 @@ def tick(now: datetime | None = None) -> list[str]:
         # Everything owed at this moment goes out as one message, so the group is pinged once. That holds
         # for what was made earlier and nobody has been shown yet too (the bot was off, or had no group):
         # it is said again as of now, in the same one message.
-        owed, waiting_text = service.waiting_nudge(CHANNEL)
+        owed, waiting_text = questions.waiting_nudge(CHANNEL)
         parts: list[str] = []
         kinds: list[str] = []
         this_month = f"{label[0]}-{label[1]:02d}"
@@ -211,11 +211,11 @@ def tick(now: datetime | None = None) -> list[str]:
                 sent.append("stale")
         text = "\n\n".join(parts)
         if (parts and (sent or text != waiting_text)) or (owed and not parts):
-            service.post_nudge(CHANNEL, text, {"nudge": "+".join(kinds), "unasked": True})
+            questions.post_nudge(CHANNEL, text, {"nudge": "+".join(kinds), "unasked": True})
         db.commit()
     # Payments Claude was not sure of that nobody has been asked about yet, such as those from an import
     # made at night on the Import page: asked now that it is day.
-    service.ask_questions(unasked=True)
+    questions.ask_questions(unasked=True)
     return sent
 
 

@@ -18,10 +18,10 @@ from routers.dashboard import router as dashboard_router
 from routers.categories import router as categories_router
 from routers.settings import router as settings_router
 from routers.set_asides import router as set_asides_router
-from routers.chat import router as chat_router
 from routers.recurring import router as recurring_router
 from routers.goals import router as goals_router
-from assistant import service as chat_service
+from assistant import bot as chat_bot, questions
+from botkit.fastapi import bot_router
 import nudges
 
 app = FastAPI(title="Household Finance")
@@ -43,14 +43,15 @@ app.include_router(dashboard_router)
 app.include_router(categories_router)
 app.include_router(settings_router)
 app.include_router(set_asides_router)
-app.include_router(chat_router)
 app.include_router(recurring_router)
 app.include_router(goals_router)
 
 with SessionLocal() as session:
     run_seed(session)
 
-chat_service.resume()
+# The chat (the bot kit's HTTP API) at /api/chat, made after the migrations so old chats are in its store first.
+app.include_router(bot_router(chat_bot.bot()), prefix="/chat", tags=["chat"])
+questions.resume()
 if os.getenv("NUDGES", "on") != "off":
     nudges.start()
 

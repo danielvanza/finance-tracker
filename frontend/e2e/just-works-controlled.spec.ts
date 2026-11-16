@@ -5,39 +5,66 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 import {
-  App, DANIEL, GROUP, PARTNER, STRANGER, TelegramStub, euro, ingCsv, ingRow, openChat, repo, say, shot, startBot,
+  App, DANIEL, GROUP, PARTNER, STRANGER, TelegramStub, euro, ingCsv, ingRow, openChat, port, repo, say, script, shot, startBot,
 } from './fixtures'
 
 // "Just works for two" (thoughts/features/2026-11-11-just-works-for-two) in controlled conditions: the real
-// app, Telegram bot and browser, with a scripted Claude in the real sandbox and the app's clock held still.
+// app, Telegram bot (bot-kit's Telegram front) and browser, with botkit's scripted model answering in both chats
+// (SCRIPT-* lines in the message), a scripted sorter for imports, and the app's clock held still.
 // What rests on Claude's own judgement (reading a receipt, a card from a voice note, which guesses are sure)
 // is in just-works-real. The upgrade of an existing database and the unasked messages are in just-works-upgrade.
 const NOW = '2026-11-15T12:00' // a Sunday; the financial month runs 24 Oct to 23 Nov
 const TODAY = '2026-11-15'
 const MONTH = '2026-11'
-const app = new App({ port: 18761, fakeClaude: true })
-const stub = new TelegramStub(18762)
+const app = new App({ port: port(0), fakeClaude: true })
+const stub = new TelegramStub(port(1))
 const assets = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets')
 let stopBot: () => void
 let page: Page
 
-const answer = (text: string) => ({ kind: 'answer', text })
-const overview = (doing: string) => ({ kind: 'overview', doing })
-const propose = (summary: string, op: string, args: object, text?: string) => ({ kind: 'propose', summary, op, args, ...(text ? { text } : {}) })
+/** What a person types, with the scripted model's answer to it. */
+const answer = (words: string, text: string) => `${words}\nSCRIPT-SAY ${text}`
+/** What a person types, and the card the scripted model makes for it (with its words on the card, if any). */
+const propose = (words: string, summary: string, kind: string, args: object, text = '') =>
+  `${words}\n${script(['make_change', { kind, summary, args }], `SCRIPT-SAY ${text}`)}`
 const sure = (index: number, category: string) => ({ index, category, sure: true })
 const unsure = (index: number, category: string, options: string[] = []) => ({ index, category, sure: false, options })
 /** What the scripted Claude answers when the app asks it to sort imported rows. */
 const sortsAs = (items: object[]) => app.fake({ plain: JSON.stringify(items) })
 const idOf = async (name: string) => (await app.category(name)).id
-const telegram = async () => (await app.json('/chat/messages?channel=telegram')).messages
+const telegram = async () => (await app.conversation('telegram')).messages
 const pace = () => app.json<any>('/dashboard/pace')
 const rows = async (prefix: string) => (await app.transactions()).filter(t => t.description.startsWith(prefix))
 const isCard = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply')
 const isQuestion = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Something else')
 const labels = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().map((b: any) => b.text)
 const wholeEuro = (cents: number) => `€${Math.floor((Math.abs(cents) + 50) / 100).toString().replace(/\B(?=(\d{3})+$)/g, '.')}`
-const newMessage = () => JSON.parse(app.lastCall().prompt.split('<new_message>\n')[1].split('\n</new_message>')[0])
 const contextOf = (prompt: string) => JSON.parse(prompt.split('<context>\n')[1].split('\n</context>')[0])
+const conversationOf = (prompt: string) => JSON.parse(prompt.split('<conversation>\n')[1].split('\n</conversation>')[0])
+const newMessageOf = (prompt: string) => JSON.parse(prompt.split('<new_message>\n')[1].split('\n</new_message>')[0])
+
+/** Opens a category's row on the Month page; one with nothing spent sits in its group's folded "untouched" list. */
+async function openCategory(name: string) {
+  await page.locator('section.cat-group').first().waitFor()
+  const folded = page.locator('details.untouched:not([open]) > summary')
+  while (await folded.count() > 0) await folded.first().click()
+  await page.getByRole('button', { name: new RegExp(`^${name}`) }).click()
+}
+
+/** Sends a message ending in SCRIPT-ECHO and returns the whole prompt the model was given for it. */
+async function echo(from: number, words: string) {
+  const count = stub.sent.length
+  stub.text(from, `${words}\nSCRIPT-ECHO`)
+  await stub.reply_after(count, m => m.text.includes('<new_message>'))
+  await quiet()
+  return (await telegram()).filter((m: any) => m.kind === 'answer').at(-1).text as string
+}
+
+/** Waits until the bot has really shown the newest card, so a typed yes can mean it. */
+async function cardShown() {
+  await expect.poll(async () => (await telegram()).filter((m: any) => m.kind === 'card').at(-1)?.delivered?.length ?? 0,
+    { timeout: 20_000, intervals: [200] }).toBeGreaterThan(0)
+}
 
 /** Waits until the bot has shown everything the app has for the group and nothing is being worked on. */
 async function quiet() {
@@ -77,6 +104,8 @@ test.describe.serial('just works for two, in controlled conditions', () => {
   test.beforeAll(async ({ browser }) => {
     app.clock(NOW)
     await app.start()
+    await app.useRunner('script', 'script', 'bubble')
+    await app.useRunner('script', 'script', 'telegram')
     await stub.start()
     stopBot = startBot(stub, `${app.base}/api`)
     await app.addRule('salaris voorbeeld', 'Salary')
@@ -104,48 +133,43 @@ test.describe.serial('just works for two, in controlled conditions', () => {
 
   test.beforeEach(async () => {
     app.fake({ mode: 'reply', delay: '0', plain: '[]' })
-    app.fakeReply(answer('Scripted answer.'))
     await app.newChats()
     await quiet()
   })
 
   test('R-001: the bot works in one group for both people, either can press the other\'s card, and nobody else gets anything', async () => {
-    app.fakeReply(answer('Hello both.'))
     let count = stub.sent.length
-    stub.text(DANIEL, 'How are we doing?')
+    stub.text(DANIEL, answer('How are we doing?', 'Hello both.'))
     await stub.reply_after(count, m => m.text === 'Hello both.' && m.chat_id === GROUP)
     await quiet()
     count = stub.sent.length
-    stub.text(PARTNER, 'And when I ask?')
+    stub.text(PARTNER, answer('And when I ask?', 'Hello both.'))
     await stub.reply_after(count, m => m.text === 'Hello both.' && m.chat_id === GROUP)
-    expect((await telegram()).filter((m: any) => m.role === 'user').map((m: any) => m.text)).toEqual(['How are we doing?', 'And when I ask?'])
+    expect((await telegram()).filter((m: any) => m.role === 'user').map((m: any) => m.text.split('\n')[0])).toEqual(['How are we doing?', 'And when I ask?'])
 
     // A card made in answer to one of them is applied by the other.
     const food = await idOf('Food - Essential')
-    app.fakeReply(propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1500, description: 'Sample Shared Card', category_id: food }))
     count = stub.sent.length
-    stub.text(DANIEL, 'I paid 15 at the market')
+    stub.text(DANIEL, propose('I paid 15 at the market', 'Add it.', 'transaction.add', { date: TODAY, amount_cents: -1500, description: 'Sample Shared Card', category_id: food }))
     const card = await stub.reply_after(count, isCard)
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     expect(await rows('Sample Shared Card')).toHaveLength(1)
     // And rejected by the other.
-    app.fakeReply(propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1600, description: 'Sample Shared No', category_id: food }))
     count = stub.sent.length
-    stub.text(PARTNER, 'and 16 more')
+    stub.text(PARTNER, propose('and 16 more', 'Add it.', 'transaction.add', { date: TODAY, amount_cents: -1600, description: 'Sample Shared No', category_id: food }))
     const second = await stub.reply_after(count, isCard)
-    await app.cardShown()
+    await cardShown()
     stub.tap(DANIEL, second, stub.button(second, 'Not this'))
     await expect.poll(() => second.text, { timeout: 15_000 }).toContain('Not applied')
     expect(await rows('Sample Shared No')).toHaveLength(0)
 
     // Any other account, and any other group, gets silence and can press nothing.
-    app.fakeReply(propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1700, description: 'Sample Guarded', category_id: food }))
     count = stub.sent.length
-    stub.text(DANIEL, 'and 17 more')
+    stub.text(DANIEL, propose('and 17 more', 'Add it.', 'transaction.add', { date: TODAY, amount_cents: -1700, description: 'Sample Guarded', category_id: food }))
     const guarded = await stub.reply_after(count, isCard)
-    await app.cardShown()
+    await cardShown()
     await quiet()
     count = stub.sent.length
     const saved = (await telegram()).length
@@ -177,9 +201,8 @@ test.describe.serial('just works for two, in controlled conditions', () => {
   })
 
   test('R-002: an answer is one message, a card arrives with its words as one message, and the log is gone once the reply is there', async () => {
-    app.script([{ reply: overview('Checking how this month stands'), delay: 2 }, { reply: answer('All fine this month.'), delay: 2 }])
     let count = stub.sent.length
-    stub.text(DANIEL, 'How are we doing?')
+    stub.text(DANIEL, script('How are we doing?', 'SCRIPT-SLOW 2', ['month_overview', { doing: 'Checking how this month stands' }], 'SCRIPT-SAY All fine this month.'))
     const log = await stub.reply_after(count, m => m.text.startsWith('Working on it'))
     await expect.poll(() => log.text, { timeout: 10_000 }).toContain('• Checking how this month stands')
     await stub.reply_after(count, m => m.text === 'All fine this month.')
@@ -188,12 +211,10 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(showingSince(count).map(m => m.text)).toEqual(['All fine this month.'])
 
     const misc = await idOf('Miscellaneous')
-    app.script([
-      { reply: propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1234, description: 'Sample One Message', category_id: misc }), delay: 2 },
-      { reply: answer('I took it to be a general purchase; say if it belongs elsewhere.'), delay: 2 },
-    ])
     count = stub.sent.length
-    stub.text(PARTNER, 'paid 12,34 for something')
+    stub.text(PARTNER, script('paid 12,34 for something', 'SCRIPT-SLOW 2',
+      ['make_change', { kind: 'transaction.add', summary: 'Add it.', args: { date: TODAY, amount_cents: -1234, description: 'Sample One Message', category_id: misc } }],
+      'SCRIPT-SAY I took it to be a general purchase; say if it belongs elsewhere.'))
     const card = await stub.reply_after(count, isCard)
     await quiet()
     const shown = showingSince(count)
@@ -209,10 +230,9 @@ test.describe.serial('just works for two, in controlled conditions', () => {
   test('R-003: a simple card is a line or two in plain words in both chats, a batch is summed up in one message, and every row is listed on request', async () => {
     const misc = await idOf('Miscellaneous')
     const before = (await app.budgetRow(MONTH, 'Miscellaneous')).actual_amount_cents
-    const simple = propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1234, description: 'Sample Plain Card', category_id: misc })
-    app.fakeReply(simple)
+    const simple = (words: string, description: string) => propose(words, 'Add it.', 'transaction.add', { date: TODAY, amount_cents: -1234, description, category_id: misc })
     let count = stub.sent.length
-    stub.text(DANIEL, 'paid 12,34')
+    stub.text(DANIEL, simple('paid 12,34', 'Sample Plain Card'))
     const card = await stub.reply_after(count, isCard)
     expect(card.text.split('\n')).toEqual([
       'Add: Sample Plain Card · 15 Nov · -⁠€12,34, in Miscellaneous',
@@ -220,7 +240,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     ])
     expect(labels(card)).toEqual(['Apply', 'Not this'])
     for (const fieldByField of ['Date:', 'Amount:', 'Reviewed', 'Counts as', '—']) expect(card.text).not.toContain(fieldByField)
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\. Add: Sample Plain Card/)
     expect(card.text.split('\n')).toHaveLength(2)
@@ -229,12 +249,11 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // The same card in the app's panel: the same lines, no field list.
     await page.goto(app.base)
     await openChat(page)
-    app.fakeReply({ ...simple, args: { ...simple.args, description: 'Sample Plain Panel' } })
-    await say(page, 'paid 12,34 again')
-    const panel = page.locator('.chat-card[data-state="pending"]').last()
-    await expect(panel.locator('.chat-lines').first().locator('li')).toHaveText(['Add: Sample Plain Panel · 15 Nov · -⁠€12,34, in Miscellaneous'])
-    await expect(panel.locator('.chat-effect li')).toHaveCount(1)
-    await expect(panel.locator('dl, .chat-all')).toHaveCount(0)
+    await say(page, simple('paid 12,34 again', 'Sample Plain Panel'))
+    const panel = page.locator('.bk-card[data-state="open"]').last()
+    await expect(panel.locator('.bk-lines').first().locator('li')).toHaveText(['Add: Sample Plain Panel · 15 Nov · -⁠€12,34, in Miscellaneous'])
+    await expect(panel.locator('.hf-effect li')).toHaveCount(1)
+    await expect(panel.locator('dl, .hf-all')).toHaveCount(0)
     await shot(page, 'just-works-plain-card')
     await panel.getByRole('button', { name: 'Not this' }).click()
     await expect(page.locator('[data-state="rejected"]').last()).toBeVisible()
@@ -250,10 +269,9 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     ])
     const batch = [...await rows('Sample Grocer'), ...await rows('Sample Bistro'), ...await rows('Sample Odds')]
     expect(batch).toHaveLength(120)
-    const confirmAll = propose('Confirm these 120.', 'review.confirm', { ids: batch.map(t => t.id) })
-    app.fakeReply(confirmAll)
+    const confirmAll = (words: string, text = '') => propose(words, 'Confirm these 120.', 'review.confirm', { ids: batch.map(t => t.id) }, text)
     count = stub.sent.length
-    stub.text(DANIEL, 'confirm the lot')
+    stub.text(DANIEL, confirmAll('confirm the lot'))
     const big = await stub.reply_after(count, isCard)
     await quiet()
     expect(showingSince(count), 'one message whatever the size').toHaveLength(1)
@@ -272,7 +290,6 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // Asking to see everything lists the rows: by typing it, and by the button. They come grouped by
     // what changes under a bold heading, as columns of date, amount and name that fit a phone.
     count = stub.sent.length
-    const calls = app.calls().length
     stub.text(PARTNER, 'Show all')
     const everything = () => stub.sent.slice(count).map(m => m.text).join('\n').split('\n')
     const listed = () => everything().filter(line => /^5 Sep {2,}\d+,\d\d {2}Sample (Grocer|Bistro|Odds) \d+/.test(line))
@@ -286,7 +303,11 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(html).toContain('<b>Confirmed as Food - Essential</b> · 60\n<pre>5 Sep  10,00  Sample Grocer ')
     expect(everything().join('\n'), 'confirming remembers no shop by itself').not.toContain('Remembered')
     expect(everything().join('\n')).not.toContain('Reviewed')
-    expect(app.calls().length, 'listing the rows did not go to Claude').toBe(calls)
+    // Listing the rows did not go to the model: the typed words were settled at once, and no reply was worked on.
+    const told = await telegram()
+    const typed = told.findLast((m: any) => m.role === 'user')
+    expect(typed).toMatchObject({ text: 'Show all', status: 'done' })
+    expect(told.filter((m: any) => m.id > typed.id).map((m: any) => m.kind)).toEqual(['all_rows'])
     expect((await rows('Sample Grocer')).every(t => !t.confirmed), 'listing changed nothing').toBe(true)
     await quiet()
     count = stub.sent.length
@@ -295,25 +316,26 @@ test.describe.serial('just works for two, in controlled conditions', () => {
 
     await quiet()
     // The same card a second time, while the first is open, is not made.
-    app.fakeReply({ ...confirmAll, text: 'The card is above.' })
+    // (No closing words, so the reply is the tool's own result: what the model was told.)
+    const cardsBefore = app.botValue('SELECT COUNT(*) FROM bot_cards')[0][0]
     count = stub.sent.length
-    stub.text(DANIEL, 'confirm the lot, I said')
-    const pointed = await stub.reply_after(count, m => m.text.includes('The card is above.'))
+    stub.text(DANIEL, `confirm the lot, I said\n${script(['make_change', { kind: 'review.confirm', summary: 'Confirm these 120.', args: { ids: batch.map(t => t.id) } }])}`)
+    const pointed = await stub.reply_after(count, m => m.text.includes('make_change'))
     await quiet()
     expect(isCard(pointed), 'no second card').toBe(false)
     expect(showingSince(count).filter(isCard)).toHaveLength(0)
-    expect(app.toolCalls().at(-1)).toMatchObject({ tool: 'propose_change', isError: true })
-    expect(app.toolCalls().at(-1)!.text).toContain('already open')
+    expect(pointed.text).toContain('make_change (error)')
+    expect(pointed.text).toContain('already open')
+    expect(app.botValue('SELECT COUNT(*) FROM bot_cards')[0][0]).toBe(cardsBefore)
 
     // Not this changes nothing; a new card and Apply confirm all 120.
     stub.tap(DANIEL, big, stub.button(big, 'Not this'))
     await expect.poll(() => big.text, { timeout: 15_000 }).toContain('Not applied')
     expect((await rows('Sample Bistro')).every(t => !t.confirmed)).toBe(true)
-    app.fakeReply(confirmAll)
     count = stub.sent.length
-    stub.text(DANIEL, 'confirm the lot after all')
+    stub.text(DANIEL, confirmAll('confirm the lot after all'))
     const again = await stub.reply_after(count, isCard)
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, again, stub.button(again, 'Apply'))
     await expect.poll(() => again.text, { timeout: 30_000 }).toMatch(/^Applied\./)
     // Once applied it is one sentence and what is left, not the whole summary again.
@@ -337,110 +359,108 @@ test.describe.serial('just works for two, in controlled conditions', () => {
       description: `Wide${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + Math.floor(i / 26))} Longnamedshop Verylongsecondword ${i}`,
       cents: -(100 + i), category: spending[i % spending.length].id,
     })))
-    app.fakeReply(propose('Confirm these 480.', 'review.confirm', { ids: (await rows('Wide')).map(t => t.id) }))
     count = stub.sent.length
-    stub.text(DANIEL, 'confirm the wide lot')
+    stub.text(DANIEL, propose('confirm the wide lot', 'Confirm these 480.', 'review.confirm', { ids: (await rows('Wide')).map(t => t.id) }))
     const wide = await stub.reply_after(count, isCard)
     await quiet()
     expect(showingSince(count)).toHaveLength(1)
     expect(wide.text.length).toBeLessThanOrEqual(4096)
     expect(wide.text.split('\n')[0]).toBe('480 payments')
-    await app.cardShown()
+    await cardShown()
     stub.tap(DANIEL, wide, stub.button(wide, 'Apply'))
     await expect.poll(() => wide.text, { timeout: 60_000 }).toMatch(/^Applied\./)
     expect(wide.text.length).toBeLessThanOrEqual(4096)
     expect((await rows('Wide')).every(t => t.confirmed)).toBe(true)
   })
 
-  test('R-004: a voice note is taken as what was said, the reply shows what was heard, and an unclear note asks to repeat and changes nothing', async () => {
+  test('R-004: a voice note is taken as what was said, the reply shows what was heard, never settles a card, and an unclear note asks to repeat and changes nothing', async () => {
+    // A card is open in front of the group.
     const food = await idOf('Food - Essential')
-    app.fakeReply(propose('Add it.', 'transaction.add', { date: TODAY, amount_cents: -1500, description: 'Market (cash)', category_id: food }, 'I put it under groceries.'))
     let count = stub.sent.length
-    stub.voice(PARTNER, readFileSync(path.join(assets, 'voice-fifteen-euros-market.ogg')))
+    stub.text(DANIEL, propose('15 cash at the market', 'Add it.', 'transaction.add', { date: TODAY, amount_cents: -1500, description: 'Market (cash)', category_id: food }))
     const card = await stub.reply_after(count, isCard)
+    await cardShown()
     await quiet()
-    expect(card.text).toMatch(/^Heard: “(15|fifteen) euros cash at the market\.?”\n\nI put it under groceries\./i)
-    expect(card.text).toContain('Add: Market (cash) · 15 Nov')
-    expect(showingSince(count), 'still one message').toHaveLength(1)
-    // Claude was given what was heard, marked as heard.
-    expect(newMessage().heard_from_a_voice_note).toMatch(/^(15|fifteen) euros cash at the market\.?$/i)
+
+    // The voice note is heard on this machine and goes to the model as the person's words (the scripted model,
+    // given no SCRIPT lines, says so); the reply starts with what was heard, in one message.
+    count = stub.sent.length
+    stub.voice(PARTNER, readFileSync(path.join(assets, 'voice-fifteen-euros-market.ogg')))
+    const reply = await stub.reply_after(count, m => m.text.startsWith('Heard:') && !m.text.includes('Working on it'))
+    await quiet()
+    expect(reply.text).toMatch(/^Heard: “(15|fifteen) euros cash at the market\.?”\n\nThe script ran no tools\.$/i)
+    expect(showingSince(count), 'one message').toHaveLength(1)
     const saved = (await telegram()).filter((m: any) => m.role === 'user').at(-1)
     expect(saved).toMatchObject({ kind: 'voice' })
+    expect(saved.text).toMatch(/^(15|fifteen) euros cash at the market\.?$/i)
     // Replies are text: nothing was sent as sound.
     expect(stub.calls.filter(c => /voice|audio/i.test(c))).toEqual([])
+    // Words from a voice note never settle a card: the card is still open, and only a tap applies it.
+    expect(isCard(card)).toBe(true)
+    expect(app.botValue('SELECT status FROM bot_cards ORDER BY id DESC LIMIT 1')).toEqual([['open']])
+    // The model is given what was heard, marked as heard.
+    const prompt = await echo(DANIEL, 'what did I say?')
+    expect(conversationOf(prompt).find((e: any) => e.heard_from_a_voice_note)).toMatchObject({ from: 'person', text: saved.text })
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     expect(await rows('Market (cash)')).toHaveLength(1)
-
-    // A plain answer to a voice note shows what was heard too.
-    app.fakeReply(answer('Noted.'))
-    count = stub.sent.length
-    stub.voice(DANIEL, readFileSync(path.join(assets, 'voice-fifteen-euros-market.ogg')))
-    const reply = await stub.reply_after(count, m => m.text.endsWith('Noted.'))
-    expect(reply.text).toMatch(/^Heard: “(15|fifteen) euros cash at the market\.?”\n\nNoted\.$/i)
     await quiet()
 
-    // A note that cannot be made out: asked to repeat or type, nothing saved, nothing changed, Claude not asked.
+    // A note that cannot be made out: asked to repeat or type, nothing changed, the model not asked.
     const before = app.dump()
-    const messages = (await telegram()).length
-    const calls = app.calls().length
+    const messages = await telegram()
     count = stub.sent.length
     stub.voice(DANIEL, readFileSync(path.join(assets, 'voice-unclear.ogg')))
-    const unheard = await stub.reply_after(count, () => true)
+    const unheard = await stub.reply_after(count, m => !m.text.startsWith('Working on it'))
     expect(unheard.text).toBe('I could not make that out. Could you say it again, or type it? Nothing changed.')
     await quiet()
     expect(showingSince(count)).toHaveLength(1)
-    expect((await telegram()).length).toBe(messages)
-    expect(app.calls().length).toBe(calls)
+    // The note is kept (with no words) and answered with the reason; nothing else was said.
+    expect((await telegram()).slice(messages.length).map((m: any) => [m.role, m.kind, m.text])).toEqual([
+      ['user', 'voice', ''], ['assistant', 'error', 'I could not make that out. Could you say it again, or type it? Nothing changed.'],
+    ])
     expect(app.dump()).toEqual(before)
   })
 
-  test('R-005: a photo is shown to Claude with no tools added, its caption is the person\'s message, an unreadable one is said to be unreadable, and nothing changes without Apply', async () => {
+  test('R-005: a photo is shown to the model, its caption is the person\'s message, an unreadable one is said to be unreadable, and nothing changes without Apply', async () => {
     const eating = await idOf('Food - Not Essential')
     const receipt = readFileSync(path.join(assets, 'receipt-bakery.png'))
-    app.fakeReply(propose('Add the bakery.', 'transaction.add', { date: '2026-11-11', amount_cents: -780, description: 'Bakkerij De Korenbloem', category_id: eating }, 'From the receipt.'))
     let count = stub.sent.length
-    stub.photo(DANIEL, receipt)
+    stub.photo(DANIEL, receipt, script(['make_change', { kind: 'transaction.add', summary: 'Add the bakery.', args: { date: '2026-11-11', amount_cents: -780, description: 'Bakkerij De Korenbloem', category_id: eating } }], 'SCRIPT-SAY From the receipt.'))
     const card = await stub.reply_after(count, isCard)
-    const call = app.lastCall()
-    expect(call.picture.media_type).toBe('image/png')
-    expect(call.picture.base64_chars).toBe(receipt.toString('base64').length) // the full-size picture, not the thumbnail
-    expect(newMessage()).toEqual({ sent_a_photo: true, caption: null })
-    // The sandbox is as closed as for a typed message: no built-in tools, only the app's own.
-    expect(call.argv[call.argv.indexOf('--tools') + 1]).toBe('')
-    expect(call.argv[call.argv.indexOf('--allowedTools') + 1].split(',').every((t: string) => t.startsWith('mcp__finance__'))).toBe(true)
-    expect(call.real_login_visible).toBe(false)
+    // The full-size picture was taken, not the thumbnail.
+    const photo = (await telegram()).filter((m: any) => m.role === 'user').at(-1)
+    expect(photo).toMatchObject({ kind: 'photo', payload: { size: receipt.length } })
     expect(card.text).toContain('Add: Bakkerij De Korenbloem · 11 Nov · -⁠€7,80, in Food - Not Essential')
     expect(await rows('Bakkerij De Korenbloem'), 'nothing changes without Apply').toHaveLength(0)
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     expect(await rows('Bakkerij De Korenbloem')).toHaveLength(1)
-
-    // A caption is treated as the person's message.
-    app.fakeReply(answer('Noted the bakery.'))
-    count = stub.sent.length
-    stub.photo(PARTNER, receipt, 'bakery 7,80 this morning')
-    await stub.reply_after(count, m => m.text === 'Noted the bakery.')
-    expect(newMessage()).toEqual({ sent_a_photo: true, caption: 'bakery 7,80 this morning' })
-    expect((await telegram()).filter((m: any) => m.role === 'user').at(-1)).toMatchObject({ kind: 'photo', text: 'bakery 7,80 this morning' })
     await quiet()
 
-    // Something that is not a picture Claude can look at: said plainly, nothing changes, Claude is not asked.
+    // A caption is treated as the person's message, marked as coming with a photo.
+    count = stub.sent.length
+    stub.photo(PARTNER, receipt, 'bakery 7,80 this morning\nSCRIPT-ECHO')
+    await stub.reply_after(count, m => m.text.includes('<new_message>'))
+    await quiet()
+    const echoed = (await telegram()).filter((m: any) => m.kind === 'answer').at(-1).text
+    expect(newMessageOf(echoed)).toEqual({ from: 'person', text: 'bakery 7,80 this morning\nSCRIPT-ECHO', sent_a_photo: true })
+    expect((await telegram()).filter((m: any) => m.role === 'user').at(-1)).toMatchObject({ kind: 'photo', text: 'bakery 7,80 this morning\nSCRIPT-ECHO' })
+
+    // Something that is not a picture the model can look at: said plainly, nothing changes, the model is not asked.
     const before = app.dump()
-    const calls = app.calls().length
     count = stub.sent.length
     stub.photo(DANIEL, Buffer.from('these bytes are not a picture'))
-    const refused = await stub.reply_after(count, () => true)
+    const refused = await stub.reply_after(count, m => !m.text.startsWith('Working on it'))
     expect(refused.text).toBe('I could not read that picture. Send it as a photo, or type what it shows. Nothing changed.')
     await quiet()
-    expect(app.calls().length).toBe(calls)
+    expect((await telegram()).at(-1)).toMatchObject({ role: 'assistant', kind: 'error' })
     expect(app.dump()).toEqual(before)
 
-    // When Claude itself cannot read the photo, its plain words go out and nothing changes.
-    app.fakeReply(answer('I cannot read that photo. Could you type what it shows?'))
+    // When the model itself cannot read the photo, its plain words go out and nothing changes.
     count = stub.sent.length
-    stub.photo(DANIEL, receipt)
+    stub.photo(DANIEL, receipt, 'SCRIPT-SAY I cannot read that photo. Could you type what it shows?')
     await stub.reply_after(count, m => m.text === 'I cannot read that photo. Could you type what it shows?')
     await quiet()
     expect(app.dump()).toEqual(before)
@@ -571,7 +591,8 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(webshop.text).toBe('Sample Webshop · 12 Nov · +€20,00\n\nWhat was this money for?')
     expect(labels(webshop)).toEqual(['Other Income', 'Refund: Clothing', 'Something else'])
     // The same payments are in the app's review list.
-    await expect(page.locator('.page-head')).toContainText(`${waitingBefore + 6} to review`)
+    // (With payments waiting the page opens its review queue, whose header gives the count.)
+    await expect(page.locator('.tx-page')).toContainText(`${waitingBefore + 6} remaining`)
     const inReview = new Set<string>()
     for (let i = 0, skip: number[] = []; i < 12; i++) {
       const next = await app.json<any>(`/transactions/review?${skip.map(id => `skip_ids=${id}`).join('&')}`)
@@ -583,7 +604,8 @@ test.describe.serial('just works for two, in controlled conditions', () => {
 
     // An answer by either person sorts the shop's payments, and the next question comes.
     const eatingBefore = (await app.budgetRow(MONTH, 'Food - Not Essential')).actual_amount_cents
-    stub.tap(PARTNER, tango, stub.button(tango, 'Food - Not Essential'))
+    const firstAnswer = stub.button(tango, 'Food - Not Essential')
+    stub.tap(PARTNER, tango, firstAnswer)
     await expect.poll(() => tango.text, { timeout: 15_000 }).toBe('Tango Sample: Food - Not Essential. 2 payments sorted.')
     // R-013: the answer made no rule; the answered question offers to remember the shop.
     expect(labels(tango)).toEqual(['Remember Tango Sample for next time'])
@@ -593,7 +615,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await expect.poll(() => asked().length, { timeout: 20_000 }).toBe(3)
     expect(asked().map(m => m.text.split(' · ')[0])).toEqual(['Mw P Voorbeeld', 'Sample Webshop', 'Kiosk Onbekend'])
     // A second tap on an answered question changes nothing.
-    stub.tap(DANIEL, tango, 'q:0:0')
+    stub.tap(DANIEL, tango, firstAnswer)
 
     // R-013: asked to, the shop is remembered. Its later payments are sorted the same way, with no question and without asking Claude.
     expect((await rows('Tango Sample')).length, 'the second tap sorted nothing again').toBe(2)
@@ -601,11 +623,11 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await expect.poll(() => tango.text, { timeout: 15_000 }).toBe('Tango Sample: Food - Not Essential. 2 payments sorted.\nRemembered: “tango sample” → Food - Not Essential.')
     expect(labels(tango)).toEqual([])
     expect((await app.json<any[]>('/rules')).filter(r => r.pattern === 'tango sample').map(r => r.category_name)).toEqual(['Food - Not Essential'])
-    const calls = app.calls().length
+    const calls = app.sorterCalls().length
     const later = await importInTelegram(DANIEL, ingCsv([ingRow('2026-11-14', 'Tango Sample 99 Utrecht', -500)]))
     expect(later.summary.text.split('\n')).toEqual(['ING import: 1 new payment.', '1 sorted and counted.'])
     expect((await rows('Tango Sample 99'))[0]).toMatchObject({ confirmed: true, category_name: 'Food - Not Essential', categorised_by: 'rule' })
-    expect(app.calls().length, 'Claude was not asked about a remembered shop').toBe(calls)
+    expect(app.sorterCalls().length, 'Claude was not asked about a remembered shop').toBe(calls)
     expect(showingSince(later.count).filter(isQuestion)).toHaveLength(0)
     // And a waiting payment of that shop that no question named follows the answer at once.
     addWaiting([{ description: 'Kiosk Onbekend Filiaal 2', cents: -150, category: await idOf('Miscellaneous'), date: '2026-11-11' }])
@@ -635,18 +657,17 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await quiet()
     expect(showingSince(sent).filter(m => m.text.startsWith('Tell me in a few words'))).toHaveLength(1)
     const voorbeeld = (await rows('Mw P Voorbeeld'))[0]
-    app.fakeReply(propose('Move it.', 'transaction.update', { id: voorbeeld.id, category_id: await idOf('Home & DIY') }))
-    sent = stub.sent.length
-    stub.text(DANIEL, 'that was the plumber')
-    const card = await stub.reply_after(sent, isCard)
-    const conversation = JSON.parse(app.lastCall().prompt.split('<conversation>\n')[1].split('\n</conversation>')[0])
-    expect(conversation.find((e: any) => e.asked?.startsWith('Mw P Voorbeeld'))).toMatchObject({ from: 'app', transaction_ids: [voorbeeld.id] })
     // With other questions open too, Claude is told which payment the words are about: the app's request is the
     // last thing said before them, and it names the payment.
+    const conversation = conversationOf(await echo(DANIEL, 'that was the plumber'))
+    expect(conversation.find((e: any) => e.asked?.startsWith('Mw P Voorbeeld'))).toMatchObject({ from: 'app', transaction_ids: [voorbeeld.id] })
     expect(conversation.at(-1)).toEqual({
       from: 'app', asked_after_something_else: 'Tell me in a few words what Mw P Voorbeeld is, and I will sort it.', transaction_ids: [voorbeeld.id],
     })
-    await app.cardShown()
+    sent = stub.sent.length
+    stub.text(DANIEL, propose('the plumber, I said', 'Move it.', 'transaction.update', { id: voorbeeld.id, category_id: await idOf('Home & DIY') }))
+    const card = await stub.reply_after(sent, isCard)
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     await expect.poll(() => person.text, { timeout: 15_000 }).toBe('Mw P Voorbeeld: Sorted as Home & DIY.')
@@ -877,13 +898,17 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(p.free).toMatchObject({ left_in_plan_cents: left, bills_cents: 14500, set_aside_cents: 0, free_cents: left - 14500 })
     expect(p.free.per_day_cents, 'today and the eight days after it').toBe(Math.floor((left - 14500) / 9))
 
+    // The Month page (since its "Left to spend" redesign) gives the same figure as "to stay in budget": what is free
+    // until payday, a day; its working-out lists the fixed bills it allows for.
     await page.goto(app.base)
     const verdict = page.locator('.verdict')
-    await expect(verdict.locator('h1')).toHaveText(`${wholeEuro(p.free.free_cents)} free to spend`)
-    await expect(verdict).toContainText('until payday, 23 Nov')
-    await expect(verdict).toContainText(`About ${wholeEuro(p.free.per_day_cents)} a day until payday`)
-    await expect(verdict.locator('.free-how > summary')).toHaveText(`${wholeEuro(left)} left in the plan, less €145 of fixed bills still to come`)
+    const inBudget = verdict.locator('.cell', { hasText: 'To stay in budget' })
+    await expect(inBudget).toContainText(wholeEuro(p.free.per_day_cents))
+    await expect(inBudget).toContainText('a day, for 9 days')
+    await expect(verdict.locator('.verdict-sub')).toContainText(/until payday, 23 Nov/i)
     await verdict.locator('.free-how > summary').click()
+    await expect(verdict.locator('.ledger')).toContainText(`${wholeEuro(left)} left in the plan (less fixed bills and set-asides)`)
+    await expect(verdict.locator('.ledger dl')).toContainText('Fixed bills still to come- €145')
     const bill = verdict.locator('.free-list li', { hasText: 'Sample Energy NV' })
     await expect(bill).toContainText('due 20 Nov')
     await expect(bill).toContainText('€145')
@@ -891,24 +916,21 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await shot(page, 'just-works-free-to-spend')
 
     // The bot is given the same figure, and leads with it.
-    app.fakeReply(answer('Free to spend is as the page says.'))
-    const count = stub.sent.length
-    stub.text(PARTNER, 'How are we doing?')
-    await stub.reply_after(count, m => m.text === 'Free to spend is as the page says.')
-    const told = contextOf(app.lastCall().prompt).this_month
+    const told = contextOf(await echo(PARTNER, 'How are we doing?')).this_month
     expect(told).toMatchObject({
       free_to_spend_cents: p.free.free_cents, free_per_day_cents: p.free.per_day_cents,
       fixed_bills_still_to_come_cents: 14500, set_aside_this_month_cents: 0, left_in_plan_cents: left,
     })
     expect(told.upcoming_bills.map((b: any) => b.name)).toEqual(['Sample Energy NV'])
-    expect(app.lastCall().argv[app.lastCall().argv.indexOf('--system-prompt') + 1]).toContain('free_to_spend_cents is the app\'s headline')
+    // What the model is told to lead with (its system prompt, which the scripted model is not shown).
+    expect(readFileSync(path.join(repo, 'backend', 'assistant', 'prompts.py'), 'utf8')).toContain('free_to_spend_cents is the app\'s headline')
 
     // Marked as not a fixed bill: it is left out, on the page and for the bot.
     await bill.getByRole('button', { name: 'Sample Energy NV is not a fixed bill' }).click()
-    await expect(verdict.locator('h1')).toHaveText(`${wholeEuro(left)} free to spend`)
     await expect(verdict.locator('.free-list li', { hasText: 'Sample Energy NV' })).toHaveCount(0)
     const without = await pace()
     expect(without.free).toMatchObject({ bills_cents: 0, bills: [], free_cents: left })
+    await expect(inBudget).toContainText(wholeEuro(without.free.per_day_cents))
     expect((await app.json<any>('/recurring')).items.find((i: any) => i.name === 'Sample Energy NV').state).toBe('ignored')
     // It can be counted again from the list of repeating payments.
     await page.getByRole('button', { name: /Nothing more to pay|still to pay|Recurring payments/ }).first().click()
@@ -917,20 +939,22 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await sheet.getByRole('button', { name: 'Count as a fixed bill again' }).click()
     await expect.poll(async () => (await pace()).free.bills_cents, { timeout: 10_000 }).toBe(14500)
     await sheet.getByRole('button', { name: 'Close' }).click()
-    await expect(verdict.locator('h1')).toHaveText(`${wholeEuro(left - 14500)} free to spend`)
+    await expect(inBudget).toContainText(wholeEuro(p.free.per_day_cents))
 
     // When more is spent than was free, it says by how much the month is over.
     const big = await app.addManual(TODAY, -(left - 14500 + 12345), 'Sample Big Spend', 'Miscellaneous')
     await page.reload()
-    await expect(verdict.locator('h1')).toHaveText(`${wholeEuro(12345)} over`)
+    await expect(inBudget).toContainText(`${wholeEuro(12345)} over`)
+    await expect(inBudget).toContainText('plan used up')
     expect((await pace()).free).toMatchObject({ free_cents: -12345, per_day_cents: null })
     await app.json(`/transactions/${big.id}`, { method: 'DELETE' })
     await page.reload()
-    await expect(verdict.locator('h1')).toHaveText(`${wholeEuro(left - 14500)} free to spend`)
+    await expect(inBudget).toContainText(wholeEuro(p.free.per_day_cents))
 
-    // A past month has no "free to spend": it says what was left or over.
+    // A past month has no "to stay in budget": it says what was left over.
     await page.getByRole('button', { name: 'Previous month' }).click()
-    await expect(verdict.locator('h1')).toHaveText(/left$|over$/)
+    await expect(verdict.locator('h1')).toHaveText(/^Left over/)
+    await expect(verdict).not.toContainText('To stay in budget')
   })
 
   test('R-018: a set-aside spreads a bill over the months to its due month, lowers free to spend, and its payment comes out of what was set aside', async () => {
@@ -952,9 +976,12 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(await months('2027-01')).toMatchObject({ monthly_cents: 10000, saved_cents: 30000 })
     expect(await months('2027-04')).toMatchObject({ monthly_cents: 10000, saved_cents: 60000 })
     expect(await months('2027-05'), 'a yearly bill starts again over twelve months').toMatchObject({ monthly_cents: 5000, saved_cents: 5000, due_month: '2028-04' })
+    // On the Month page (its "Left to spend" redesign): what may still be spent a day allows for it, and the working-out names it.
     await page.goto(app.base)
-    await expect(page.locator('.verdict h1')).toHaveText(`${wholeEuro(kept.free.free_cents)} free to spend`)
-    await expect(page.locator('.free-how > summary')).toContainText('less €100 set aside')
+    await expect(page.locator('.verdict .cell', { hasText: 'To stay in budget' })).toContainText(wholeEuro(kept.free.per_day_cents))
+    await page.locator('.free-how > summary').click()
+    await expect(page.locator('.ledger dl')).toContainText('Set aside this month- €100')
+    await expect(page.locator('.free-list[aria-label="Set aside this month"] li', { hasText: 'Car insurance' })).toContainText('€100')
 
     // The bill is paid: first it counts as ordinary spending and against the month's pace.
     await app.addRule('sample insurer', 'Insurance')
@@ -1039,24 +1066,22 @@ test.describe.serial('just works for two, in controlled conditions', () => {
   })
 
   test('R-018: the bot can make a set-aside and say a payment was its bill, through cards', async () => {
-    app.fakeReply(propose('Set aside for the road tax.', 'set_aside.add', { name: 'Road tax', amount_cents: 24000, due_month: '2027-02', every_months: 12 }))
     let count = stub.sent.length
-    stub.text(DANIEL, 'set aside 240 for road tax in February')
+    stub.text(DANIEL, propose('set aside 240 for road tax in February', 'Set aside for the road tax.', 'set_aside.add', { name: 'Road tax', amount_cents: 24000, due_month: '2027-02', every_months: 12 }))
     const card = await stub.reply_after(count, isCard)
     expect(card.text).toContain('New: Set-aside “Road tax”: €240,00, February 2027')
     expect((await app.json<any>('/set-asides')).items).toHaveLength(0)
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     const made = (await app.json<any>('/set-asides')).items[0]
     expect(made).toMatchObject({ name: 'Road tax', monthly_cents: 6000 })
     const insurer = (await rows('Sample Insurer Direct'))[0]
-    app.fakeReply(propose('That payment was the road tax.', 'set_aside.pay', { id: made.id, transaction_id: insurer.id }))
     count = stub.sent.length
-    stub.text(DANIEL, 'the insurer payment was the road tax')
+    stub.text(DANIEL, propose('the insurer payment was the road tax', 'That payment was the road tax.', 'set_aside.pay', { id: made.id, transaction_id: insurer.id }))
     const pay = await stub.reply_after(count, isCard)
     expect(pay.text).toContain('Sample Insurer Direct · 13 Nov · -⁠€600,00: paid from Road tax')
-    await app.cardShown()
+    await cardShown()
     stub.tap(DANIEL, pay, stub.button(pay, 'Apply'))
     await expect.poll(() => pay.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     expect((await rows('Sample Insurer Direct'))[0].set_aside_name).toBe('Road tax')
@@ -1099,10 +1124,10 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await page.goto(app.base)
     const summary = await app.json<any>(`/dashboard/summary?month=${MONTH}`)
     const p = await pace()
-    const kinds = page.locator('.kinds')
+    // (Since the Month page's redesign each group heading says it.)
     for (const [kind, label, aim] of [['needs', 'Needs', 60], ['wants', 'Wants', 25], ['savings', 'Savings', 15]] as const) {
       const share = Math.round((p.actual_cents[kind] / summary.total_income_cents) * 100)
-      await expect(kinds.locator('.kind', { hasText: label })).toContainText(`${share}% of income, aim ${aim}%`)
+      await expect(page.locator(`section.cat-group[aria-label="${label}"] .kind-share`)).toContainText(`${share}% of income, aim ${aim}%`)
     }
     await shot(page, 'just-works-target-split')
   })
@@ -1113,7 +1138,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(await planned('2026-10', 'Clothing')).toBe(10000)
     expect(await planned('2026-12', 'Clothing')).toBe(10000)
     await page.goto(app.base)
-    await page.getByRole('button', { name: /^Clothing/ }).click()
+    await openCategory('Clothing')
     const field = page.locator('.cat-detail').getByLabel('Planned')
     await field.fill('140')
     await field.blur()
@@ -1147,6 +1172,10 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // The Setup planner saves the same way, and says so.
     await page.goto(`${app.base}/setup`)
     await expect(page.getByText('A changed amount stays for the months after November too; earlier months keep theirs.')).toBeVisible()
+    // (The planner's groups start folded.)
+    await expect(page.locator('.bud-fold').first()).toBeVisible()
+    const closed = page.locator('.bud-fold[aria-expanded="false"]')
+    while (await closed.count() > 0) await closed.first().click()
     await page.getByLabel('Home & DIY planned amount').fill('175')
     await page.getByRole('button', { name: 'Save plan' }).click()
     await expect.poll(() => planned(MONTH, 'Home & DIY'), { timeout: 10_000 }).toBe(17500)
@@ -1154,12 +1183,11 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(await planned('2026-10', 'Home & DIY')).toBe(10000)
 
     // Through the bot, with no month named: from this month on.
-    app.fakeReply(propose('Plan less for recreation.', 'budget.set', { category_id: await idOf('Recreation & Entertainment'), planned_amount_cents: 8000 }))
     const count = stub.sent.length
-    stub.text(PARTNER, 'plan 80 for recreation from now on')
+    stub.text(PARTNER, propose('plan 80 for recreation from now on', 'Plan less for recreation.', 'budget.set', { category_id: await idOf('Recreation & Entertainment'), planned_amount_cents: 8000 }))
     const card = await stub.reply_after(count, isCard)
     expect(card.text).toContain('Budget for Recreation & Entertainment, November 2026: planned €100,00 → €80,00')
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 15_000 }).toMatch(/^Applied\./)
     expect(await planned(MONTH, 'Recreation & Entertainment')).toBe(8000)
@@ -1219,7 +1247,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await app.addRule('sample deli to go', 'Food - Not Essential')
     await app.addRule('quick snack corner', 'Food - Not Essential')
     await app.addRule('quick snack', 'Food - Essential')
-    const calls = app.calls().length
+    const calls = app.sorterCalls().length
     await importInTelegram(DANIEL, ingCsv([
       ingRow('2026-11-12', 'Sample Deli To Go 44 Enschede', -450),
       ingRow('2026-11-12', 'Sample Deli 12 Enschede', -2300),
@@ -1233,7 +1261,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(await sorted('Quick Snack')).toEqual(expect.arrayContaining([
       ['Quick Snack Corner Utrecht', 'Food - Not Essential', 'rule'], ['Quick Snack Utrecht', 'Food - Essential', 'rule'],
     ]))
-    expect(app.calls().length).toBe(calls)
+    expect(app.sorterCalls().length).toBe(calls)
     // Two equally specific rules: the older one, as before.
     await app.addRule('tie shop a', 'Clothing')
     await app.addRule('ie shop ab', 'Home & DIY')
@@ -1281,7 +1309,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
 
   test('R-025: the Month page no longer changes what a category counts as; Setup does, and asks first when the category is in use', async () => {
     await page.goto(app.base)
-    await page.getByRole('button', { name: /^Clothing/ }).click()
+    await openCategory('Clothing')
     const detail = page.locator('.cat-detail')
     await expect(detail.getByLabel('Planned')).toBeVisible()
     await expect(detail.getByLabel('Counts as')).toHaveCount(0)

@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect } from '@playwright/test'
-import { App, DANIEL, GROUP, PARTNER, TelegramStub, euro, ingCsv, ingRow, startBot } from './fixtures'
+import { App, DANIEL, GROUP, PARTNER, TelegramStub, euro, ingCsv, ingRow, port, startBot } from './fixtures'
 
 // "Just works for two" with the real Claude (the machine's login, in its sandbox) on synthetic data: the parts
 // that rest on Claude's own judgement. Everything else is in just-works-controlled and just-works-upgrade.
 const NOW = '2026-11-15T12:00'
-const app = new App({ port: 18781 })
-const stub = new TelegramStub(18782)
+const app = new App({ port: port(0) })
+const stub = new TelegramStub(port(1))
 const assets = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets')
 let stopBot: () => void
 
@@ -17,7 +17,13 @@ const isCard = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((
 const isQuestion = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Something else')
 const labels = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().map((b: any) => b.text)
 const rows = async (prefix: string) => (await app.transactions()).filter(t => t.description.toLowerCase().includes(prefix.toLowerCase()))
-const telegram = async () => (await app.json('/chat/messages?channel=telegram')).messages
+const telegram = async () => (await app.conversation('telegram')).messages
+
+/** Waits until the bot has really shown the newest card in the group, so a tap or a typed yes can mean it. */
+async function cardShown() {
+  await expect.poll(async () => (await telegram()).filter((m: any) => m.card).at(-1)?.delivered?.length ?? 0,
+    { timeout: 20_000, intervals: [200] }).toBeGreaterThan(0)
+}
 
 async function quiet() {
   await expect.poll(async () => {
@@ -117,7 +123,7 @@ test.describe.serial('just works for two, with the real Claude', () => {
     stub.text(PARTNER, 'The XQZ payment was a new lamp for the living room')
     const card = await stub.reply_after(sent, isCard)
     expect(card.text).toContain('XQZ 8841 Holding')
-    await app.cardShown()
+    await cardShown()
     stub.tap(PARTNER, card, stub.button(card, 'Apply'))
     await expect.poll(() => card.text, { timeout: 20_000 }).toMatch(/^Applied\./)
     const [lamp] = await rows('XQZ 8841')
@@ -182,7 +188,7 @@ test.describe.serial('just works for two, with the real Claude', () => {
     expect(held.lines).toHaveLength(1)
     expect(held.lines[0]).toMatch(/^Add: .*Korenbloem.* · 11 Nov · -⁠€7,80, in /i)
     expect(app.dump(), 'nothing changes without Apply').toEqual(before)
-    await app.cardShown()
+    await cardShown()
     stub.tap(DANIEL, shown, stub.button(shown, 'Apply'))
     await expect.poll(() => shown.text, { timeout: 20_000 }).toMatch(/^Applied\./)
     const [bakery] = await rows('Korenbloem')
@@ -199,7 +205,7 @@ test.describe.serial('just works for two, with the real Claude', () => {
     await quiet()
     expect(isCard(reply)).toBe(false)
     expect(reply.text.toLowerCase()).toMatch(/can(no|')t (read|see|make)|could ?n(o|')t (read|see|make)|unable to|nothing (on|in)|blank|no (receipt|payment|text)|not (able|show)|doesn't show|does not show/)
-    expect((await telegram()).filter((m: any) => m.card && m.card.status === 'pending')).toHaveLength(0)
+    expect((await telegram()).filter((m: any) => m.card && m.card.status === 'open')).toHaveLength(0)
     expect(app.dump()).toEqual(settled)
   })
 })

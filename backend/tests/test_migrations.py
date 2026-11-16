@@ -102,7 +102,8 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     cfg = _alembic_config(scratch_db)
     command.upgrade(cfg, "head")
 
-    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version", "chat_messages", "chat_proposals", "ask_shops"}
+    # The chat's tables came and went: its history lives in the bot kit's own store since c5e8b2a7d913.
+    assert _table_names(scratch_db) == BASELINE_TABLES | {"alembic_version", "ask_shops"}
     assert _version_row(scratch_db) == _head_revision(cfg)
 
     # R7 columns, exactly as models.py declares them.

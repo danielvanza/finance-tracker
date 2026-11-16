@@ -16,6 +16,7 @@ chmod 700 "$HOME/.local/share/household-finance"
 git -C "$repo" archive HEAD | tar -x -C "$release"
 
 (cd "$release/backend" && uv venv -q .venv && uv pip install -q -p .venv/bin/python .)
+# The shared bot kit comes from vendor/ (in the archive), for both the backend and the frontend; nothing to build.
 (cd "$release/frontend" && npm ci --silent && FINANCES_BASE=/finances/ npm run build)
 
 healthy() {

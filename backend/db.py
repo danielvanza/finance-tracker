@@ -23,6 +23,22 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 class Base(DeclarativeBase):
     pass
 
+
+def bot_store_path(database_file: str | None = None) -> Path:
+    """The chat's own SQLite file (the bot kit's store): BOT_DB_PATH, else `bot.db` beside the finance database.
+
+    `database_file` is the finance database's file (the migration passes the one it runs on); by default the one
+    DATABASE_URL names.
+    """
+    explicit = os.getenv("BOT_DB_PATH")
+    if explicit:
+        return Path(explicit)
+    if database_file is None and DATABASE_URL.startswith("sqlite:///"):
+        database_file = DATABASE_URL[len("sqlite:///"):]
+    if not database_file or database_file == ":memory:":
+        return Path("data") / "bot.db"
+    return Path(database_file).parent / "bot.db"
+
 def run_migrations() -> None:
     """Bring the database up to the current schema via Alembic.
 

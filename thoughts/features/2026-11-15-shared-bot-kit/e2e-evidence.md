@@ -1,6 +1,6 @@
 # Shared bot kit — E2E evidence
 
-Executed 2026-11-15/16. Nothing committed, pushed or deployed. Raw logs, scripts and screenshots: `~/artifacts/shared-bot-kit-e2e/` (below: `A/`).
+Executed 2026-11-15/16; delivered 2026-11-16 (see "Delivered" at the end). Raw logs, scripts and screenshots: `~/artifacts/shared-bot-kit-e2e/` (below: `A/`).
 
 ## Where the work is
 
@@ -149,3 +149,21 @@ Test scratch from this work was deleted from `/var/tmp`, `~/.cache/roadmap-studi
 - Live leftovers until LifeSystem is deployed: the Hermes gateway keeps the old `day-plan` route in memory until its next restart; `DAILY_PLAN_DIR` stays in `~/.config/life-dashboard/env` because the deployed dashboard still reads it (remove at deploy); the live dashboard shows its last Arnold cards until deploy.
 - One real-Claude finance run (agent-real R-006, in a run alongside other suites) was stopped by the claude-cli policy check, which fails closed. It did not recur in 3 repeat runs (27 tests). The reason was not logged because finance's Alembic logging muted the kit's loggers; that is fixed now, so a future stop records why.
 - Deploys: finance's deploy script now builds the kit first. Studio and LifeSystem need the kit's `ts/dist` built before installing (see their docs). All three apps reach the kit through a `bot-kit` symlink to `~/code/bot-kit/ts` and an absolute path to `~/code/bot-kit/python`, which works on this machine only. The bot-kit repo has its first local commit (`5f19289`, 2026-11-16), made after Daniel's review; it has no remote.
+
+## Delivered (2026-11-16)
+
+- **bot-kit:** private repo https://github.com/danielvanza/bot-kit, release v0.1.0 (wheel and npm tarball attached). Each app vendors both files in `vendor/`.
+- **Finance:** PR #8 merged (`58dc39c`) and deployed with `deploy/deploy.sh`. GitHub CI passed on the PR.
+  - `finance.db` was backed up first to `~/.local/share/household-finance/backups/finance-pre-bot-kit-20261116T122429Z.db` (integrity ok, same counts).
+  - The migration moved the chat history into `bot.db`: 115 messages and 12 cards.
+  - Live: health ok, Claude Code ready, starters answer, no errors in the logs. Telegram bot restarted.
+- **LifeSystem:** PR #1 shipped with `life-dashboard-ship` (`d6ec5fa`, rebased over "Agents tab hands its machinery to Understory").
+  - Before the deploy, `DAILY_PLAN_DIR` and its "Replies to Arnold" comment were removed from `~/.config/life-dashboard/env`.
+  - Live: health ok; migration 22 applied (`user_version` 22, `task_events` in place); the planner store was created.
+  - The Hermes gateway was restarted, so the old `day-plan` route is gone from memory.
+- **Studio:** local `main` (182 unpushed commits) was pushed first, then PR #4 was merged (`931ce8e`) and deployed with `roadmap-studio-deploy`, which took a database snapshot first. Live: health ok, Claude Code and Codex ready, starters answer.
+- **Live checks** were done without sending messages, so nothing was written to the real chats. Real-runner answers were verified earlier on scratch copies of the same code.
+- **Cleanup:**
+  - The three worktrees and the merged branches (local and on GitHub) were removed.
+  - The Anthropic test key was deleted.
+- **Not set up live, by design:** the Claude API and OpenAI API runners have no key. Codex in finance has no private home (`CODEX_CLI_HOME` is commented out in its unit). The picker shows each of these as not set up.

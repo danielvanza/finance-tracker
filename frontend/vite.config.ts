@@ -6,6 +6,8 @@ export default defineConfig({
   // Deployed under a sub-path (e.g. /finances/): set FINANCES_BASE when building.
   base: process.env.FINANCES_BASE ?? '/',
   plugins: [react()],
+  // Make sure bot-kit and the app share one React.
+  resolve: { dedupe: ['react', 'react-dom'] },
   server: {
     proxy: {
       '/api': { target: 'http://localhost:8000', rewrite: (p) => p.replace(/^\/api/, '') }

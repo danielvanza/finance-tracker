@@ -11,6 +11,12 @@ Environment=FRONTEND_DIST=%h/apps/household-finance/current/frontend/dist
 Environment=CLAUDE_CLI_HOME=%h/.local/share/household-finance/claude
 Environment=CLAUDE_BIN=%h/.local/bin/claude
 Environment=AI_TIME_BUDGET_SECONDS=240
+# The chat's own store (bot-kit), beside the finance database (this is also the default).
+Environment=BOT_DB_PATH=%h/.local/share/household-finance/bot.db
+# Optional chat runners, off until set: a private folder for the sandboxed Codex login, and API keys (keep keys in
+# an EnvironmentFile with mode 600 rather than here). Without them the picker shows these runners as not set up.
+#Environment=CODEX_CLI_HOME=%h/.local/share/household-finance/codex
+#EnvironmentFile=%h/.config/household-finance/keys.env   # ANTHROPIC_API_KEY=…, OPENAI_API_KEY=…
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=%h/apps/household-finance/current/backend/.venv/bin/uvicorn serve:app --host 127.0.0.1 --port 18600
 Restart=on-failure

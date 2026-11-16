@@ -124,25 +124,26 @@ ROUTER_PREFIXES = [
 ]
 
 
-def _iter_api_routes(routes):
-    """Yield APIRoute objects from the app's route tree. Newer FastAPI versions
+def _iter_api_routes(routes, prefix=""):
+    """Yield (path, route) from the app's route tree. Newer FastAPI versions
     nest included routers (_IncludedRouter.original_router) instead of
-    flattening them into app.routes."""
+    flattening them into app.routes, keeping an include's prefix aside (the chat
+    is the bot kit's router, included at /chat)."""
     for route in routes:
         if getattr(route, "path_format", None) is not None:
-            yield route
+            yield prefix + route.path_format, route
             continue
         nested = getattr(route, "original_router", None)
         if nested is not None:
-            yield from _iter_api_routes(nested.routes)
+            context = getattr(route, "include_context", None)
+            yield from _iter_api_routes(nested.routes, prefix + (getattr(context, "prefix", "") or ""))
         elif hasattr(route, "routes"):
-            yield from _iter_api_routes(route.routes)
+            yield from _iter_api_routes(route.routes, prefix)
 
 
 def test_route_exists_for_every_contract_endpoint():
     route_table = {}
-    for route in _iter_api_routes(app.routes):
-        fmt = route.path_format
+    for fmt, route in _iter_api_routes(app.routes):
         for m in getattr(route, "methods", ()) or ():
             route_table[(m.upper(), fmt)] = route
 

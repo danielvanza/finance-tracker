@@ -1,20 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- API responses in the test harness */
 import { test, expect, type Page } from '@playwright/test'
 import {
-  App, DANIEL, TelegramStub, euro, ingCsv, ingRow, monthDates, monthName, openChat, say, seedHistory, shot, startBot, thread,
+  App, DANIEL, TelegramStub, euro, ingCsv, ingRow, monthDates, monthName, openChat, port, say, seedHistory, shot, startBot, thread,
 } from './fixtures'
 
 // The finance agent with the real Claude, in its sandbox, on synthetic data only. These check what rests on
 // Claude's own judgement: talking, remembering, looking things up, honesty, cards, reviewing, stopping.
-const app = new App({ port: 18731 })
-const stub = new TelegramStub(18732)
+const app = new App({ port: port(0) })
+const stub = new TelegramStub(port(1))
 const d = monthDates()
 let stopBot: () => void
 let page: Page
 
 type Channel = 'bubble' | 'telegram'
-const messages = async (channel: Channel) => (await app.json(`/chat/messages?channel=${channel}`)).messages
-const waiting = async () => (await app.json('/chat/messages?channel=bubble')).guesses_waiting as number
+const messages = async (channel: Channel) => (await app.conversation(channel)).messages
+/** Payments waiting for an answer (counted nowhere until someone confirms them). */
+const waiting = async () => (app.value('SELECT COUNT(*) FROM transactions WHERE confirmed = 0') as number[][])[0][0]
+/** What a card changes, row by row (the app's preview, under the card's data). */
+const changesOf = (card: any): any[] => card.data?.changes ?? []
 const money = /€\s?\d/
 
 /** Asks through the API (or Telegram) and waits for the whole reply: every card and the words after them. */
@@ -36,7 +39,7 @@ async function ask(channel: Channel, text: string) {
   }
   // The agent's words: its answers, and what it said with a card (they arrive on the card, as one message).
   const words = replies.map((r: any) => (r.card ? r.card.says ?? '' : r.text)).filter(Boolean).join('\n\n')
-  return { asked, replies, words, cards: replies.filter((r: any) => r.card).map((r: any) => r.card), steps: (asked.payload?.steps ?? []) as string[] }
+  return { asked, replies, words, cards: replies.filter((r: any) => r.card).map((r: any) => r.card), steps: (asked.steps ?? []) as string[] }
 }
 
 /** Asks in the panel itself, by typing. */
@@ -53,7 +56,8 @@ async function askPanel(text: string) {
   return { asked, replies, words: replies.map((r: any) => (r.card ? r.card.says ?? '' : r.text)).filter(Boolean).join('\n\n'), cards: replies.filter((r: any) => r.card).map((r: any) => r.card) }
 }
 
-const apply = (card: any) => app.post(`/chat/proposals/${card.id}/apply`, { version: card.version })
+/** Apply, as the bubble does it; the card comes back on its message. */
+const apply = async (card: any) => (await app.post(`/chat/cards/${card.id}/apply`, { version: card.version })).card
 
 test.describe.serial('the finance agent, with the real Claude', () => {
   test.setTimeout(3_600_000)
@@ -83,8 +87,10 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     const first = await askPanel('How are we doing this month?')
     expect(first.words).toContain(euro(left))
     expect(first.words).not.toMatch(/^(Left|Per day|Vs plan|Needs|Wants|Savings):/m) // no fixed layout
-    expect(first.words).not.toMatch(/\*\*|^#|Based on:/m)
+    // Bold leads and "- " lines are allowed (the prompt asks for them, sparingly); headings and a "Based on" line are not.
+    expect(first.words).not.toMatch(/^#|Based on:/m)
     await expect(thread(page)).toContainText(euro(left))
+    await expect(thread(page), 'bold is drawn, never shown as asterisks').not.toContainText('**')
     await shot(page, 'agent-real-how-are-we-doing')
 
     const food = (await app.budgetRow(d.label, 'Food - Essential')).actual_amount_cents
@@ -117,9 +123,9 @@ test.describe.serial('the finance agent, with the real Claude', () => {
 
     await page.reload()
     await openChat(page)
-    await page.getByRole('button', { name: 'New chat' }).click()
+    await page.getByRole('button', { name: 'New chat', exact: true }).click()
     await page.getByRole('button', { name: 'Start new chat' }).click()
-    await expect(page.locator('.chat-empty')).toBeVisible()
+    await expect(page.locator('.bk-empty')).toBeVisible()
     const fresh = await ask('bubble', 'What did I say we call the holiday money?')
     expect(fresh.words).not.toMatch(/sunflower/i)
 
@@ -134,17 +140,19 @@ test.describe.serial('the finance agent, with the real Claude', () => {
   test('R-003 R-009: a question that needs several lookups is answered in one reply, logged in plain words, and changes nothing', async () => {
     const before = app.dump()
     const reply = await askPanel(`Compare our grocery spending in each of the last 6 months with our gym and streaming costs over the same months, and tell me which rules we have.`)
-    const steps = (reply.asked.payload?.steps ?? []) as string[]
-    // Claude may group up to three queries into one step, so count the lookups themselves.
-    expect(reply.asked.payload?.lookups).toBeGreaterThanOrEqual(2)
+    const steps = (reply.asked.steps ?? []) as string[]
+    // Each tool call is one step of the live log; Claude may put up to three queries in one call, so one step can be
+    // several lookups. That it looked several things up shows in the answer covering all of them (below).
     expect(steps.length).toBeGreaterThanOrEqual(1)
     for (const step of steps) expect(step).not.toMatch(/select |from |_cents|category_months/i)
     expect(reply.replies.filter((r: any) => r.role === 'assistant' && !r.card)).toHaveLength(1)
     expect(reply.words).toMatch(/albert heijn|groceries|food/i)
     expect(reply.words).toMatch(/sample gym|gym/i)
+    expect(reply.words).toMatch(/streaming/i)
+    expect(reply.words).toMatch(/rule/i)
     expect(reply.cards).toEqual([])
     expect(app.dump()).toEqual(before)
-    await expect(page.locator('.chat-log-done').last()).toContainText('Worked through')
+    await expect(page.locator('.bk-log-done').last()).toContainText('Worked through')
   })
 
   test('R-004: a month with no data says so, a failed lookup gives no made-up number, and totals match the Month page', async () => {
@@ -171,29 +179,29 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     await app.newChats()
     const before = app.dump()
     const payment = await ask('bubble', `Today's Albert Heijn payment of €11,00 was really a treat, please move it to Food - Not Essential.`)
-    expect(payment.cards.map((c: any) => c.status)).toContain('pending')
-    expect(JSON.stringify(payment.cards.at(-1).changes)).toContain('Food - Not Essential')
+    expect(payment.cards.map((c: any) => c.status)).toContain('open')
+    expect(JSON.stringify(changesOf(payment.cards.at(-1)))).toContain('Food - Not Essential')
     const budget = await ask('bubble', 'Set the Clothing budget to €80 a month from now on.')
-    expect(JSON.stringify(budget.cards.at(-1).changes)).toContain('€80,00')
+    expect(JSON.stringify(changesOf(budget.cards.at(-1)))).toContain('€80,00')
     const rule = await ask('bubble', 'Add a rule so anything from Sample Florist goes to Home & DIY.')
-    expect(JSON.stringify(rule.cards.at(-1).changes)).toMatch(/sample florist/i)
+    expect(JSON.stringify(changesOf(rule.cards.at(-1)))).toMatch(/sample florist/i)
     const goal = await ask('bubble', `Start a savings goal called Holiday: €1.500 by ${monthName(d.back(-8))}, saved in Savings Transfer.`)
     const goalCard = goal.cards.at(-1)
-    expect(JSON.stringify(goalCard.changes)).toContain('Savings goal')
-    expect(JSON.stringify(goalCard.changes)).toContain('€1.500,00')
+    expect(JSON.stringify(changesOf(goalCard))).toContain('Savings goal')
+    expect(JSON.stringify(changesOf(goalCard))).toContain('€1.500,00')
     expect(app.dump(), 'a card changed something before Apply').toEqual(before)
 
     await apply(goalCard)
     expect((await app.json('/goals')).goals).toMatchObject([{ name: expect.stringMatching(/holiday/i), target_cents: 150000 }])
 
     // Earlier cards stay open while the conversation goes on, and a typed yes answers the card just made.
-    const stillOpen = (await messages('bubble')).filter((m: any) => m.card?.status === 'pending').map((m: any) => m.card.id)
+    const stillOpen = (await messages('bubble')).filter((m: any) => m.card?.status === 'open').map((m: any) => m.card.id)
     expect(stillOpen).toEqual(expect.arrayContaining([payment, budget, rule].map(r => r.cards.at(-1).id)))
     await page.reload()
     await openChat(page)
     const bakery = await askPanel('Also add a rule so anything from Sample Bookshop goes to Recreation & Entertainment.')
     expect(bakery.cards).toHaveLength(1)
-    await expect(page.locator('.chat-card[data-state="pending"]', { hasText: /sample bookshop/i })).toBeVisible()
+    await expect(page.locator('.bk-card[data-state="open"]', { hasText: /sample bookshop/i })).toBeVisible()
     await say(page, 'yes')
     await expect.poll(async () => (await app.json<any[]>('/rules')).some(r => r.pattern.toLowerCase().includes('bookshop') && r.category_name === 'Recreation & Entertainment'), { timeout: 30_000 }).toBe(true)
     expect((await app.json<any[]>('/rules')).some(r => r.pattern.toLowerCase().includes('florist')), 'an older card applied by the yes').toBe(false)
@@ -224,19 +232,19 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     let biggest = 0
     for (let round = 0; round < 40 && (await waiting()) > 0; round++) {
       counts.push(reply.words)
-      const pending = (await messages('bubble')).filter((m: any) => m.card?.status === 'pending').map((m: any) => m.card)
-      const pizzaCard = pending.find((c: any) => c.changes.some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
+      const pending = (await messages('bubble')).filter((m: any) => m.card?.status === 'open').map((m: any) => m.card)
+      const pizzaCard = pending.find((c: any) => changesOf(c).some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
       if (!corrected && pizzaCard) {
         corrected = true
         // The pizza rows were guessed as Food - Essential. The agent may accept that guess or, seeing the name,
         // move them to eating out by itself; either way the person now corrects the card the other way.
-        const ofPizza = (card: any) => JSON.stringify(card.changes.filter((ch: any) => ch.title.startsWith('Sample Pizza Place')))
+        const ofPizza = (card: any) => JSON.stringify(changesOf(card).filter((ch: any) => ch.title.startsWith('Sample Pizza Place')))
         const movedAlready = ofPizza(pizzaCard).includes('Food - Not Essential')
         wanted = movedAlready ? 'Food - Essential' : 'Food - Not Essential'
         reply = await ask('bubble', movedAlready
           ? 'No, the Sample Pizza Place ones are our weekly family dinner at home, so keep those as Food - Essential.'
           : 'The Sample Pizza Place ones are takeaway, so those are Food - Not Essential.')
-        const adjusted = reply.cards.find((c: any) => c.changes.some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
+        const adjusted = reply.cards.find((c: any) => changesOf(c).some((ch: any) => ch.title.startsWith('Sample Pizza Place')))
         expect(adjusted, reply.words).toBeTruthy()
         expect(ofPizza(adjusted).includes('Food - Not Essential'), `the adjusted card puts them in ${wanted}`).toBe(!movedAlready)
         const old = (await messages('bubble')).find((m: any) => m.card?.id === pizzaCard.id).card
@@ -244,9 +252,9 @@ test.describe.serial('the finance agent, with the real Claude', () => {
         continue
       }
       for (const card of pending) {
-        biggest = Math.max(biggest, card.changes.length)
+        biggest = Math.max(biggest, changesOf(card).length)
         const result = await apply(card)
-        expect(['applied', 'pending'], JSON.stringify(result.error)).toContain(result.status)
+        expect(['applied', 'open'], JSON.stringify(result.error)).toContain(result.status)
       }
       if ((await waiting()) === 0) break
       reply = await ask('bubble', 'Applied. Next group please.')
@@ -273,13 +281,13 @@ test.describe.serial('the finance agent, with the real Claude', () => {
     await openChat(page)
     const before = app.dump()
     await say(page, 'Go through every one of the last 9 months, one month at a time, and for each month list every category with its spending and every merchant with its total.')
-    const steps = page.getByTestId('chat-steps').locator('li')
+    const steps = page.getByTestId('bk-steps').locator('li')
     await expect(steps.first()).toBeVisible({ timeout: 120_000 })
     const pressed = Date.now()
-    await page.getByTestId('chat-pending').getByRole('button', { name: 'Stop' }).click()
-    await expect(page.getByTestId('chat-pending')).toContainText(/Stopping|Stopped/, { timeout: 5_000 })
+    await page.getByTestId('bk-pending').getByRole('button', { name: 'Stop' }).click()
+    await expect(page.getByTestId('bk-pending')).toContainText(/Stopping|Stopped/, { timeout: 5_000 })
     const stoppedAfter = Date.now() - pressed
-    await expect(page.getByTestId('chat-pending')).toHaveCount(0, { timeout: 120_000 })
+    await expect(page.getByTestId('bk-pending')).toHaveCount(0, { timeout: 120_000 })
     const answeredAfter = Date.now() - pressed
     const last = (await messages('bubble')).at(-1)
     expect(last.role).toBe('assistant')
@@ -331,7 +339,7 @@ test.describe.serial('the finance agent, with the real Claude', () => {
         if (row) expect(series.values[i], `${series.name} ${month}`).toBe(row.actual_amount_cents)
       }
     }
-    const image = page.locator(`.chat-chart[src*="/messages/${answer.id}/chart"]:visible`)
+    const image = page.locator(`.bk-image[src*="/messages/${answer.id}/image"]:visible`)
     await expect(image).toBeVisible()
     await image.scrollIntoViewIfNeeded()
     await shot(page, 'agent-real-chart')

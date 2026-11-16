@@ -3,7 +3,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { expect, type Locator, type Page } from '@playwright/test'
 
@@ -11,11 +11,13 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 export const repo = path.resolve(here, '..', '..')
 const backend = path.join(repo, 'backend')
 const python = path.join(backend, '.venv', 'bin', 'python')
-const uvicorn = path.join(backend, '.venv', 'bin', 'uvicorn')
 export const artifacts = process.env.E2E_ARTIFACTS ?? path.join(tmpdir(), 'hf-chat-e2e')
+// The throwaway apps live here, not in /tmp: botkit's sandbox refuses a Claude home under a folder that holds a
+// repository or agent instructions, and /tmp on this machine has a stray .git.
+const scratch = process.env.E2E_TMP ?? path.join(homedir(), '.cache', 'hf-bot-kit-e2e')
 
-// A stand-in for the claude CLI, used only for states that can't be triggered on demand. It runs in
-// the same sandbox as the real one and is steered through files in its work folder.
+// A stand-in for the claude CLI, used where a spec needs import sorting without the real login. The chat's scripted
+// stand-in is botkit's `script` runner (SCRIPT-* lines).
 const FAKE_CLAUDE = `#!/usr/bin/python3 -I
 import json, os, sys, time
 prompt = sys.stdin.read()
@@ -94,19 +96,70 @@ for _ in range(2000):
 done("")
 `
 
-export type AppOptions = { port: number; fakeClaude?: boolean; env?: Record<string, string> }
+// A stand-in for the claude CLI as the new app's sorter runs it (botkit's ClaudeCliRunner with no tools, in its
+// sandbox): it answers with what the spec put in the private home (/sandbox/home/fake/…), or fails as told. The chat
+// itself is scripted with botkit's `script` runner (SCRIPT-* lines), never with this.
+const FAKE_SORTER = `#!/usr/bin/python3 -I
+import json, os, sys, time
+prompt = sys.stdin.read()
+FAKE = "/sandbox/home/fake/"
+def read(name, default=""):
+    try:
+        with open(FAKE + name) as f: return f.read().strip()
+    except OSError:
+        return default
+try:
+    with open(FAKE + "calls.jsonl", "a") as f:
+        f.write(json.dumps({"argv": sys.argv, "prompt": prompt}) + chr(10))
+except OSError:
+    pass
+def out(event):
+    print(json.dumps(event), flush=True)
+mode = read("mode", "reply")
+delay = float(read("delay", "0"))
+if delay: time.sleep(delay)
+out({"type": "system", "subtype": "init", "tools": [], "mcp_servers": [], "permissionMode": "dontAsk"})
+if mode == "logged_out":
+    out({"type": "result", "is_error": True, "result": "Not logged in · Please run /login"}); sys.exit(1)
+if mode == "limit":
+    out({"type": "result", "is_error": True, "result": "Claude usage limit reached|1793000000"}); sys.exit(1)
+if mode == "fail":
+    sys.exit(1)
+out({"type": "result", "is_error": False, "result": read("plain") or read("reply", "[]")})
+`
+
+/** The ports a spec may use: E2E_PORT_BASE (default 18800) and the ones after it. */
+export const port = (i: number) => Number(process.env.E2E_PORT_BASE ?? 18800) + i
+
+export type AppOptions = {
+  port: number
+  fakeClaude?: boolean
+  env?: Record<string, string>
+  /** Run another checkout's backend (the old app, for the side-by-side look check), with its own venv. */
+  backend?: string
+  /** That checkout's built frontend. */
+  dist?: string
+}
 
 export class App {
   readonly base: string
   private proc?: ChildProcess
-  private readonly dir: string
-  readonly home: string
+  private made?: string
 
   constructor(readonly options: AppOptions) {
     this.base = `http://127.0.0.1:${options.port}`
-    this.dir = mkdtempSync(path.join(tmpdir(), 'hf-e2e-'))
-    this.home = path.join(this.dir, 'claude')
   }
+
+  /** The app's throwaway folder, made on first use (a skipped spec makes none). */
+  private get dir() {
+    if (!this.made) {
+      mkdirSync(scratch, { recursive: true })
+      this.made = mkdtempSync(path.join(scratch, 'hf-e2e-'))
+    }
+    return this.made
+  }
+
+  get home() { return path.join(this.dir, 'claude') }
 
   async start() {
     // A server left behind by an earlier run would quietly answer for this one, with its own code.
@@ -119,7 +172,10 @@ export class App {
       HOME: process.env.HOME,
       LANG: 'C.UTF-8',
       DATABASE_URL: `sqlite:///${path.join(this.dir, 'finance.db')}`,
-      FRONTEND_DIST: path.join(repo, 'frontend', 'dist'),
+      BOT_DB_PATH: this.botDb,
+      // botkit's scripted model (SCRIPT-TOOL, SCRIPT-SAY, SCRIPT-SLOW, SCRIPT-FAIL lines) is in the picker as "Test script".
+      FINANCE_SCRIPT_RUNNER: '1',
+      FRONTEND_DIST: this.options.dist ?? path.join(repo, 'frontend', 'dist'),
       CLAUDE_CLI_HOME: this.home,
       CLAUDE_BIN: `${process.env.HOME}/.local/bin/claude`,
       AI_TIME_BUDGET_SECONDS: '240',
@@ -130,15 +186,16 @@ export class App {
     }
     if (this.options.fakeClaude) {
       const fake = path.join(this.dir, 'fake-claude')
-      writeFileSync(fake, FAKE_CLAUDE)
+      writeFileSync(fake, this.options.backend ? FAKE_CLAUDE : FAKE_SORTER)
       chmodSync(fake, 0o755)
       const credential = path.join(this.dir, 'fake-credentials.json')
       writeFileSync(credential, '{}')
       env.CLAUDE_BIN = fake
       env.CLAUDE_CREDENTIALS = credential
     }
-    this.proc = spawn(uvicorn, ['serve:app', '--host', '127.0.0.1', '--port', String(this.options.port)], {
-      cwd: backend,
+    const dir = this.options.backend ?? backend
+    this.proc = spawn(path.join(dir, '.venv', 'bin', 'uvicorn'), ['serve:app', '--host', '127.0.0.1', '--port', String(this.options.port)], {
+      cwd: dir,
       env,
       stdio: process.env.E2E_VERBOSE ? 'inherit' : 'ignore',
     })
@@ -153,7 +210,7 @@ export class App {
   }
 
   destroy() {
-    rmSync(this.dir, { recursive: true, force: true })
+    if (this.made) rmSync(this.made, { recursive: true, force: true })
   }
 
   /** Set the app's clock (local time, such as 2026-11-15T18:30), or let it follow the real one again. */
@@ -161,6 +218,47 @@ export class App {
     const file = path.join(this.dir, 'clock')
     if (at === null) rmSync(file, { force: true })
     else writeFileSync(file, at)
+  }
+
+  get botDb() { return path.join(this.dir, 'bot.db') }
+
+  /** Rows read from the chat's own store (the bot kit's SQLite file). */
+  botValue(query: string): any[] {
+    const out = execFileSync(python, ['-c', 'import json, sqlite3, sys; print(json.dumps(sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall()))', this.botDb, query])
+    return JSON.parse(out.toString())
+  }
+
+  /** Change the chat's own store directly (only to make a screen comparable, never to force a result). */
+  botSql(statement: string, ...params: (string | number)[]) {
+    execFileSync(python, ['-c', 'import json, sqlite3, sys; db = sqlite3.connect(sys.argv[1]); db.execute(sys.argv[2], json.loads(sys.argv[3])); db.commit()', this.botDb, statement, JSON.stringify(params)])
+  }
+
+  /** The chat as the bubble reads it. */
+  conversation(channel: 'bubble' | 'telegram' = 'bubble'): Promise<any> {
+    return this.json(`/chat/conversation?channel=${channel}`)
+  }
+
+  /** Which runner and model the channel's conversation uses from now on. */
+  useRunner(runner: string, model: string, channel: 'bubble' | 'telegram' = 'bubble') {
+    return this.post('/chat/runner', { channel, runner, model })
+  }
+
+  /** Sends a message through the API and waits until the reply has landed; returns the messages after it. */
+  async ask(text: string, channel: 'bubble' | 'telegram' = 'bubble') {
+    const sent = await this.post('/chat/messages', { channel, text })
+    await this.settled(channel)
+    return (await this.conversation(channel)).messages.filter((m: any) => m.id >= sent.id)
+  }
+
+  /** Sends a file, photo or voice note the way a chat does (multipart), and waits until it is dealt with. */
+  async upload(kind: 'file' | 'photo' | 'voice', name: string, content: Buffer | string, caption = '', channel: 'bubble' | 'telegram' = 'bubble') {
+    const form = new FormData()
+    form.append('channel', channel)
+    form.append('file', new Blob([content]), name)
+    if (caption) form.append('caption', caption)
+    const sent = await this.json(`/chat/uploads/${kind}`, { method: 'POST', body: form })
+    await this.settled(channel)
+    return (await this.conversation(channel)).messages.filter((m: any) => m.id >= sent.id)
   }
 
   /** One value read from the throwaway database. */
@@ -185,12 +283,25 @@ export class App {
     return JSON.parse(execFileSync(python, ['-c', script, path.join(this.dir, 'finance.db')]).toString())
   }
 
-  /** Steer the fake Claude. */
+  /** Where the fake reads its steering files: the old app's work folder, or the new app's private home. */
+  private get fakeDir() {
+    const dir = this.options.backend ? path.join(this.home, 'work') : path.join(this.home, 'home', 'fake')
+    mkdirSync(dir, { recursive: true })
+    return dir
+  }
+
+  /** Steer the fake Claude (the old app's whole fake; the new app's sorter: mode, delay, plain/reply). */
   fake(files: Record<string, string>) {
-    const work = path.join(this.home, 'work')
     for (const [name, content] of Object.entries(files)) {
-      writeFileSync(path.join(work, name), content)
+      writeFileSync(path.join(this.fakeDir, name), content)
     }
+  }
+
+  /** Every call the new app's fake sorter has had (argv and prompt), oldest first. */
+  sorterCalls(): { argv: string[]; prompt: string }[] {
+    const file = path.join(this.fakeDir, 'calls.jsonl')
+    if (!existsSync(file)) return []
+    return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
   }
 
   lastCall(): any {
@@ -268,26 +379,18 @@ export class App {
     return this.json('/import/confirm', { method: 'POST', body: form })
   }
 
-  /** Waits until the bot has really shown the newest card, so a typed yes can mean it. */
-  async cardShown() {
-    await expect.poll(async () => {
-      const chat = await this.json<any>('/chat/messages?channel=telegram')
-      return chat.messages.at(-1)?.card?.message_ids?.length ?? 0
-    }, { timeout: 20_000, intervals: [200] }).toBeGreaterThan(0)
-  }
-
   /** Starts both chats afresh. */
   async newChats() {
     await this.post('/chat/new', { channel: 'bubble' })
     await this.post('/chat/new', { channel: 'telegram' })
   }
 
-  /** Waits until a chat's queue is empty. */
-  async settled(channel: 'bubble' | 'telegram') {
+  /** Waits until nothing is queued or being worked on in a chat. */
+  async settled(channel: 'bubble' | 'telegram' = 'bubble') {
     await expect.poll(async () => {
-      const chat = await this.json<any>(`/chat/messages?channel=${channel}`)
-      return chat.messages.filter((m: any) => m.status !== 'done').length
-    }, { timeout: 220_000, intervals: [400] }).toBe(0)
+      const chat = await this.conversation(channel)
+      return chat.busy || chat.messages.some((m: any) => m.status !== 'done')
+    }, { timeout: 240_000, intervals: [400] }).toBe(false)
   }
 }
 
@@ -611,13 +714,18 @@ export async function seedHistory(app: App, d: ReturnType<typeof monthDates>) {
   await app.importCsv(ingCsv(rows))
 }
 
-export const thread = (page: Page) => page.locator('.chat-thread')
-export const lastPending = (page: Page): Locator => page.locator('.chat-card[data-state="pending"]').last()
+export const thread = (page: Page) => page.locator('.bk-thread')
+export const lastPending = (page: Page): Locator => page.locator('.bk-card[data-state="open"]').last()
 
 /** The waiting card for a change, found by Claude's one-sentence summary of it or by words the card shows. */
 export const pendingCard = (page: Page, text: string): Locator =>
-  page.locator(`.chat-card[data-state="pending"][data-summary*="${text.replaceAll('"', '\\"')}"]`)
-    .or(page.locator('.chat-card[data-state="pending"]', { hasText: text }))
+  page.locator(`.bk-card[data-state="open"][data-summary*="${text.replaceAll('"', '\\"')}"]`)
+    .or(page.locator('.bk-card[data-state="open"]', { hasText: text }))
+
+/** A script for botkit's test runner: each tool call as `SCRIPT-TOOL name {json}`, then what it says. */
+export function script(...lines: (string | [string, object])[]) {
+  return lines.map(line => typeof line === 'string' ? line : `SCRIPT-TOOL ${line[0]} ${JSON.stringify(line[1])}`).join('\n')
+}
 
 /** Presses a card's button and waits for that card, not an earlier one, to reach its result. */
 export async function decide(page: Page, card: Locator, button: string, state = 'applied') {

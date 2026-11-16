@@ -4,10 +4,11 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import { App, DANIEL, GROUP, PARTNER, TelegramStub, euro, ingCsv, ingRow, monthDates, openChat, repo, say, startBot } from './fixtures'
+import { App, DANIEL, GROUP, PARTNER, TelegramStub, euro, ingCsv, ingRow, monthDates, openChat, port, repo, say, script, startBot } from './fixtures'
 
 // "Just works for two": what happens to a household that already uses the app (its database is made by the
 // release before this feature, then opened by this one), and what the bot says without being asked.
+// `app.fake` steers the sorter (Claude judging imported rows); the chats answer on botkit's scripted model.
 const backend = path.join(repo, 'backend')
 const python = path.join(backend, '.venv', 'bin', 'python')
 const BEFORE = '1318268' // the release before this feature
@@ -18,16 +19,17 @@ const sure = (index: number, category: string) => ({ index, category, sure: true
 const unsure = (index: number, category: string, options: string[] = []) => ({ index, category, sure: false, options })
 
 test.describe.serial('just works for two: a household that already uses the app', () => {
-  const app = new App({ port: 18771, fakeClaude: true })
-  const stub = new TelegramStub(18772)
+  const app = new App({ port: port(0), fakeClaude: true })
+  const stub = new TelegramStub(port(1))
   const d = monthDates()
-  const old = mkdtempSync(path.join(tmpdir(), 'hf-before-'))
+  let old = ''
   let stopBot: () => void
   let page: Page
   let before: any
 
   test.beforeAll(async ({ browser }) => {
     // The release before this feature makes the database, seeds it and is used the way the household used it.
+    old = mkdtempSync(path.join(tmpdir(), 'hf-before-'))
     execFileSync('sh', ['-c', `git -C "${repo}" archive ${BEFORE} backend | tar -x -C "${old}"`])
     const dbFile = path.join((app as any).dir, 'finance.db')
     const script = `
@@ -99,6 +101,7 @@ print("RESULT" + json.dumps(out))
       unsure(5, 'Other Income', ['Clothing']),
     ]) })
     await app.start()
+    await app.useRunner('script', 'script', 'bubble')
     await stub.start()
     stopBot = startBot(stub, `${app.base}/api`)
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -109,7 +112,7 @@ print("RESULT" + json.dumps(out))
     await stub.stop()
     await app.stop()
     app.destroy()
-    rmSync(old, { recursive: true, force: true })
+    if (old) rmSync(old, { recursive: true, force: true })
   })
 
   test('R-015: standing adjustments and their invented payments are gone, and no total changed except by those payments', async () => {
@@ -156,22 +159,23 @@ print("RESULT" + json.dumps(out))
     await expect(page.getByRole('heading', { name: 'Set-asides' })).toBeVisible()
     await expect(page.locator('body')).not.toContainText(/standing adjustment/i)
     await page.goto(`${app.base}/transactions`)
-    await page.locator('.page-actions').getByRole('button', { name: 'Add transaction' }).click()
+    await page.locator('.add-row').click() // the side panel's "Add transaction" since the shell moved it there
     await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible()
     await expect(page.locator('.sheet')).not.toContainText(/adjustment pair|pair/i)
     await page.getByRole('button', { name: 'Cancel' }).click()
     await openChat(page)
+    // The kit's make_change takes only the app's kinds: asking for an old one is refused back to the model, and the
+    // scripted model's reply (with no words of its own) is the refusal it was given.
     for (const op of ['standing.add', 'adjustment_pair.add', 'transaction.rule']) {
-      app.script([
-        { reply: { kind: 'propose', summary: 'Try it.', op, args: { name: 'x', amount_cents: 100, date: d.today, description: 'x', legs: [], id: 1 } } },
-        { reply: { kind: 'answer', text: `No ${op}.` } },
-      ])
-      await say(page, `try ${op}`)
-      await expect(page.locator('.chat-reply', { hasText: `No ${op}.` })).toBeVisible()
-      expect(app.toolCalls().at(-1)).toMatchObject({ isError: true })
-      expect(app.toolCalls().at(-1)!.text).toContain(`there is no change called '${op}'`)
+      await say(page, script(['make_change', { kind: op, summary: 'Try it.', args: { name: 'x', amount_cents: 100, date: d.today, description: 'x', legs: [], id: 1 } }]))
+      const reply = page.locator('.bk-thread > li').last()
+      await expect(reply).toContainText('make_change (error): ')
+      await expect(reply).toContainText('kind: should be one of "transaction.add"')
+      await expect(reply).not.toContainText(`"${op}"`)
+      await expect(page.locator('[data-testid="bk-pending"]')).toHaveCount(0)
     }
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await expect(page.locator('.bk-card[data-state="open"]')).toHaveCount(0)
+    expect(app.botValue('SELECT COUNT(*) FROM bot_cards')).toEqual([[0]])
   })
 
   test('R-024: the "Refunds" income category is gone and its payments wait again, to be booked as refunds', async () => {
@@ -186,7 +190,7 @@ print("RESULT" + json.dumps(out))
     expect(now.total_income_cents).toBe(was.total_income_cents - 2500)
     expect(now.total_expenses_cents).toBe(was.total_expenses_cents)
     // A fresh household has no such category either.
-    const fresh = new App({ port: 18773, fakeClaude: true })
+    const fresh = new App({ port: port(2), fakeClaude: true })
     await fresh.start()
     try {
       const names = (await fresh.json<any[]>('/categories')).map(c => c.name)
@@ -247,8 +251,8 @@ print("RESULT" + json.dumps(out))
 
 test.describe.serial('just works for two: what the bot says without being asked', () => {
   // The app's clock is moved by hand; it looks every second whether something is due.
-  const app = new App({ port: 18775, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-  const stub = new TelegramStub(18776)
+  const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+  const stub = new TelegramStub(port(1))
   let stopBot: () => void
   const said = () => stub.sent.filter(m => m.chat_id === GROUP)
   const settle = () => new Promise(resolve => setTimeout(resolve, 4500))
@@ -414,7 +418,7 @@ test.describe.serial('just works for two: what the bot says without being asked'
     expect(owedParts[1]).toBe('This week\'s recap: I cannot say how the month is going, because the bank data stops at 23 Dec.\nSend a new ING export here and I will catch up.')
     expect(app.value("SELECT value FROM settings WHERE key = 'nudge_stale'")).toEqual([['2027-01-25T10:00|2026-12-23']])
     // With NUDGES off the bot says nothing unasked at all.
-    const quietApp = new App({ port: 18777, fakeClaude: true, env: { NUDGE_TICK_SECONDS: '1' } })
+    const quietApp = new App({ port: port(2), fakeClaude: true, env: { NUDGE_TICK_SECONDS: '1' } })
     quietApp.clock('2026-11-22T18:30')
     await quietApp.start()
     try {
@@ -430,8 +434,8 @@ test.describe.serial('just works for two: what the bot says without being asked'
 
 test.describe('just works for two: questions keep the quiet hours too', () => {
   test('R-010 R-012: questions from an import on the Import page at night wait for the morning; a file sent in the group is answered then and there', async () => {
-    const app = new App({ port: 18778, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18779)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-14T22:30')
     await app.start()
     await stub.start()
@@ -477,8 +481,8 @@ test.describe('just works for two: questions keep the quiet hours too', () => {
 
 test.describe('just works for two: quiet hours hold when a message can only be delivered at night', () => {
   test('R-010: a recap made in the evening while the bot was down is not sent at night, but in the morning, once', async () => {
-    const app = new App({ port: 18783, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18784)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-14T12:00')
     await app.start()
     await stub.start()
@@ -516,8 +520,8 @@ test.describe('just works for two: quiet hours hold when a message can only be d
 
 test.describe('just works for two: the waiting pile with the bot\'s own messages switched on, as the household runs it', () => {
   test('R-014: nothing is asked before Claude has judged the pile, and an answer given meanwhile is not overwritten', async () => {
-    const app = new App({ port: 18785, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18786)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-14T12:00')
     await app.start()
     await stub.start()
@@ -566,8 +570,8 @@ test.describe('just works for two: the waiting pile with the bot\'s own messages
 
 test.describe('just works for two: a household that used adjustments in its own way', () => {
   test('R-015 R-028: only the seeded allowance categories are removed or renamed, a switched-off adjustment takes nothing from the plan, and a card left open in the old private chat cannot be applied from the group', async () => {
-    const app = new App({ port: 18787, fakeClaude: true })
-    const stub = new TelegramStub(18788)
+    const app = new App({ port: port(0), fakeClaude: true })
+    const stub = new TelegramStub(port(1))
     const d = monthDates()
     const old = mkdtempSync(path.join(tmpdir(), 'hf-before-own-'))
     execFileSync('sh', ['-c', `git -C "${repo}" archive ${BEFORE} backend | tar -x -C "${old}"`])
@@ -626,8 +630,8 @@ print("RESULT" + json.dumps(out))
     app.clock(`${d.today}T12:00`)
     mkdirSync(path.join(app.home, 'work'), { recursive: true })
     app.fake({ mode: 'reply', delay: '0', plain: '[]' })
-    app.fakeReply({ kind: 'answer', text: 'Scripted answer.' })
     await app.start()
+    await app.useRunner('script', 'script', 'telegram')
     await stub.start()
     const stopBot = startBot(stub, `${app.base}/api`)
     try {
@@ -653,16 +657,25 @@ print("RESULT" + json.dumps(out))
         expect((await app.budgetRow(d.label, other)).planned_amount_cents, other).toBe(plannedBefore(other))
       }
 
-      // The old card is withdrawn: a first "yes" in the group applies nothing and is taken as a message.
-      expect(app.value("SELECT status FROM chat_proposals WHERE channel = 'telegram'")).toEqual([['superseded']])
+      // The old card is withdrawn (it moved into the bot kit's store with the rest of the chat): a first "yes" in the
+      // group applies nothing and is taken as a message.
+      expect(app.value("SELECT name FROM sqlite_master WHERE name IN ('chat_messages', 'chat_proposals')")).toEqual([])
+      expect(app.botValue("SELECT status FROM bot_cards WHERE channel = 'telegram'")).toEqual([['superseded']])
       const count = stub.sent.length
       stub.text(DANIEL, 'yes')
-      const reply = await stub.reply_after(count, m => m.text === 'Scripted answer.')
+      const reply = await stub.reply_after(count, m => m.text === 'The script ran no tools.')
       expect(reply.chat_id).toBe(GROUP)
       expect((await app.transactions()).some(t => t.description === 'Old Card Coffee')).toBe(false)
-      expect(app.value("SELECT status FROM chat_proposals WHERE channel = 'telegram'")).toEqual([['superseded']])
-      // The conversation in the group starts afresh: Claude is not given the old private chat.
-      expect(app.lastCall().prompt).not.toContain('add 5 euro coffee')
+      expect(app.botValue("SELECT status FROM bot_cards WHERE channel = 'telegram'")).toEqual([['superseded']])
+      // The conversation in the group starts afresh: the model is not given the old private chat.
+      stub.text(DANIEL, 'SCRIPT-ECHO')
+      let echoed: any
+      await expect.poll(async () => {
+        echoed = (await app.conversation('telegram')).messages.find((m: any) => m.role === 'assistant' && m.text.includes('<conversation>'))
+        return Boolean(echoed)
+      }, { timeout: 30_000 }).toBe(true)
+      expect(echoed.text).toContain('"yes"')
+      expect(echoed.text).not.toContain('add 5 euro coffee')
     } finally {
       stopBot()
       await stub.stop()
@@ -678,8 +691,8 @@ test.describe('just works for two: when the bot could not deliver', () => {
   const staleRecap = (to: string) => `This week's recap: I cannot say how the month is going, because the bank data stops at ${to}.\nSend a new ING export here and I will catch up.`
 
   test('R-010: what the app said unasked while the bot was off for two weeks arrives as one message, saying everything as of then', async () => {
-    const app = new App({ port: 18789, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18790)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-10T12:00')
     await app.start()
     await stub.start()
@@ -730,8 +743,8 @@ test.describe('just works for two: when the bot could not deliver', () => {
   })
 
   test('R-007 R-008: with old data the group hears about it once a week, in the recap, not twice', async () => {
-    const app = new App({ port: 18791, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18792)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-10T12:00')
     await app.start()
     await stub.start()
@@ -771,8 +784,8 @@ test.describe('just works for two: when the bot could not deliver', () => {
 
 test.describe('just works for two: payments Claude gives no answer for', () => {
   test('R-012 R-014: they are asked about too, a few at a time, and the next ones follow until none waits', async () => {
-    const app = new App({ port: 18793, fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
-    const stub = new TelegramStub(18794)
+    const app = new App({ port: port(0), fakeClaude: true, env: { NUDGES: 'on', NUDGE_TICK_SECONDS: '1' } })
+    const stub = new TelegramStub(port(1))
     app.clock('2026-11-14T12:00')
     await app.start()
     await stub.start()

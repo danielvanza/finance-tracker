@@ -189,16 +189,9 @@ export interface ImportConfirmResponse {
   notes_added?: number        // rows already in that got the bank's note they were imported without
 }
 
+// The chat's own kinds and card data (docs/bot.md); the rest of a chat message is bot-kit's Message.
 export interface ChatFieldChange { label: string; before: string; after: string }
 export interface ChatChange { title: string; fields: ChatFieldChange[] }
-export interface ChatEffect {
-  category: string
-  when: string
-  before_cents: number
-  after_cents: number
-  planned_before_cents: number | null
-  planned_cents: number | null
-}
 export interface ChatTransactionRef {
   id: number
   date_label: string
@@ -206,47 +199,33 @@ export interface ChatTransactionRef {
   description: string
   category: string | null
 }
-export interface ChatCard {
-  id: number
-  status: 'pending' | 'applied' | 'failed' | 'rejected' | 'superseded'
-  version: string
-  summary: string
-  note: string | null
+/** A card's `data`: the app's preview, and how a chat shows it. */
+export interface ChatCardData {
   changes: ChatChange[]
   purchase: ChatTransactionRef | null
-  effect: ChatEffect[]
-  error: string | null
-  result: { text: string; effect: ChatEffect[] } | null
-  heading: string
-  apply_label: string
-  reject_label: string
-  lines: string[]          // what the card says, in the app's words
+  effect_lines: string[]   // what it does to this month's budget lines, before → after
   summed_up: boolean       // many rows, shown as a summary; the rows themselves on request
   rows: number
-  effect_lines: string[]
-  says: string | null      // Claude's words that came with the card
-  offer: string | null     // once applied: the button that remembers the shops it sorted
-  remembered: string | null  // what was remembered, once that button was pressed
+  payments: number
+}
+/** An applied card's `result`. */
+export interface ChatCardResult {
+  applied_text?: string
+  effect_lines?: string[]  // the budget lines as they stand now
+  waiting?: number         // payments still waiting for an answer, when the card sorted waiting ones
+  offer?: { transaction_ids: number[]; label: string } | null
 }
 export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number; noted?: number }
-export interface ChatChart {
-  type: 'line' | 'bars'
-  title: string
-  labels: string[]
-  series: { name: string; values: number[] }[]
-  unit: 'cents' | 'euros' | 'percent' | 'number'
+/** A question about payments Claude was not sure of (`kind: question`). */
+export interface ChatQuestion {
+  status: 'open' | 'answered'
+  name: string
+  incoming: boolean
+  count: number
+  total_cents: number
+  examples: { date_label: string; amount_label: string; description: string; note: string }[]
+  options: { category_id: number; label: string; refund: boolean }[]
+  result?: string
 }
-export interface ChatMessage {
-  id: number
-  role: 'user' | 'assistant'
-  kind: 'text' | 'file' | 'voice' | 'photo' | 'answer' | 'clarify' | 'proposal' | 'import' | 'error' | 'question' | 'nudge'
-  text: string
-  status: 'queued' | 'running' | 'waiting' | 'stopping' | 'done'
-  reply_to: number | null
-  created_at: string
-  payload: (ChatImportCounts & { options?: undefined }) | { options: ChatTransactionRef[] } | { chart: ChatChart } | ChatWork | null
-  card: ChatCard | null
-}
-/** On a person's message: the live log of the reply's steps, and how the reply ended if it was cut short. */
-export interface ChatWork { steps?: string[]; ended?: 'stopped' | 'time' }
-export interface ChatConversation { messages: ChatMessage[]; guesses_waiting: number; claude_busy: boolean }
+/** Every row of a card (`kind: all_rows`): grouped by what changes. */
+export interface ChatRowGroup { heading: string; rows?: { when: string; amount: string; name: string }[]; lines?: string[] }

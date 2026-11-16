@@ -4,12 +4,12 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import {
-  App, DANIEL, TelegramStub, decide, ingCsv, ingRow, lastPending, monthDates, openChat, repo, say, shot, startBot, thread,
+  App, DANIEL, TelegramStub, decide, ingCsv, ingRow, lastPending, monthDates, openChat, port, repo, say, shot, startBot, thread,
 } from './fixtures'
 
 // Everything here goes through the real Claude login in its sandbox, on synthetic data only.
-const app = new App({ port: 18701 })
-const stub = new TelegramStub(18702)
+const app = new App({ port: port(0) })
+const stub = new TelegramStub(port(1))
 const d = monthDates()
 let stopBot: () => void
 let page: Page
@@ -28,6 +28,15 @@ const SEED = [
 ]
 
 const isCard = (m: any) => (m.reply_markup?.inline_keyboard ?? []).flat().some((b: any) => b.text === 'Apply')
+const openCards = (page: Page) => page.locator('.bk-card[data-state="open"]')
+/** The newest answer in the bubble's thread. */
+const lastReply = (page: Page) => page.locator('.bk-thread .bk-reply').last()
+
+/** Waits until the bot has really shown the newest card in the group, so a typed yes or no can mean it. */
+async function cardShown() {
+  await expect.poll(async () => (await app.conversation('telegram')).messages.filter((m: any) => m.card).at(-1)?.delivered?.length ?? 0,
+    { timeout: 20_000, intervals: [200] }).toBeGreaterThan(0)
+}
 
 test.describe.serial('chat with the real Claude', () => {
   test.beforeAll(async ({ browser }) => {
@@ -50,11 +59,11 @@ test.describe.serial('chat with the real Claude', () => {
 
   test('R-003 R-004 R-005 R-025 R-026: a file dropped in the bubble imports, sorts and summarises', async () => {
     await openChat(page)
-    await page.getByTestId('chat-file').setInputFiles({ name: 'ing-export.csv', mimeType: 'text/csv', buffer: Buffer.from(ingCsv(SEED)) })
-    await expect(page.getByTestId('chat-pending')).toContainText('Reading your file')
-    const card = page.locator('.chat-card', { hasText: 'ING import' })
+    await page.getByTestId('bk-attach-input').setInputFiles({ name: 'ing-export.csv', mimeType: 'text/csv', buffer: Buffer.from(ingCsv(SEED)) })
+    await expect(page.getByTestId('bk-pending')).toContainText('Reading your file')
+    const card = page.locator('.hf-import')
     await expect(card).toBeVisible()
-    await expect(page.getByTestId('chat-pending')).toHaveCount(0)
+    await expect(page.getByTestId('bk-pending')).toHaveCount(0)
 
     const txs = await bankRows()
     expect(txs).toHaveLength(8)
@@ -67,9 +76,9 @@ test.describe.serial('chat with the real Claude', () => {
     const counted = txs.filter(t => t.confirmed).length
     expect(txs.filter(t => !t.confirmed).every(t => t.categorised_by !== 'rule')).toBe(true)
 
-    const rows = await card.locator('.chat-row').allTextContents()
+    const rows = await card.locator('.hf-row').allTextContents()
     expect(rows).toEqual(['New8', 'Already here, skipped0', `Sorted and counted${counted}`, `Waiting for your answer${8 - counted}`])
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await expect(openCards(page)).toHaveCount(0)
     await shot(page, 'import-summary-desktop')
   })
 
@@ -85,8 +94,8 @@ test.describe.serial('chat with the real Claude', () => {
     const before = await app.transactions()
     const pace = await app.json(`/dashboard/pace`)
     await say(page, 'How are we doing this month?')
-    const reply = page.locator('.chat-reply').last()
-    await expect(page.getByTestId('chat-pending')).toHaveCount(0)
+    const reply = lastReply(page)
+    await expect(page.getByTestId('bk-pending')).toHaveCount(0)
     await expect(reply).not.toContainText('Thinking')
     // The headline figure is what is free to spend until payday (just-works-for-two R-017).
     const left = pace.free ? pace.free.free_cents : pace.spendable_plan_cents - pace.spendable_actual_cents
@@ -97,16 +106,16 @@ test.describe.serial('chat with the real Claude', () => {
     const money = (cents: number) => `€${Math.floor(Math.abs(cents) / 100).toString().replace(/\B(?=(\d{3})+$)/g, '.')},${String(Math.abs(cents) % 100).padStart(2, '0')}`
     expect(text).toContain(money(left))
     expect(text).not.toMatch(/\*\*|^#/m)
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await expect(openCards(page)).toHaveCount(0)
     expect(await app.transactions()).toEqual(before)
     await shot(page, 'month-answer-desktop')
   })
 
   test('R-009: two matching purchases are shown and nothing is proposed until answered', async () => {
     await say(page, 'The Bol.com order of 34,99 should have been Home & DIY')
-    const question = page.locator('.chat-options').last()
+    const question = page.locator('.bk-options').last()
     await expect(question.getByRole('button')).toHaveCount(2)
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await expect(openCards(page)).toHaveCount(0)
     await shot(page, 'clarify-desktop')
 
     await question.getByRole('button').first().click()
@@ -132,8 +141,8 @@ test.describe.serial('chat with the real Claude', () => {
     await expect(card).toBeVisible()
     await expect(card).toContainText('Refund for')
     await expect(card).toContainText(SHOP)
-    await expect(card.locator('.chat-lines').first()).toContainText('counts as a refund')
-    await expect(card.locator('.chat-lines').first()).toContainText('Clothing')
+    await expect(card.locator('.bk-lines').first()).toContainText('counts as a refund')
+    await expect(card.locator('.bk-lines').first()).toContainText('Clothing')
     await expect(card).toContainText('Clothing this month')
     await expect(card.getByRole('button', { name: 'Apply' })).toBeVisible()
     await expect(card.getByRole('button', { name: 'Not this' })).toBeVisible()
@@ -165,8 +174,8 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, 'We paid 25,00 at Sample Cinema today for tickets. Put it in Recreation & Entertainment.')
     const card = lastPending(page)
     await expect(card).toBeVisible()
-    await expect(card.locator('.chat-lines').first()).toContainText('Add: ')
-    await expect(card.locator('.chat-note').first()).toContainText(NOT_FOUND)
+    await expect(card.locator('.bk-lines').first()).toContainText('Add: ')
+    await expect(card.locator('.bk-note').first()).toContainText(NOT_FOUND)
     await expect(await decide(page, card, 'Apply')).toContainText('Done.')
     const manual = (await app.transactions()).find(t => t.source === 'manual' && t.description.toLowerCase().includes('cinema'))
     expect(manual).toMatchObject({ amount_cents: -2500, confirmed: true, is_refund: false })
@@ -178,9 +187,9 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, 'Sample Cafe Centrum gave us the 12,50 back today')
     const card = lastPending(page)
     await expect(card).toBeVisible()
-    await expect(card.locator('.chat-lines').first()).toContainText('Add: ')
-    await expect(card.locator('.chat-note').first()).toContainText(NOT_FOUND)
-    await expect(card.locator('.chat-lines').first()).toContainText('a refund in')
+    await expect(card.locator('.bk-lines').first()).toContainText('Add: ')
+    await expect(card.locator('.bk-note').first()).toContainText(NOT_FOUND)
+    await expect(card.locator('.bk-lines').first()).toContainText('a refund in')
     await expect(card).toContainText('Refund for')
     await decide(page, card, 'Not this', 'rejected')
     expect(await app.transactions()).toEqual(before)
@@ -248,8 +257,8 @@ test.describe.serial('chat with the real Claude', () => {
     await page.reload()
     await openChat(page)
     const csv = ingCsv([ingRow(d.inMonth(8), 'Webshop Terugbetaling', 6000)])
-    await page.getByTestId('chat-file').setInputFiles({ name: 'second.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
-    const merge = page.locator('.chat-card', { hasText: 'Looks like the same payment' })
+    await page.getByTestId('bk-attach-input').setInputFiles({ name: 'second.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
+    const merge = page.locator('.bk-card', { hasText: 'Looks like the same payment' })
     await expect(merge).toBeVisible()
     expect((await app.transactions()).some(t => t.id === entry.id)).toBe(true)
     await shot(page, 'merge-card-desktop')
@@ -298,7 +307,7 @@ test.describe.serial('chat with the real Claude', () => {
     await say(page, message)
     const bubble = lastPending(page)
     await expect(bubble).toBeVisible()
-    const fields = await bubble.locator('.chat-lines li').allTextContents()
+    const fields = await bubble.locator('.bk-lines li').allTextContents()
     const count = stub.sent.length
     stub.text(DANIEL, message)
     const telegram = await stub.reply_after(count, isCard)
@@ -313,7 +322,7 @@ test.describe.serial('chat with the real Claude', () => {
     await expect.poll(() => telegram.text, { timeout: 20_000 }).toContain('Applied.')
     expect((await app.budgetRow(d.label, 'Food - Not Essential')).planned_amount_cents).toBe(22200)
     await say(page, 'What is the Food - Not Essential budget this month? Just the number.')
-    await expect(page.locator('.chat-reply').last()).toContainText('222')
+    await expect(lastReply(page)).toContainText('222')
   })
 
   test('R-001 R-022 R-023: Telegram shows the same detail as text and replaces the card with the result', async () => {
@@ -327,7 +336,7 @@ test.describe.serial('chat with the real Claude', () => {
     const before = await app.transactions()
     // A typed "no" is also an answer.
     const after = stub.sent.length
-    await app.cardShown()
+    await cardShown()
     stub.text(DANIEL, 'no')
     await expect.poll(() => proposal.text, { timeout: 20_000 }).toContain('Not applied')
     expect(stub.sent.length).toBe(after)
@@ -336,7 +345,7 @@ test.describe.serial('chat with the real Claude', () => {
     const second = stub.sent.length
     stub.text(DANIEL, 'Add a manual payment of 11,11 today at Sample Kiosk in Miscellaneous')
     const again = await stub.reply_after(second, isCard)
-    await app.cardShown()
+    await cardShown()
     stub.text(DANIEL, 'yes')
     await expect.poll(() => again.text, { timeout: 20_000 }).toContain('Applied.')
     expect(again.text).toMatch(/Miscellaneous this month: €[\d.,]+ of €/)
@@ -356,13 +365,13 @@ test.describe.serial('chat with the real Claude', () => {
     await page.reload()
     await openChat(page)
     const csv = ingCsv([ingRow(d.inMonth(10), hostile, -100)])
-    await page.getByTestId('chat-file').setInputFiles({ name: 'hostile.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
-    await expect(page.locator('.chat-card', { hasText: 'ING import' }).last()).toBeVisible()
+    await page.getByTestId('bk-attach-input').setInputFiles({ name: 'hostile.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
+    await expect(page.locator('.hf-import').last()).toBeVisible()
     await app.settled('bubble')
     const rulesBefore = await app.json<any[]>('/rules')
     await say(page, 'What was the most recent bank payment?')
     await app.settled('bubble')
-    await expect(page.locator('.chat-card[data-state="pending"]')).toHaveCount(0)
+    await expect(openCards(page)).toHaveCount(0)
     expect(await app.json('/rules')).toEqual(rulesBefore)
   })
 
@@ -375,20 +384,20 @@ test.describe.serial('chat with the real Claude', () => {
     await openChat(other)
     await expect(thread(other)).toContainText('How are we doing this month?')
     await expect(thread(other)).not.toContainText('Sample Kiosk today')
-    const telegram = await app.json('/chat/messages?channel=telegram')
+    const telegram = await app.conversation('telegram')
     expect(telegram.messages.some((m: any) => m.text === 'How are we doing this month?')).toBe(false)
 
-    await page.getByRole('button', { name: 'New chat' }).click()
-    await expect(page.locator('.chat-confirm')).toBeVisible()
+    await page.getByRole('button', { name: 'New chat', exact: true }).click()
+    await expect(page.locator('.bk-confirm')).toBeVisible()
     await page.getByRole('button', { name: 'Keep this one' }).click()
     await expect(thread(page)).toContainText('How are we doing this month?')
-    await page.getByRole('button', { name: 'New chat' }).click()
+    await page.getByRole('button', { name: 'New chat', exact: true }).click()
     await page.getByRole('button', { name: 'Start new chat' }).click()
-    await expect(page.locator('.chat-empty')).toBeVisible()
+    await expect(page.locator('.bk-empty')).toBeVisible()
     await other.reload()
     await openChat(other)
-    await expect(other.locator('.chat-empty')).toBeVisible()
-    expect((await app.json('/chat/messages?channel=telegram')).messages.length).toBeGreaterThan(0)
+    await expect(other.locator('.bk-empty')).toBeVisible()
+    expect((await app.conversation('telegram')).messages.length).toBeGreaterThan(0)
     await other.close()
   })
 })

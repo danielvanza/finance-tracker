@@ -32,11 +32,11 @@ def preview(file: UploadFile = ..., db: Session = Depends(get_db)):
 
 @router.post("/confirm", response_model=ImportConfirmResponse)
 def confirm(file: UploadFile = ..., db: Session = Depends(get_db)):
-    from assistant import service as chat_service  # the chat asks about what Claude was not sure of
+    from assistant import questions  # the chat asks about what Claude was not sure of
 
     rows = _parse(file)
     outcome = import_service.import_rows(rows, db)
-    chat_service.after_import()
+    questions.after_import()
     return ImportConfirmResponse(
         imported=outcome.imported, skipped_duplicates=outcome.skipped,
         categorised_by_rule=outcome.by_rule, categorised_by_ai=outcome.by_ai,

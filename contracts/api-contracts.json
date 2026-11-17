@@ -81,7 +81,7 @@
       "query": {
         "skip_ids": "repeated int query params (optional)"
       },
-      "response": "TransactionOut | null (null = review queue empty)",
+      "response": "TransactionOut + options: [{category_id, label, refund}] (likely categories, most likely first, at most 3) | null (null = review queue empty)",
       "frontend_caller": "api.getNextReview"
     },
     {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import { describeApiError } from './ErrorBanner'
+import { describeApiError } from './apiError'
 
 const FIELDS = 2
 

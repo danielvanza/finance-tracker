@@ -5,7 +5,8 @@ import { ChevronLeft, FileText, LoaderCircle, Upload } from 'lucide-react'
 import { api } from '../api'
 import type { ImportConfirmResponse, ImportPreviewResponse, Pace } from '../types'
 import { dayLabel } from '../dates'
-import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
+import ErrorBanner from '../components/ErrorBanner'
+import { describeApiError } from '../components/apiError'
 import Catchup from './import/Catchup'
 import Preview from './import/Preview'
 import Result from './import/Result'
@@ -140,7 +141,7 @@ export default function Import() {
     <>
       <Link to="/" className="btn import-back">
         <ChevronLeft size={16} aria-hidden="true" />
-        Back to Month
+        Back to Overview
       </Link>
 
       <div className="page-head">

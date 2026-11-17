@@ -1,0 +1,48 @@
+{
+  "title": "Forest Card: three ways to lay it out",
+  "question": "Same world: deep green, white, Geist. Each variant changes how the screen is organised. Pick one, or steer.",
+  "options": [
+    {
+      "id": "forest-card",
+      "kind": "grounded",
+      "label": "A · The Card",
+      "lineage": "Apple Wallet",
+      "thesis": "Free-to-spend on one deep-green card; everything else on white panels below; floating tab bar.",
+      "palette": ["#1F5C46", "#E4F2EA", "#F4F6F3", "#FFFFFF", "#16201B", "#E0812B"],
+      "materials": ["green hero card", "white panels", "floating tabs"],
+      "viewport": "As shown last round, refined.",
+      "risk": "Many rounded panels can start to feel like a stack of cards.",
+      "html": ".impeccable/mocks/decision/forest-card.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-band",
+      "kind": "grounded",
+      "label": "B · Green Band",
+      "lineage": "banking apps with a coloured top",
+      "thesis": "The whole top of the screen is green with the tabs in it; a white sheet slides up over it with the rest.",
+      "palette": ["#1F5C46", "#174A38", "#E4F2EA", "#FFFFFF", "#16201B", "#E0812B"],
+      "materials": ["green header band", "white sheet with one rounded top", "segmented tabs"],
+      "viewport": "Green band: Finances, tabs, free-to-spend, pace line. White sheet: Needs you, Still to pay, groups as one list.",
+      "risk": "More green on screen; the band must stay calm so the number stays the loudest thing.",
+      "html": ".impeccable/mocks/decision/forest-band.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-list",
+      "kind": "grounded",
+      "label": "C · Quiet List",
+      "lineage": "iOS Settings and Health: grouped lists",
+      "thesis": "Mostly light; green only on the number, the pace area and what you can tap. Groups read as tidy lists.",
+      "palette": ["#F4F6F3", "#FFFFFF", "#1F5C46", "#CFE6DA", "#16201B", "#E0812B"],
+      "materials": ["grouped lists", "full-width pace area", "tab bar with icons"],
+      "viewport": "Big green number on light ground, the pace area full width under it, then grouped lists; standard bottom tab bar.",
+      "risk": "Closest to stock iOS; the satisfaction has to come from motion and type, not colour.",
+      "html": ".impeccable/mocks/decision/forest-list.html",
+      "htmlFrame": "390x844"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "steer": true
+}

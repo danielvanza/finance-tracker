@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { describeApiError } from '../ErrorBanner'
+import { describeApiError } from '../apiError'
 import { centsToInputString, parseToCents } from '../../money'
 import type { Goal, GoalInput, SavingsCategory } from './types'
 

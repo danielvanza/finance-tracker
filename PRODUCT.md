@@ -40,7 +40,7 @@ A private household ledger that sits beside the life dashboard: the household's 
 
 ## Brand Commitments
 
-- The visual design aligns with life-dashboard (`/home/daniel/code/life-dashboard/DESIGN.md`); the two should read as one system.
+- Finances has its own visual world, independent of life-dashboard (decided 2026-11-17 for the full redesign). It must not read as AI-generated: no cream-plus-italic-serif-plus-mono-label look.
 - Named "Finances" where the dashboard links to it.
 
 ## Evidence on Hand

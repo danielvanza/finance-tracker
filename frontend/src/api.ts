@@ -69,7 +69,7 @@ export const api = {
     return apiFetch(`${BASE}/transactions${q ? '?' + q : ''}`, { method: 'GET' })
   },
 
-  getNextReview: (skipIds: number[] = []): Promise<import('./types').Transaction | null> => {
+  getNextReview: (skipIds: number[] = []): Promise<import('./types').ReviewTransaction | null> => {
     const params = skipIds.length ? '?' + skipIds.map(id => `skip_ids=${id}`).join('&') : ''
     return apiFetch(`${BASE}/transactions/review${params}`, { method: 'GET' })
   },

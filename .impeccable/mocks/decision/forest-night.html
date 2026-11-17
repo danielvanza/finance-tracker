@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset=utf-8><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet"><style>:root{--bg:#111814;--card:#1A231E;--hair:#26312B;--ink:#ECEAE4;--text:#D3D6D0;--quiet:#98A39C;--accent:#7FD8A8;--onaccent:#0F1A14;--line:#7FD8A8;--ideal:#4A5850;--today:#E8B04B;--ontoday:#1A1408;--chip:#222D27;--warnbg:#3A2E17;--warn:#E8B04B;--overbg:#3B2220;--over:#F07167}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:390px;height:844px;overflow:hidden;font-family:Geist,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums;position:relative}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 8px}
+.brand{font-weight:700;font-size:18px;letter-spacing:-.02em}
+.imp{border:1px solid var(--hair);background:var(--card);color:var(--accent);border-radius:12px;padding:9px 14px;font:600 14px Geist}
+.hd{padding:8px 18px 0}
+.lbl{font-size:14px;color:var(--quiet);font-weight:500}
+.big{font-size:56px;font-weight:650;letter-spacing:-.035em;line-height:1;margin:8px 0 6px}
+.big small{font-size:30px;font-weight:500;color:var(--quiet);vertical-align:16px;letter-spacing:-.01em}
+.sub{font-size:15px;color:var(--text)}
+.chart{position:relative;margin:14px 14px 0}
+.chart svg{display:block;width:100%;height:96px}
+.tip{position:absolute;left:236px;top:-10px;background:var(--today);color:var(--ontoday);font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px}
+.ax{display:flex;justify-content:space-between;font-size:11px;color:var(--quiet);margin-top:4px}
+.c{background:var(--card);margin:12px 14px 0;border-radius:20px;padding:6px 16px;border:1px solid var(--hair)}
+h3{font-size:14px;font-weight:600;padding:8px 0 2px;display:flex;justify-content:space-between}
+h3 span{color:var(--quiet);font-weight:500}
+.r{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--hair)}
+h3+.r{border:0}
+.ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:13px;background:var(--chip);color:var(--text);flex:none}
+.ic.warn{background:var(--warnbg);color:var(--warn)}.ic.over{background:var(--overbg);color:var(--over)}
+.t{flex:1;font-size:15px;font-weight:500}.t small{display:block;font-size:13px;color:var(--quiet);font-weight:400}
+.go{color:var(--accent);font-weight:600;font-size:14px}.amt{font-size:15px;font-weight:500}
+.tabs{position:absolute;left:14px;right:14px;bottom:14px;background:var(--card);border:1px solid var(--hair);border-radius:20px;display:flex;padding:5px;box-shadow:0 8px 24px -10px rgba(0,0,0,.25)}
+.tabs a{flex:1;text-align:center;font-size:14px;font-weight:600;padding:10px 0;border-radius:15px;color:var(--quiet)}
+.tabs a.on{background:var(--accent);color:var(--onaccent)}
+.c{box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}.chart circle{filter:drop-shadow(0 0 6px #E8B04B)}</style></head><body>
+<div class="nav"><span class="brand">Finances</span><button class="imp">Import</button></div>
+<div class="hd"><div class="lbl">Free to spend until payday</div>
+<div class="big"><small>€</small>1.180<small>,40</small></div>
+<div class="sub">About €196 a day · 6 days to payday</div></div>
+<div class="chart"><svg viewBox="0 0 362 96" preserveAspectRatio="none"><defs><linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--line)" stop-opacity=".22"/><stop offset="1" stop-color="var(--line)" stop-opacity="0"/></linearGradient></defs><path d="M0 92 L362 10" stroke="var(--ideal)" stroke-dasharray="3 5" stroke-width="1.5" fill="none"/><path d="M0 92 L40 70 L92 66 L128 42 L190 34 L276 22 L276 96 L0 96Z" fill="url(#f)"/><path d="M0 92 L40 70 L92 66 L128 42 L190 34 L276 22" stroke="var(--line)" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/><circle cx="276" cy="22" r="6" fill="var(--today)" stroke="var(--card)" stroke-width="3"/></svg><span class="tip">€84 over</span>
+<div class="ax"><span>24 Oct</span><span>today</span><span>24 Nov</span></div></div>
+<div class="c"><h3>Needs you</h3>
+<div class="r"><i class="ic warn">3</i><div class="t">Payments to sort<small>Claude wasn't sure about these</small></div><span class="go">Answer</span></div>
+<div class="r"><i class="ic over">!</i><div class="t">Utilities is €13 over<small>€213 of €200</small></div><span class="go">See</span></div></div>
+<div class="c"><h3>Still to pay <span>€391</span></h3>
+<div class="r"><i class="ic">20</i><div class="t">Ziggo<small>Thursday</small></div><span class="amt">€62</span></div>
+<div class="r"><i class="ic">22</i><div class="t">Health insurance<small>Saturday</small></div><span class="amt">€284</span></div></div>
+<div class="tabs"><a class="on">Overview</a><a>Money</a><a>Plan</a></div>
+</body></html>

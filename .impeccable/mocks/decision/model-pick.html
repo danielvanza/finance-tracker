@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:390px;height:844px;overflow:hidden;font-family:Archivo,system-ui,sans-serif;background:#FBFAF5;color:#1D2340;font-variant-numeric:tabular-nums}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
+.brand{font-weight:800;font-size:17px;font-stretch:125%}
+.imp{background:#1D2340;color:#FBFAF5;border:0;border-radius:999px;font:600 14px Archivo;padding:8px 14px}
+.note{margin:0 12px;border-radius:14px;background:#F2BE22;padding:16px 18px 18px;position:relative;overflow:hidden}
+.note:before{content:"";position:absolute;inset:0;background:repeating-radial-gradient(circle at 110% 30%,transparent 0 6px,rgba(29,35,64,.12) 6px 7px);pointer-events:none}
+.note>*{position:relative}
+.lbl{font-size:13px;font-weight:600}
+.big{font-size:84px;font-weight:800;font-stretch:125%;line-height:.95;letter-spacing:-.03em;margin:8px 0 6px}
+.sub{font-size:15px;font-weight:500}
+.pace{height:46px;margin-top:12px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 12px 0}
+.t{border-radius:10px;padding:10px;color:#1D2340}
+.t b{display:block;font-size:20px;font-weight:800;font-stretch:112%}
+.t span{font-size:12px;font-weight:600}
+.bar{height:6px;border-radius:3px;background:rgba(29,35,64,.18);margin-top:8px}
+.bar i{display:block;height:100%;border-radius:3px;background:#1D2340}
+.card{margin:10px 12px 0;background:#fff;border-radius:12px;padding:12px 14px;border:1px solid #ECEAE2}
+h3{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-stretch:115%;margin-bottom:6px}
+.r{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F0EEE6;font-size:15px}
+.r b{font-weight:700}
+.tabs{position:absolute;left:12px;right:12px;bottom:12px;display:flex;background:#1D2340;border-radius:999px;padding:5px}
+.tabs a{flex:1;text-align:center;color:#FBFAF5;font-weight:600;font-size:14px;padding:10px 0;border-radius:999px}
+.tabs a.on{background:#F2BE22;color:#1D2340}
+</style></head><body>
+<div class="nav"><span class="brand">Finances</span><button class="imp">Import</button></div>
+<div class="note"><div class="lbl">Free to spend until payday</div>
+<div class="big">€1.180</div><div class="sub">€196 a day · 6 days left · €84 over pace</div>
+<svg class="pace" viewBox="0 0 340 46" width="100%"><path d="M0 44 L340 4" stroke="#1D2340" stroke-dasharray="4 4" fill="none"/><path d="M0 44 L40 30 L90 28 L130 14 L200 10 L262 8" stroke="#1D2340" stroke-width="3" fill="none"/><circle cx="262" cy="8" r="6" fill="#1D2340"/></svg></div>
+<div class="trio">
+<div class="t" style="background:#9FC6E3"><span>Needs</span><b>€1.712</b><span>left of €3.250</span><div class="bar"><i style="width:47%"></i></div></div>
+<div class="t" style="background:#B7A3D6"><span>Wants</span><b>€793</b><span>left of €2.100</span><div class="bar"><i style="width:62%"></i></div></div>
+<div class="t" style="background:#A8CF9A"><span>Savings</span><b>€150</b><span>to go of €400</span><div class="bar"><i style="width:63%"></i></div></div></div>
+<div class="card"><h3>Needs you</h3>
+<div class="r"><span>3 payments to sort</span><b>Answer ›</b></div>
+<div class="r"><span>Utilities €13 over</span><b>See ›</b></div></div>
+<div class="card"><h3>Still to pay</h3>
+<div class="r"><span>20 Nov · Ziggo</span><b>€62</b></div>
+<div class="r"><span>22 Nov · Health insurance</span><b>€284</b></div></div>
+<div class="tabs"><a class="on">Overview</a><a>Money</a><a>Plan</a></div>
+</body></html>

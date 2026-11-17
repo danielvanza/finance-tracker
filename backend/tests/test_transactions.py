@@ -55,6 +55,17 @@ def test_review_endpoint_returns_unconfirmed(client):
     assert r.json()["confirmed"] is False
 
 
+def test_review_endpoint_offers_claudes_options(client, db):
+    """The card's one-tap answers: Claude's guess first, then what else it considered."""
+    misc, food = db.query(Category).filter(Category.type == "wants").limit(2).all()
+    tx = db.query(Transaction).filter_by(confirmed=False).first()
+    tx.category_id, tx.categorised_by, tx.ai_options = misc.id, "ai", [misc.id, food.id]
+    db.commit()
+    r = client.get("/transactions/review")
+    assert r.json()["id"] == tx.id
+    assert [o["category_id"] for o in r.json()["options"]][:2] == [misc.id, food.id]
+
+
 def test_filter_by_financial_month(client, db):
     """Transactions should filter by financial month, not calendar month."""
     from models import Setting

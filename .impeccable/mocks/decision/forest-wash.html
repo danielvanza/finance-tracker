@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:390px;height:844px;overflow:hidden;font-family:Geist,system-ui,sans-serif;background:#EEF1EC;color:#1B2420;font-variant-numeric:tabular-nums;position:relative}
+.wash{background:linear-gradient(#CFE8DA 0%,#DCEEE3 55%,#EEF1EC 100%);padding-bottom:6px}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 8px}
+.brand{font-weight:700;font-size:18px}.imp{border:0;background:rgba(255,255,255,.7);color:#1F6F5C;border-radius:12px;padding:9px 14px;font:600 14px Geist}
+.hd{text-align:center;padding-top:14px}
+.lbl{font-size:14px;color:#3F5A4D;font-weight:500}
+.big{font-size:60px;font-weight:650;letter-spacing:-.035em;line-height:1;margin:8px 0 6px}
+.big small{font-size:30px;font-weight:500;color:#4F6B5D;vertical-align:18px}
+.sub{font-size:15px;color:#2C3F35}
+.pill{display:inline-block;background:#D9902B;color:#fff;font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;margin-top:10px}
+svg{display:block;width:100%;height:80px;margin-top:10px}
+.rings{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 14px 0;background:#fff;border-radius:20px;border:1px solid #DDE2DA;padding:14px 6px}
+.rg{text-align:center;font-size:12px;color:#66716B}.rg b{display:block;color:#1B2420;font-size:15px;font-weight:600;margin-top:2px}
+.rg svg{width:52px;height:52px;margin:0 auto 6px}
+.c{background:#fff;margin:12px 14px 0;border-radius:20px;padding:6px 16px;border:1px solid #DDE2DA}
+h3{font-size:14px;font-weight:600;padding:8px 0 2px}
+.r{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid #E6EAE4;font-size:15px}
+h3+.r{border:0}
+.ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:13px;background:#FBEBD5;color:#9A5B0F}
+.t{flex:1}.go{color:#1F6F5C;font-weight:600;font-size:14px}
+.tabs{position:absolute;left:14px;right:14px;bottom:14px;background:#fff;border:1px solid #DDE2DA;border-radius:20px;display:flex;padding:5px;box-shadow:0 8px 24px -10px rgba(0,0,0,.2)}
+.tabs a{flex:1;text-align:center;font-size:14px;font-weight:600;padding:10px 0;border-radius:15px;color:#66716B}.tabs a.on{background:#1F6F5C;color:#fff}
+</style></head><body>
+<div class="wash"><div class="nav"><span class="brand">Finances</span><button class="imp">Import</button></div>
+<div class="hd"><div class="lbl">Free to spend until payday</div><div class="big"><small>€</small>1.180<small>,40</small></div><div class="sub">About €196 a day · 6 days to payday</div><span class="pill">€84 over pace</span></div>
+<svg viewBox="0 0 390 80" preserveAspectRatio="none"><path d="M0 78 L390 8" stroke="#8FB3A1" stroke-dasharray="3 5" stroke-width="1.5" fill="none"/><path d="M0 78 L45 58 L100 55 L140 36 L205 29 L298 19" stroke="#1F6F5C" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/><circle cx="298" cy="19" r="6" fill="#D9902B" stroke="#fff" stroke-width="3"/></svg></div>
+<div class="rings">
+<div class="rg"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" stroke="#E6EAE4" stroke-width="6" fill="none"/><circle cx="26" cy="26" r="21" stroke="#1F6F5C" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="62 132" transform="rotate(-90 26 26)"/></svg>Needs<b>€1.712 left</b></div>
+<div class="rg"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" stroke="#E6EAE4" stroke-width="6" fill="none"/><circle cx="26" cy="26" r="21" stroke="#1F6F5C" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="82 132" transform="rotate(-90 26 26)"/></svg>Wants<b>€793 left</b></div>
+<div class="rg"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" stroke="#E6EAE4" stroke-width="6" fill="none"/><circle cx="26" cy="26" r="21" stroke="#1F6F5C" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="83 132" transform="rotate(-90 26 26)"/></svg>Savings<b>€150 to go</b></div></div>
+<div class="c"><h3>Needs you</h3><div class="r"><i class="ic">3</i><span class="t">Payments to sort</span><span class="go">Answer</span></div><div class="r"><i class="ic" style="background:#F8DEDB;color:#B1322A">!</i><span class="t">Utilities is €13 over</span><span class="go">See</span></div></div>
+<div class="tabs"><a class="on">Overview</a><a>Money</a><a>Plan</a></div>
+</body></html>

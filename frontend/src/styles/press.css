@@ -1,41 +1,39 @@
-/* Pressing things: soft clay, the same as life-dashboard. Everything you can tap presses in slowly
-   (--press-in), darkens a touch and slowly puffs back up (--press-out). press.ts marks the pressed
-   element with .is-pressed and holds it at least 120 ms, so a quick tap still shows the whole
-   press; :active covers the keyboard. */
+/* Pressing things: everything you can tap sinks a little and tints, then springs back
+   (--press-in, --press-out). press.ts marks the pressed element with .is-pressed and holds it at
+   least 120 ms, so a quick tap still shows the whole press; :active covers the keyboard. */
 
 .btn,
 .back,
 .find-chip,
 .add-chip,
+.import-chip,
 .find-well,
 .seg button,
 .tabbar a,
-.tabbar a::before,
+.subnav a,
 .cat-row,
-.link-row {
+.link-row,
+.ov-row {
   transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out);
 }
 
-:is(.btn, .back, .find-chip, .add-chip, .find-well, .seg button, .link-row):is(:active, .is-pressed):not(:disabled) {
-  background: var(--press-tint);
+:is(.btn, .back, .find-chip, .add-chip, .find-well, .seg button, .link-row, .ov-row):is(:active, .is-pressed):not(:disabled) {
+  background-color: var(--press-tint);
   box-shadow: var(--press-held);
-  transform: scale(0.975);
+  transform: scale(0.97);
   transition: transform var(--press-in), box-shadow var(--press-in), background-color var(--press-in);
 }
 
-.btn-primary:is(:active, .is-pressed):not(:disabled) {
-  background: color-mix(in srgb, var(--shu) 86%, var(--ink));
+:is(.btn-primary, .import-chip):is(:active, .is-pressed):not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent) 85%, var(--ink));
+  box-shadow: none;
+  transform: scale(0.96);
+  transition: transform var(--press-in), background-color var(--press-in);
 }
 
-.tabbar a[href]:is(:active, .is-pressed) {
-  transform: scale(0.975);
+:is(.tabbar a, .subnav a)[href]:is(:active, .is-pressed) {
+  transform: scale(0.95);
   transition: transform var(--press-in);
-}
-
-.tabbar a[href]:is(:active, .is-pressed)::before {
-  background: var(--press-tint);
-  box-shadow: var(--press-held);
-  transition: box-shadow var(--press-in), background-color var(--press-in);
 }
 
 .cat-row:is(:active, .is-pressed) {

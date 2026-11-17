@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
 import { api } from '../api'
 import { formatCents } from '../money'
 import type { Transaction } from '../types'
 import ReviewCard, { type ReviewDecision } from '../components/ReviewCard'
-import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
+import ErrorBanner from '../components/ErrorBanner'
+import { describeApiError } from '../components/apiError'
 import SplitModal from '../components/SplitModal'
-import ImportLink from '../components/ImportLink'
 import CsvChip from '../components/reports/CsvChip'
 import {
   MerchantSheetProvider, MerchantsView, ViewSwitch, type MerchantView,
@@ -23,6 +24,7 @@ import type { Category } from '../types'
 import { answerLine, undoAnswer, undoneLine, type Answer } from './transactions/answer'
 
 const NOTE_MS = 8000
+const SORTED_MS = 2600 // how long "All sorted" stays before it folds away
 
 export default function Transactions() {
   const qc = useQueryClient()
@@ -31,6 +33,9 @@ export default function Transactions() {
   const [splitTx, setSplitTx] = useState<Transaction | null>(null)
   const [actionError, setActionError] = useState('')
   const [view, setView] = useState<MerchantView>('transactions')
+  // Payments answered on this visit (with the ones that followed), so the bar can show how far along the queue is.
+  const [cleared, setCleared] = useState(0)
+  const [allSorted, setAllSorted] = useState(false)
 
   // The search and the filter chips live in the URL (?q=, review=1, month=1, category=<id>, source=ing,
   // over=1): Back returns to them, and a link (Month's, the command palette's) can open them. The URL is
@@ -144,6 +149,7 @@ export default function Transactions() {
         followed = before.filter(t => t.id !== id && !after.has(t.id)).map(t => t.id)
       } catch { /* unknown: no Undo, rather than one that might miss rows */ }
     }
+    setCleared(n => n + 1 + (followed?.length ?? 0))
     invalidate()
     if (row == null) return
     const split = decision.splits != null
@@ -263,37 +269,25 @@ export default function Transactions() {
   const reviewSkeleton = showReview && reviewLoading && reviewCount !== 0
   const onlySkippedLeft = showReview && !reviewTx && !reviewLoading && !reviewError && skippedIds.length > 0
   const reviewVisible = (showReview && !!reviewTx) || reviewSkeleton || onlySkippedLeft
+  // Put away with Later: one line keeps the count and brings the card back.
+  const reviewParked = !reviewVisible && !allSorted && reviewCount != null && reviewCount > 0
+  const total = cleared + (reviewCount ?? 0)
+
+  // The queue emptied on this visit: say so for a moment, then fold away.
+  useEffect(() => {
+    if (cleared > 0 && reviewCount === 0 && skippedIds.length === 0) setAllSorted(true)
+  }, [cleared, reviewCount, skippedIds.length])
+  useEffect(() => {
+    if (!allSorted) return
+    const timer = window.setTimeout(() => setAllSorted(false), SORTED_MS)
+    return () => window.clearTimeout(timer)
+  }, [allSorted])
 
   return (
     <MerchantSheetProvider>
     <div className="tx-page">
-      <div className="page-head">
-        <div>
-          <h1>Transactions</h1>
-          {/* While the queue is open its header says the count; the line is back when it is closed. */}
-          {!reviewVisible && (
-            <p className="num">
-              {reviewCount == null ? '\u00a0' : reviewCount > 0 ? `${reviewCount} to review` : 'Nothing to review'}
-            </p>
-          )}
-        </div>
-        <div className="page-actions">
-          <ImportLink />
-          <button type="button" className="btn" onClick={() => (selecting ? leaveSelecting() : setSelecting(true))}>
-            {selecting ? 'Done' : 'Select'}
-          </button>
-          {reviewCount != null && reviewCount > 0 && (
-            <button
-              type="button"
-              className={showReview ? 'btn' : 'btn btn-primary'}
-              onClick={() => setShowReview(!showReview)}
-            >
-              {showReview ? 'Close review' : <><span className="num">{reviewCount}</span> Review pending</>}
-            </button>
-          )}
-          <CsvChip rows={visible} />
-        </div>
-      </div>
+      {/* The Payments | Trends switch above names the page; this heading is for screen readers. */}
+      <h1 className="sr-only">Payments</h1>
 
       {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />}
       {bulkError && <ErrorBanner title={bulkError.title} message={bulkError.message} onDismiss={() => setBulkError(null)} />}
@@ -315,46 +309,74 @@ export default function Transactions() {
         </div>
       )}
 
-      <div className={`tx-layout${reviewVisible ? ' has-review' : ''}`}>
-        {reviewVisible && (
-          <section className="tx-review" aria-label="Review queue">
+      <div className={`tx-layout${reviewVisible || allSorted ? ' has-review' : ''}`}>
+        {reviewParked && (
+          <div className="panel tx-parked">
+            <p className="num">{reviewCount} to sort</p>
+            <button type="button" className="btn btn-sm" onClick={() => setShowReview(true)}>Sort now</button>
+          </div>
+        )}
+
+        {(reviewVisible || allSorted) && (
+          <section className="tx-review" aria-labelledby="tx-review-title">
+            <div className="tx-review-head">
+              <h2 id="tx-review-title">{allSorted && !reviewVisible ? 'Sorted' : 'To sort'}</h2>
+              {reviewVisible && (
+                <span className="tx-review-count num">
+                  {[reviewCount != null && `${reviewCount} left`, skippedIds.length > 0 && `${skippedIds.length} skipped`].filter(Boolean).join(' · ')}
+                </span>
+              )}
+              {reviewVisible && (
+                <button type="button" className="btn btn-sm btn-quiet" onClick={() => setShowReview(false)}>Later</button>
+              )}
+            </div>
+            {cleared > 0 && total > 0 && (
+              <div
+                className="tx-progress"
+                role="progressbar"
+                aria-label="Sorted on this visit"
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={cleared}
+              >
+                <i style={{ width: `${(cleared / total) * 100}%` }} />
+              </div>
+            )}
+
             {reviewSkeleton && <span className="skeleton tx-skel-review" aria-busy="true" aria-label="Loading the next transaction" />}
 
             {showReview && reviewTx && (
-              <>
-                <div className="tx-review-head">
-                  <h2>To review</h2>
-                  <span className="lab num">
-                    {[reviewCount != null && `${reviewCount} remaining`, skippedIds.length > 0 && `${skippedIds.length} skipped`].filter(Boolean).join(' · ')}
-                  </span>
-                </div>
-                <ReviewCard
-                  key={reviewTx.id}
-                  transaction={reviewTx}
-                  categories={categories}
-                  onConfirm={handleConfirm}
-                  onSkip={() => handleSkip(reviewTx.id)}
-                  focusCategory={focusNext.current}
-                />
-              </>
+              <ReviewCard
+                key={reviewTx.id}
+                transaction={reviewTx}
+                categories={categories}
+                onConfirm={handleConfirm}
+                onSkip={() => handleSkip(reviewTx.id)}
+                focusFirst={focusNext.current}
+              />
             )}
 
-            {/* All non-skipped reviewed, but skipped items remain */}
             {onlySkippedLeft && (
               <div className="panel tx-skipped">
-                <p>{skippedIds.length} transaction{skippedIds.length > 1 ? 's' : ''} skipped. Review {skippedIds.length > 1 ? 'them' : 'it'} now?</p>
-                <button type="button" className="btn btn-primary" onClick={() => setSkippedIds([])}>Review skipped</button>
+                <p>{skippedIds.length} skipped. Sort {skippedIds.length > 1 ? 'them' : 'it'} now?</p>
+                <button type="button" className="btn btn-primary" onClick={() => setSkippedIds([])}>Sort skipped</button>
+              </div>
+            )}
+
+            {allSorted && !reviewVisible && (
+              <div className="panel tx-allsorted" role="status">
+                <span className="tx-allsorted-mark" aria-hidden="true"><Check size={22} strokeWidth={2.5} /></span>
+                <p><strong>All sorted.</strong> {cleared === 1 ? 'That payment counts' : `These ${cleared} payments count`} from now on.</p>
               </div>
             )}
           </section>
         )}
 
-        <section className={`tx-list${view === 'transactions' ? ' is-transactions' : ''}`} aria-label="All transactions">
+        <section className={`tx-list${view === 'transactions' ? ' is-transactions' : ''}`} aria-label="All payments">
           {view === 'merchants' ? (
             <MerchantsView onView={setView} />
           ) : (
             <>
-              <div className="mer-views"><ViewSwitch value="transactions" onChange={setView} /></div>
               <TransactionsToolbar
                 filters={filters}
                 categories={categories}
@@ -367,6 +389,15 @@ export default function Transactions() {
                 onSearch={setQ}
                 onChange={patch => writeParams(paramsFromChips(patch))}
                 onClear={clearFilters}
+                actions={transactions.length > 0 && (
+                  <>
+                    <ViewSwitch value="transactions" onChange={setView} />
+                    <button type="button" className="btn btn-sm btn-quiet" aria-pressed={selecting} onClick={() => (selecting ? leaveSelecting() : setSelecting(true))}>
+                      {selecting ? 'Done' : 'Select'}
+                    </button>
+                    <CsvChip rows={visible} className="btn btn-sm btn-quiet" />
+                  </>
+                )}
               />
               {listError ? (
                 <ErrorBanner title="Transactions didn't load" message={describeApiError(listError)} />

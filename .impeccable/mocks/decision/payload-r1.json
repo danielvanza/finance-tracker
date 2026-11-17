@@ -1,0 +1,60 @@
+{
+  "title": "Choose the visual world for Finances",
+  "question": "Calmer, familiar directions, each with one thing that makes it a pleasure to use. Pick one, steer, or re-roll.",
+  "options": [
+    {
+      "id": "grounded-forest",
+      "kind": "grounded",
+      "label": "Forest Card",
+      "lineage": "Apple Wallet and Things: crisp light screens, one rich colour",
+      "thesis": "A bright, quiet app where free-to-spend lives on one deep-green card you want to look at.",
+      "palette": ["#1F5C46", "#E4F2EA", "#F4F6F3", "#FFFFFF", "#16201B", "#E0812B"],
+      "materials": ["solid deep-green hero card", "white rounded panels", "soft shadows"],
+      "viewport": "Header with Overview / Money / Plan; a full-width deep-green card holding free-to-spend, per day and the pace line; white panels for Needs you, Still to pay and the three groups.",
+      "risk": "Green for money is the familiar choice; it relies on finish (number count-ups, smooth press) to not feel stock.",
+      "html": ".impeccable/mocks/decision/grounded-forest.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "grounded-trio",
+      "kind": "grounded",
+      "label": "Three Colours",
+      "lineage": "Monzo and Revolut budgets: white ground, a colour per kind of money",
+      "thesis": "Needs, wants and savings each own a colour, so the whole month reads as one filling bar.",
+      "palette": ["#FFFFFF", "#F2F4F8", "#14213D", "#2F6FEB", "#FF6B4A", "#14A38B"],
+      "materials": ["white surfaces", "one segmented month bar", "colour-coded rows"],
+      "viewport": "Free-to-spend in dark ink at the top; one full-width bar of the month's plan split into needs, wants and savings, filling as you spend; colour-dotted rows below.",
+      "risk": "Three strong colours need discipline; used outside the groups they turn noisy.",
+      "html": ".impeccable/mocks/decision/grounded-trio.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "grounded-graphite",
+      "kind": "grounded",
+      "label": "Graphite Days",
+      "lineage": "Linear and Vercel: graphite, sharp type, one bright accent",
+      "thesis": "A precise, calm tool where every day of the month is a bar against your daily allowance.",
+      "palette": ["#18181B", "#27272A", "#FAFAFA", "#E4E4E7", "#C6F432", "#F97366"],
+      "materials": ["graphite header", "hairline dividers", "day-by-day bar strip"],
+      "viewport": "Graphite header with free-to-spend in white; a strip of daily bars since payday against the daily allowance line, today in lime; light list panels below.",
+      "risk": "Can feel technical and cool to the non-technical one of you.",
+      "html": ".impeccable/mocks/decision/grounded-graphite.html",
+      "htmlFrame": "390x844"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "The category standard",
+    "thesis": "Copilot Money, Monarch and YNAB's look, done impeccably.",
+    "palette": ["#FFFFFF", "#F4F5F7", "#111827", "#2563EB", "#16A34A"],
+    "materials": ["white cards", "system sans", "soft shadows"],
+    "viewport": "Free-to-spend card with pace chart, a review card, upcoming bills, budget bars; bottom tab bar.",
+    "risk": "Indistinguishable from every other finance app by design.",
+    "html": ".impeccable/mocks/decision/canon.html",
+    "htmlFrame": "390x844"
+  },
+  "steer": true
+}

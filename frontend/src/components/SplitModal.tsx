@@ -4,8 +4,9 @@ import type { Transaction, Category } from '../types'
 import { api } from '../api'
 import { formatCents, parseToCents, centsToInputString } from '../money'
 import CategorySelect from './CategorySelect'
-import { describeApiError } from './ErrorBanner'
-import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
+import { describeApiError } from './apiError'
+import SplitEditor from './SplitEditor'
+import { splitRowsValid, type SplitRow } from './splitRows'
 
 interface Props {
   transaction: Transaction

@@ -40,11 +40,11 @@ describe('Add sheet', () => {
   })
 })
 
-test('a review card asked to focus puts focus on its category control', () => {
+test('a review card with no likely answers asked to focus puts focus on its category control', () => {
   const tx: Transaction = {
     id: 1, date: '2026-03-12', amount_cents: -100, description: 'Shop', source: 'ing', category_id: null, category_name: null,
     confirmed: false, categorised_by: null, ai_confidence: null, is_refund: false, set_aside_id: null, set_aside_name: null, splits: [],
   }
-  render(<ReviewCard transaction={tx} categories={categories} onConfirm={vi.fn()} onSkip={vi.fn()} focusCategory />)
+  render(<ReviewCard transaction={tx} categories={categories} onConfirm={vi.fn()} onSkip={vi.fn()} focusFirst />)
   expect(document.activeElement).toBe(screen.getByRole('button', { name: /Select category/ }))
 })

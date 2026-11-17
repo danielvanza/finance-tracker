@@ -23,9 +23,7 @@
 }
 
 .lab {
-  font: 400 0.68rem/1.2 var(--mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font: 500 0.8rem/1.3 var(--sans);
   color: var(--muted);
 }
 
@@ -78,7 +76,8 @@
 }
 
 .btn-primary {
-  font-weight: 700;
+  font-weight: 600;
+  box-shadow: 0 1px 2px var(--shade);
   color: var(--on-shu);
   background: var(--shu);
 }
@@ -104,6 +103,42 @@
   font-size: 0.8rem;
 }
 
+/* Quiet: a text button for the second things on a line (Later, Select, CSV, By shop). Pressed is a
+   toggle that is on. */
+.btn-quiet {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 0.6rem;
+}
+
+@media (hover: hover) {
+  .btn-quiet:hover:not(:disabled) {
+    color: var(--ink);
+    background: var(--sunk);
+    transform: none;
+  }
+}
+
+.btn-quiet[aria-pressed='true'] {
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+/* Read by screen readers, not shown. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .btn-wide {
   display: flex;
   width: 100%;
@@ -113,6 +148,10 @@
   color: var(--muted);
   background: transparent;
   box-shadow: var(--flat-sm);
+}
+
+.btn-quiet:disabled {
+  box-shadow: none;
 }
 
 /* A row of choices, one pressed in. */
@@ -125,18 +164,19 @@
 .seg button {
   min-height: 2.25rem;
   padding: 0 0.85rem;
-  border-radius: var(--r-chip);
-  font-size: 0.8rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text);
-  background: var(--raised);
+  background: var(--card);
   box-shadow: var(--raise-sm);
 }
 
 .seg button[aria-pressed='true'] {
-  color: var(--ink);
-  font-weight: 700;
-  background: var(--bg);
-  box-shadow: var(--press-sm);
+  color: var(--on-accent);
+  font-weight: 600;
+  background: var(--accent);
+  box-shadow: none;
 }
 
 /* A mouse can hit smaller things; a finger can't. */
@@ -157,9 +197,9 @@
   border-radius: var(--r-chip);
   font-size: 0.9rem;
   color: var(--ink);
-  background: var(--bg);
-  box-shadow: var(--press-sm);
-  caret-color: var(--shu);
+  background: var(--sunk);
+  box-shadow: none;
+  caret-color: var(--accent);
 }
 
 .field::placeholder {
@@ -199,17 +239,18 @@ label.lab {
 /* Meters: a pressed-in track, a fill, and a tick where today falls. */
 .meter {
   position: relative;
-  height: 0.6rem;
-  border-radius: 0.3rem;
-  background: var(--bg);
-  box-shadow: var(--press-sm);
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--sunk);
+  box-shadow: none;
 }
 
 .meter i {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 0.3rem;
+  border-radius: 0.25rem;
   background: var(--fill);
+  transition: width 0.7s var(--ease-out);
 }
 
 .meter b {
@@ -270,7 +311,7 @@ label.lab {
 .skeleton {
   display: block;
   border-radius: var(--r-row);
-  background: var(--raised);
+  background: var(--sunk);
   animation: breathe 1.6s ease-in-out infinite;
 }
 

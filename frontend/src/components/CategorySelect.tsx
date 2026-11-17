@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { createElement, useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Search } from 'lucide-react'
 import type { Category } from '../types'
@@ -60,13 +60,17 @@ export default function CategorySelect({ categories, value, onChange, placeholde
     return () => document.removeEventListener('mousedown', handle)
   }, [open])
 
+  /* Opening starts with an empty search and nothing highlighted. */
+  const openMenu = () => {
+    setSearch('')
+    setHighlightIdx(-1)
+    setOpen(true)
+  }
+  const toggle = () => (open ? setOpen(false) : openMenu())
+
   /* Focus search when opening */
   useEffect(() => {
-    if (open) {
-      setSearch('')
-      setHighlightIdx(-1)
-      requestAnimationFrame(() => searchRef.current?.focus())
-    }
+    if (open) requestAnimationFrame(() => searchRef.current?.focus())
   }, [open])
 
   /* Scroll highlighted item into view */
@@ -80,7 +84,7 @@ export default function CategorySelect({ categories, value, onChange, placeholde
     if (!open) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
         e.preventDefault()
-        setOpen(true)
+        openMenu()
       }
       return
     }
@@ -145,22 +149,17 @@ export default function CategorySelect({ categories, value, onChange, placeholde
     }
   }, [open, compact])
 
-  /* ── Selected icon ── */
-  const SelectedIcon = selected ? getCategoryIcon(selected.name, selected.type) : null
-
   return (
     <div ref={containerRef} className="cs" onKeyDown={handleKeyDown}>
-      {renderTrigger ? renderTrigger({ open, toggle: () => setOpen(o => !o) }) : (
+      {renderTrigger ? renderTrigger({ open, toggle }) : (
         <button
           type="button"
-          onClick={() => setOpen(o => !o)}
+          onClick={toggle}
           aria-haspopup="listbox"
           aria-expanded={open}
           className={`cs-trigger${compact ? ' is-compact' : ''}${selected ? '' : ' is-empty'}`}
         >
-          {selected && SelectedIcon && (
-            <SelectedIcon className="cs-icon" size={compact ? 14 : 16} aria-hidden="true" />
-          )}
+          {selected && createElement(getCategoryIcon(selected.name, selected.type), { className: 'cs-icon', size: compact ? 14 : 16, 'aria-hidden': true })}
           <span className="cs-label">{selected ? selected.name : placeholder}</span>
           {selected && meta && <span className="cs-badge">{meta.label}</span>}
           <ChevronDown className="cs-chevron" size={14} aria-hidden="true" />

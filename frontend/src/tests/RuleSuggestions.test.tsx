@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import RuleSuggestions, { descriptionKey, findSuggestions } from '../pages/RuleSuggestions'
+import RuleSuggestions from '../pages/RuleSuggestions'
+import { descriptionKey, findSuggestions } from '../pages/ruleSuggestions'
 import Rules from '../pages/Rules'
 import type { Rule, Transaction } from '../types'
 

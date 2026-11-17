@@ -78,7 +78,7 @@ describe('Shell find and add', () => {
     press('k', { ctrlKey: true })
     const box = await screen.findByRole('combobox')
     expect(box).toHaveFocus()
-    expect(screen.getByRole('option', { name: /Transactions/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /^Money/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Add transaction/ })).toBeInTheDocument()
     expect(await screen.findByRole('option', { name: /Review 5 transactions/ })).toBeInTheDocument()
     press('Escape', {}, box)

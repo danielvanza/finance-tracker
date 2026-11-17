@@ -4,8 +4,16 @@ import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { Category } from '../types'
 import { ApiError } from '../api'
-import ErrorBanner, { describeApiError } from './ErrorBanner'
+import ErrorBanner from './ErrorBanner'
+import { describeApiError } from './apiError'
 import { TYPE_META, GROUP_ORDER } from './CategorySelect'
+
+/** A copy of `record` without `key`. */
+function withoutKey<T>(record: Record<number, T>, key: number): Record<number, T> {
+  const rest = { ...record }
+  delete rest[key]
+  return rest
+}
 
 export default function CategoryManager() {
   const qc = useQueryClient()
@@ -43,7 +51,7 @@ export default function CategoryManager() {
     if (raw == null) return
     const trimmed = raw.trim()
     if (!trimmed || trimmed === cat.name) {
-      setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
+      setEditedNames(prev => withoutKey(prev, cat.id))
       return
     }
     try {
@@ -52,7 +60,7 @@ export default function CategoryManager() {
       setError(describeApiError(e))
       return
     }
-    setEditedNames(prev => { const { [cat.id]: _, ...rest } = prev; return rest })
+    setEditedNames(prev => withoutKey(prev, cat.id))
     invalidate()
   }
 

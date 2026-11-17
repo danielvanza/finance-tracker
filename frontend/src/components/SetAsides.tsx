@@ -5,7 +5,8 @@ import { api } from '../api'
 import { dayLabel } from '../dates'
 import { centsToInputString, formatCents, formatEuros, parseToCents } from '../money'
 import type { SetAside } from '../types'
-import ErrorBanner, { describeApiError } from './ErrorBanner'
+import ErrorBanner from './ErrorBanner'
+import { describeApiError } from './apiError'
 
 const monthWord = (label: string) =>
   new Date(`${label}-15T12:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })

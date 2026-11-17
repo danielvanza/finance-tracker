@@ -6,7 +6,7 @@ import { dayLabel } from '../../dates'
 import { centsToInputString, formatCents, formatEuros, parseToCents } from '../../money'
 import type { BudgetRow, Category } from '../../types'
 import CategorySelect from '../../components/CategorySelect'
-import { describeApiError } from '../../components/ErrorBanner'
+import { describeApiError } from '../../components/apiError'
 import { categoryStatus } from './projection'
 
 const KINDS = [

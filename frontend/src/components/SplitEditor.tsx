@@ -1,24 +1,8 @@
 import { Check, Plus, X } from 'lucide-react'
 import type { Category } from '../types'
-import { parseToCents, centsToInputString, formatCents, sumCents } from '../money'
+import { parseToCents, centsToInputString, formatCents } from '../money'
 import CategorySelect from './CategorySelect'
-
-export interface SplitRow {
-  category_id: number | null
-  amount: string // positive magnitude as typed by the user
-}
-
-export function splitRowsTotalCents(rows: SplitRow[]): number {
-  return sumCents(rows.map(r => parseToCents(r.amount) ?? 0))
-}
-
-export function splitRowsValid(rows: SplitRow[], totalAmountCents: number): boolean {
-  if (rows.length < 2) return false
-  if (rows.some(r => r.category_id == null)) return false
-  if (rows.some(r => { const c = parseToCents(r.amount); return c == null || c <= 0 })) return false
-  // Exact integer comparison — magnitudes must sum to the parent's magnitude
-  return sumCents(rows.map(r => Math.abs(parseToCents(r.amount) ?? 0))) === Math.abs(totalAmountCents)
-}
+import { splitRowsTotalCents, type SplitRow } from './splitRows'
 
 interface Props {
   totalAmount: number // signed parent amount in cents

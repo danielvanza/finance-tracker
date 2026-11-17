@@ -1,5 +1,5 @@
 import { api } from '../../api'
-import { describeApiError } from '../../components/ErrorBanner'
+import { describeApiError } from '../../components/apiError'
 
 /** What one answer on the review card changed: the payment, and the shop's other waiting payments that left the queue with it. */
 export interface Answer {

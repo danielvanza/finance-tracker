@@ -235,7 +235,7 @@ describe('MerchantsView', () => {
     fireEvent.click(rows[0])
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'By shop' }))
     expect(onView).toHaveBeenCalledWith('transactions')
   })
 })

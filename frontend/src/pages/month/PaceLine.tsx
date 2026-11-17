@@ -9,7 +9,7 @@ const addDays = (iso: string, days: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** The month as one line: the plan dashed, spending solid, today as the sun. */
+/** The month as one line: the plan dashed, spending solid over a fading area, today a dot with a pill saying ahead or behind. */
 export default function PaceLine({ pace }: { pace: Pace }) {
   const [hover, setHover] = useState<number | null>(null)
   const { daily, days_total: total, spendable_plan_cents: plan, day_number: dayNumber } = pace
@@ -30,6 +30,12 @@ export default function PaceLine({ pace }: { pace: Pace }) {
   const spent = points.join(' ')
   const nowY = today === null ? 0 : reachesToday ? y(lastSpent) : y(planAt(today))
   const nowX = today === null ? 0 : x(today)
+  const lastX = points.length > 0 ? points[points.length - 1].split(',')[0] : '0'
+  const area = points.length > 1 ? `0,100 ${spent} ${lastX},100` : ''
+  const delta = pace.pace_delta_cents
+  const pill = reachesToday && pace.status === 'ok' && delta !== null && plan > 0
+    ? { over: delta > 0, text: delta > 0 ? `${formatEuros(delta)} over pace` : delta < 0 ? `${formatEuros(-delta)} under pace` : 'On pace' }
+    : null
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     const box = e.currentTarget.getBoundingClientRect()
@@ -47,11 +53,26 @@ export default function PaceLine({ pace }: { pace: Pace }) {
     <div className="pace">
       <div className="pace-plot" onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={summary}>
+          <defs>
+            <linearGradient id="pace-fade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" className="pace-fade-top" />
+              <stop offset="1" className="pace-fade-end" />
+            </linearGradient>
+          </defs>
           <line className="pace-plan" x1="0" y1={y(0)} x2="100" y2={y(plan)} />
+          {area && <polygon className="pace-area" points={area} fill="url(#pace-fade)" />}
           {points.length > 1 && <polyline className="pace-spent" points={spent} />}
         </svg>
         {today !== null && (
           <span className={`pace-now${reachesToday ? '' : ' is-open'}`} style={{ left: `${nowX}%`, top: `${nowY}%` }} />
+        )}
+        {pill && today !== null && (
+          <span
+            className={`pace-pill ${pill.over ? 'is-over' : 'is-under'}`}
+            style={nowX > 70 ? { right: `${100 - nowX}%`, top: `${nowY}%` } : { left: `${nowX}%`, top: `${nowY}%` }}
+          >
+            {pill.text}
+          </span>
         )}
         {hover !== null && (
           <>

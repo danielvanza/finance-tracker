@@ -1,5 +1,5 @@
-// Day (Washi Clay) and night (Charcoal Clay) follow the real sun in Amsterdam. Tapping the
-// daylight dot flips the theme until the next sunrise or sunset; flipping back returns to auto.
+// Day (Forest Light) and night (Forest Night) follow the device's own light / dark setting. A flip
+// from Find holds until the next sunrise or sunset in Amsterdam; flipping back returns to auto.
 
 export type Theme = 'day' | 'night'
 
@@ -64,21 +64,26 @@ export function setOverride(theme: Theme | null, until: number) {
   }
 }
 
+/** What the device asks for: the phone's or computer's own light / dark setting. */
+export function deviceTheme(): Theme {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'day'
+}
+
 export function themeAt(now: number): Theme {
-  return readOverride(now) ?? daylightAt(now).natural
+  return readOverride(now) ?? deviceTheme()
 }
 
 export function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'day' ? '#efe6d6' : '#2a2622')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'day' ? '#eef1ec' : '#111814')
 }
 
 /** Flips the theme on screen until the next sunrise or sunset; flipping to what the sun says returns to auto.
  *  ThemeProvider listens for 'storage' (another tab's flip), so the same event tells it about this one. */
 export function flipTheme(shown: Theme, now = Date.now()): Theme {
-  const { natural, to } = daylightAt(now)
+  const { to } = daylightAt(now)
   const next: Theme = shown === 'day' ? 'night' : 'day'
-  setOverride(next === natural ? null : next, to)
+  setOverride(next === deviceTheme() ? null : next, to)
   window.dispatchEvent(new Event('storage'))
   return next
 }

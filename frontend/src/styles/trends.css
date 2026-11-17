@@ -1,17 +1,20 @@
-/* Trends. The three kinds of spending keep one colour each, built from the theme's own tokens and
-   checked against the card surface in both themes (dataviz palette validator, all pairs). */
+/* Trends. Needs, wants and savings keep one colour each: slate, heather and moss, none of them a status
+   colour (amber, red) or the green of what you tap. Checked on the card in both themes with the dataviz
+   palette validator, every pair, protan and deutan: day worst ΔE 18.3, night 15.2 (pass from 8).
+   Re-run it before changing one. A month still running is striped, never paler. */
 
-:root {
-  --series-needs: oklch(from var(--moss) calc(l - 0.02) calc(c * 2) calc(h + 110));
-  --series-wants: oklch(from var(--gold) calc(l - 0.04) calc(c * 1.3) calc(h - 4));
-  --series-savings: oklch(from var(--moss) calc(l - 0.1) calc(c * 2.2) calc(h + 20));
+:root,
+:root[data-theme='day'] {
+  --series-needs: #16558c;
+  --series-wants: #bf7fb9;
+  --series-savings: #3e7232;
   --series-other: var(--muted);
 }
 
 :root[data-theme='night'] {
-  --series-needs: oklch(from var(--moss) calc(l - 0.17) calc(c * 1.8) calc(h + 110));
-  --series-wants: oklch(from var(--gold) calc(l - 0.2) calc(c * 1.2) calc(h - 8));
-  --series-savings: oklch(from var(--moss) calc(l - 0.1) calc(c * 2) calc(h + 20));
+  --series-needs: #5590cc;
+  --series-wants: #82477e;
+  --series-savings: #5e9352;
 }
 
 .is-needs,
@@ -38,7 +41,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  margin-top: 1.4rem; /* the page-head gap: title to first block */
+  margin-top: 1rem; /* the month bar to the first block */
   row-gap: 2.2rem; /* between the stacked columns on a phone, as between sections */
   transition: opacity var(--press-in);
 }
@@ -56,7 +59,7 @@
 }
 
 .trend-finding {
-  font: 400 1.45rem/1.2 var(--serif);
+  font: 600 1.25rem/1.25 var(--sans);
   color: var(--ink);
   text-wrap: balance;
 }
@@ -72,9 +75,116 @@
   margin-bottom: 0;
 }
 
-.trend-range {
-  display: block;
-  margin-top: 0.1rem;
+.trend-empty {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+  max-width: 34rem;
+  margin-top: 1rem;
+  color: var(--text);
+}
+
+/* The striped swatch beside the note about months still running. */
+.trend-running-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.45rem;
+  vertical-align: -0.05rem;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, var(--series-needs) 0 2px, color-mix(in srgb, var(--series-needs) 45%, var(--card)) 2px 4px);
+}
+
+/* The whole month: one sentence, then in / spent / saved / left on one ledger line. */
+.trends-grid > .trend-whole {
+  grid-column: 1 / -1;
+}
+
+.trend-whole-line {
+  font: 600 1.15rem/1.3 var(--sans);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.trend-whole-line span {
+  font-weight: 500;
+  color: var(--quiet);
+}
+
+.trend-whole-ledger {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 0;
+  margin-top: 1rem;
+}
+
+.trend-whole-ledger > div {
+  min-width: 0;
+  padding-inline: 0.9rem;
+  border-left: 1px solid var(--hair);
+}
+
+.trend-whole-ledger > div:nth-child(odd) {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.trend-whole-ledger dt {
+  font-size: 0.82rem;
+  color: var(--quiet);
+}
+
+.trend-whole-ledger dd {
+  margin-top: 0.15rem;
+  font: 650 1.35rem/1.15 var(--sans);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.trend-whole-ledger dd.trend-whole-part {
+  font: 400 0.78rem/1.35 var(--sans);
+  letter-spacing: 0;
+  color: var(--quiet);
+  overflow-wrap: anywhere;
+}
+
+.trend-whole-ledger .is-over dd {
+  color: var(--over);
+}
+
+.trend-whole-ledger .is-over .amount small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+@media (min-width: 720px) {
+  .trend-whole-ledger {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .trend-whole-ledger > div:nth-child(odd) {
+    padding-left: 0.9rem;
+    border-left: 1px solid var(--hair);
+  }
+
+  .trend-whole-ledger > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .trend-whole {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    column-gap: 2.4rem;
+    align-items: center;
+  }
+
+  .trend-whole-ledger {
+    margin-top: 0;
+  }
 }
 
 .trend-note {
@@ -142,7 +252,7 @@
 }
 
 .trend-plot text {
-  font: 400 0.68rem/1 var(--mono);
+  font: 500 0.8rem/1.3 var(--sans);
   font-variant-numeric: tabular-nums;
   fill: var(--muted);
 }
@@ -272,7 +382,6 @@
 
 .trend-table th {
   font-size: 0.6rem;
-  letter-spacing: 0.06em;
 }
 
 .trend-cats {

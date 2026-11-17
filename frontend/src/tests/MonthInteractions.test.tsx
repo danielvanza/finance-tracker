@@ -58,18 +58,29 @@ const free = (over: Partial<FreeToSpend> = {}): FreeToSpend => ({
 describe('Month top block: money left to spend', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leads with the money left and shows the average day, the month end and the daily budget', async () => {
+  it('leads with what is free until payday, a day at a time', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
-    const { container } = render(wrap(<Month />))
-    const top = () => within(container.querySelector('.four') as HTMLElement)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Left to spend€2.638' })).toBeInTheDocument()
-    expect(screen.getByText('After €400 still to come, until payday, 23 Nov')).toBeInTheDocument()
-    expect(top().getByText('€47')).toBeInTheDocument()
-    expect(top().getByText('€2.210')).toBeInTheDocument()
-    expect(screen.getByText('left on 23 Nov')).toBeInTheDocument()
-    expect(top().getByText('€169')).toBeInTheDocument()
-    expect(screen.getByText('a day, for 15 days')).toBeInTheDocument()
-    expect(screen.queryByText(/free to spend/)).toBeNull()
+    render(wrap(<Month />))
+    expect(await screen.findByRole('heading', { level: 1, name: '€1.688,00' })).toBeInTheDocument()
+    expect(screen.getByText('Free to spend until payday')).toBeInTheDocument()
+    expect(screen.getByText('About €169 a day · 15 days to payday')).toBeInTheDocument()
+  })
+
+  it('lists the bills and set-asides still to pay before payday, soonest first', async () => {
+    const bills = [
+      { key: 'ziggo', name: 'Ziggo', amount_cents: 6200, next_date: '2026-11-20', category_name: 'Utilities' },
+      { key: 'zilveren kruis', name: 'Zilveren Kruis', amount_cents: 26800, next_date: '2026-11-12', category_name: 'Insurance' },
+    ]
+    vi.mocked(api.getPace).mockResolvedValue(pace({
+      free: free({ bills, bills_cents: 33000, set_aside_cents: 4500, set_asides: [{ id: 1, name: 'Car insurance', monthly_cents: 4500 }] }),
+    }))
+    render(wrap(<Month />))
+    const card = (await screen.findByRole('heading', { name: /Still to pay before payday/ })).closest('section')!
+    expect(within(card).getByRole('heading').textContent).toContain('€375')
+    const names = within(card).getAllByRole('listitem').map(li => li.textContent)
+    expect(names[0]).toContain('Zilveren Kruis')
+    expect(names[1]).toContain('Ziggo')
+    expect(names[2]).toContain('Car insurance')
   })
 
   it('keeps every part of the working in one fold, with the bills and the Not a fixed bill buttons', async () => {
@@ -91,39 +102,33 @@ describe('Month top block: money left to spend', () => {
     expect(within(fold).getByText(/€950 of what is left to spend lies outside the plan/)).toBeInTheDocument()
   })
 
-  it("early in the month the average day and the month end read Can't tell yet and say when", async () => {
+  it('early in the month the working says when the average day shows', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({ day_number: 3, days_left: 28, free: free({ avg_day_cents: null, avg_day_days: null, avg_day_spent_cents: null, month_end_cents: null }) }))
-    const { container } = render(wrap(<Month />))
-    const top = () => within(container.querySelector('.four') as HTMLElement)
-    await screen.findByRole('heading', { level: 1 })
-    expect(screen.getAllByText("Can't tell yet")).toHaveLength(2)
-    expect(screen.getAllByText('shows after day 5')).toHaveLength(2)
-    expect(top().getByText('€2.638')).toBeInTheDocument()
+    render(wrap(<Month />))
+    const fold = (await screen.findByText('How this is worked out')).closest('details')!
+    expect(fold.textContent).toContain('Shows once five days of the month are over')
+    expect(screen.getByRole('heading', { level: 1, name: '€1.688,00' })).toBeInTheDocument()
   })
 
-  it('says the plan is used up, and short, when the plan and the money run out', async () => {
+  it('says the plan is used up when nothing is free until payday', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({
       free: free({ free_cents: -24000, per_day_cents: null, cash_left_cents: 71000, month_end_cents: -54000 }),
     }))
-    const { container } = render(wrap(<Month />))
-    const top = () => within(container.querySelector('.four') as HTMLElement)
-    expect(await screen.findByText('plan used up')).toBeInTheDocument()
-    expect(top().getByText('€240 over')).toBeInTheDocument()
-    expect(top().getByText('€540 short')).toBeInTheDocument()
-    expect(screen.getByText('short on 23 Nov')).toBeInTheDocument()
+    render(wrap(<Month />))
+    expect(await screen.findByText('Over plan until payday')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '€240,00' })).toBeInTheDocument()
+    expect(screen.getByText('The plan for this month is used up. 15 days to payday.')).toBeInTheDocument()
   })
 
-  it('shows a finished month as left over with its average day and the plan result', async () => {
+  it('shows a finished month against its plan, with no working to show', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({
       day_number: null, days_left: null, money_in_cents: 700000, ordinary_day: { avg_cents: 7800, days: 25, spent_cents: 195000 },
       actual_cents: { needs: 300000, wants: 78000, savings: 190000 }, spendable_actual_cents: 378000, spendable_plan_cents: 415000,
     }))
-    const { container } = render(wrap(<Month />))
-    const top = () => within(container.querySelector('.four') as HTMLElement)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Left over€1.320' })).toBeInTheDocument()
-    expect(top().getByText('€78')).toBeInTheDocument()
-    expect(screen.getByText('€370 under')).toBeInTheDocument()
-    expect(screen.getByText('spent €3.780 of €4.150')).toBeInTheDocument()
+    render(wrap(<Month />))
+    expect(await screen.findByRole('heading', { level: 1, name: '€370,00' })).toBeInTheDocument()
+    expect(screen.getByText('Under the plan')).toBeInTheDocument()
+    expect(screen.getByText('Spent €3.780 of €4.150 planned.')).toBeInTheDocument()
     expect(screen.queryByText('How this is worked out')).toBeNull()
   })
 })
@@ -139,17 +144,18 @@ describe('Month while another month loads', () => {
       : Promise.resolve(pace()))
     const { container } = render(wrap(<Month />))
     const heading = await screen.findByRole('heading', { level: 1 })
-    const before = heading.textContent
+    // The figure's full value (its label); the digits on screen may still be counting up.
+    const before = heading.querySelector('.amount')!.getAttribute('aria-label')
 
     await user.click(screen.getByRole('button', { name: 'Previous month' }))
     expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(before)
-    const body = container.querySelector('.month-body')!
+    expect(screen.getByRole('heading', { level: 1 }).querySelector('.amount')!.getAttribute('aria-label')).toBe(before)
+    const body = container.querySelector('.ov')!
     expect(body).toHaveClass('is-loading')
     expect(body).toHaveAttribute('aria-busy', 'true')
 
     release(pace({ month: '2026-10', day_number: null, days_left: null, start_date: '2026-09-24', end_date: '2026-10-23', spendable_actual_cents: 313100 }))
-    await waitFor(() => expect(container.querySelector('.month-body')).not.toHaveClass('is-loading'))
+    await waitFor(() => expect(container.querySelector('.ov')).not.toHaveClass('is-loading'))
     expect(screen.getByRole('button', { name: 'Next month' })).toBeEnabled()
   })
 
@@ -168,17 +174,20 @@ describe('Month links to the payments behind its figures', () => {
   beforeEach(() => vi.clearAllMocks())
 
 
-  it('ends the caveat about waiting payments with a link to answer them, and shows neither without any', async () => {
-    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review_in_month: 6 }))
+  it('puts payments to sort and categories over plan under Needs you, and says All sorted without any', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review: 6 }))
+    vi.mocked(api.getCategories).mockResolvedValueOnce([{ id: 3, name: 'Utilities', type: 'needs', sort_order: 1 }])
+    vi.mocked(api.getBudget).mockResolvedValueOnce([
+      { id: 1, category_id: 3, category_name: 'Utilities', month: '2026-11', planned_amount_cents: 20000, actual_amount_cents: 23900 },
+    ])
     const { unmount } = render(wrap(<Month />))
-    const link = await screen.findByRole('link', { name: 'Answer them' })
-    expect(link).toHaveAttribute('href', '/transactions')
-    expect(link.closest('p')).toHaveTextContent('6 payments this month still wait for an answer and are not counted.')
+    expect((await screen.findByText('6 payments to sort')).closest('a')).toHaveAttribute('href', '/transactions?review=1')
+    expect((await screen.findByText('Utilities is €39 over')).closest('a')).toHaveAttribute('href', '/transactions?category=3&month=1')
     unmount()
-    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review_in_month: 0 }))
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free(), to_review: 0 }))
     render(wrap(<Month />))
-    await screen.findByRole('heading', { level: 1 })
-    expect(screen.queryByRole('link', { name: /Answer (it|them)/ })).toBeNull()
+    expect(await screen.findByText('All sorted')).toBeInTheDocument()
+    expect(screen.queryByText(/payments? to sort/)).toBeNull()
   })
 })
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, LabelList, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '../api'
@@ -8,6 +9,7 @@ import type { DashboardSummary, Pace, TrendMonth } from '../types'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import GoalsSection from '../components/goals/GoalsSection'
 import Movers from './trends/Movers'
+import WholeMonth from './trends/WholeMonth'
 import { trendFacts } from './trends/facts'
 import { monthName } from './trends/months'
 import { useRem } from './trends/useRem'
@@ -174,6 +176,14 @@ function SpendingChart({ rows, compact, onResize }: { rows: Row[]; compact: bool
     <div className="trend-plot" ref={plotRef}>
       <ResponsiveContainer width="100%" height="100%" onResize={width => onResize(width)}>
         <BarChart data={rows} margin={{ top: 22, right: compact ? 20 : showNames ? 56 : 8, bottom: 0, left: 0 }} barCategoryGap="30%">
+          <defs>
+            {SERIES.map(s => (
+              <pattern key={s.kind} id={`trend-running-${s.kind}`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="6" height="6" fill={seriesColour(s.kind)} />
+                <rect width="2.5" height="6" fill="var(--card)" fillOpacity="0.55" />
+              </pattern>
+            ))}
+          </defs>
           <CartesianGrid vertical={false} stroke="var(--line)" />
           <XAxis dataKey="label" interval={0} axisLine={false} tickLine={false} />
           {compact
@@ -194,7 +204,8 @@ function SpendingChart({ rows, compact, onResize }: { rows: Row[]; compact: bool
                 const props = bar as ComponentProps<typeof Rectangle> & { payload: Row }
                 if (!props.height) return <g />
                 const top = topKey(props.payload) === s.key
-                return <Rectangle {...props} radius={top ? [4, 4, 0, 0] : 0} fillOpacity={props.payload.finished ? 1 : 0.5} />
+                // A month still running is striped: no colour of its own, so the colours keep one meaning.
+                return <Rectangle {...props} radius={top ? [4, 4, 0, 0] : 0} fill={props.payload.finished ? props.fill : `url(#trend-running-${s.kind})`} />
               }}
             >
               <LabelList content={nameLabel(s.label)} />
@@ -229,7 +240,7 @@ function LastMonths({ rows }: { rows: Row[] }) {
         )}
         <SpendingChart rows={shown} compact={compact} onResize={setPlotWidth} />
         <Legend kinds={SERIES.map(s => s.kind)} />
-        {rows.some(r => r.hasData && !r.finished) && <p className="trend-note">Paler months are not finished yet.</p>}
+        {rows.some(r => r.hasData && !r.finished) && <p className="trend-note"><i className="trend-running-swatch" aria-hidden="true" />Striped months are not finished yet.</p>}
         <Figures rows={rows} />
       </div>
     </section>
@@ -348,29 +359,36 @@ export default function Trends() {
 
   return (
     <>
-      <div className="month-bar trend-bar">
-        <h1>Trends</h1>
-        <div className="month-nav">
-          <button type="button" className="btn" aria-label="Previous month" onClick={() => setPicked(shiftMonth(month, -1))}>
-            <ChevronLeft size={16} aria-hidden="true" />
+      {/* The Payments | Trends switch above names the page; this heading is for screen readers. */}
+      <h1 className="sr-only">Trends</h1>
+      <div className="ov-bar trend-bar">
+        <span className="ov-period">
+          {monthName(month, 'long')}<span className="ov-day"> · {dayLabel(p.start_date)} – {dayLabel(p.end_date)}</span>
+        </span>
+        <div className="ov-nav">
+          <button type="button" className="btn btn-icon" aria-label="Previous month" onClick={() => setPicked(shiftMonth(month, -1))}>
+            <ChevronLeft size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn-icon"
             aria-label="Next month"
             disabled={month === p.current_month}
             onClick={() => setPicked(shiftMonth(month, 1))}
           >
-            <ChevronRight size={16} aria-hidden="true" />
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
-      <span className="lab trend-range">{dayLabel(p.start_date)} – {dayLabel(p.end_date)}</span>
 
       {!anyData ? (
-        <p className="empty">No months of spending yet. Bring in a file from a bank to see the trend.</p>
+        <div className="panel trend-empty">
+          <p>No months of spending yet. Bring in a file from the bank and the months line up here.</p>
+          <Link to="/import" className="btn btn-primary">Import a bank file</Link>
+        </div>
       ) : (
         <div className={`trends-grid${refreshing ? ' is-refreshing' : ''}`}>
+          <WholeMonth summary={summary} finished={month < p.current_month && !p.behind_months.includes(month)} />
           <div className="trends-col">
             <LastMonths rows={rows} />
             <Movers month={month} summary={summary} rows={rows} />

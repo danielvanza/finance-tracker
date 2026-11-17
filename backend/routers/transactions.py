@@ -142,7 +142,10 @@ def next_review(skip_ids: list[int] = Query(default=[]), db: Session = Depends(g
     tx = q.order_by(Transaction.date.asc()).first()
     if not tx:
         return None
-    return _to_out(tx)
+    # The review card offers the likely categories as one-tap answers, as the questions in the chat do.
+    pattern = guesses.shop_pattern(tx.description)
+    group = guesses.Group(pattern, tx.amount > 0, rows=[tx], only=tx.id)
+    return {**_to_out(tx), "options": guesses.options_for(db, group)}
 
 
 @router.post("", status_code=201)

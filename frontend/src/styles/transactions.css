@@ -18,10 +18,10 @@
   transition: transform var(--press-in), box-shadow var(--press-in), background-color var(--press-in);
 }
 
-/* Layout */
+/* Layout: the queue to sort leads when there is one, the list follows. */
 .tx-layout {
   display: grid;
-  gap: 1.8rem;
+  gap: 1.6rem;
 }
 
 .tx-layout > * {
@@ -30,25 +30,131 @@
 
 .tx-review-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.3rem 0.75rem;
-  margin-bottom: 0.8rem;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.tx-review-head h2 {
+  margin-right: auto;
+}
+
+.tx-review-count {
+  font-size: 0.875rem;
+  color: var(--quiet);
+}
+
+.tx-review-head .btn-quiet {
+  margin-right: -0.6rem;
+}
+
+/* How far along the queue this visit is. */
+.tx-progress {
+  height: 4px;
+  margin-bottom: 0.9rem;
+  border-radius: 999px;
+  background: var(--sunk);
+  overflow: hidden;
+}
+
+.tx-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.5s var(--ease-out);
 }
 
 .tx-skel-review {
   height: 19rem;
+  max-width: 34rem;
   border-radius: var(--r-card);
 }
 
-.tx-skipped {
+.tx-skipped,
+.tx-parked {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  max-width: 34rem;
   color: var(--text);
+}
+
+.tx-parked {
+  padding-block: 0.75rem;
+}
+
+.tx-parked p {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The queue is empty: a tick, a line, and then it folds away. */
+.tx-allsorted {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 34rem;
+  color: var(--text);
+  animation: tx-allsorted 2.6s var(--ease-out) both;
+}
+
+.tx-allsorted p {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tx-allsorted strong {
+  color: var(--ink);
+}
+
+.tx-allsorted-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+  animation: rev-tick 0.4s var(--press-out) 0.1s backwards;
+}
+
+@keyframes tx-allsorted {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (min-width: 1100px) and (max-width: 1679px) {
+  .tx-review {
+    max-width: 56rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .tx-progress,
+  .tx-review-head {
+    max-width: 56rem;
+  }
+}
+
+@media (max-width: 1099px) {
+  .tx-progress,
+  .tx-review-head {
+    max-width: 34rem;
+  }
 }
 
 /* After a correction: offer to always ask about the shop. */
@@ -96,52 +202,12 @@
   text-underline-offset: 0.2em;
 }
 
-/* The view switch with the count at its right, then search, then one scrolling row of filter chips.
-   Only the Transactions view is a grid: the Merchants view lays out its own parts. */
+/* Search, one scrolling row of filter chips, then the count with its quiet actions. */
 .tx-controls {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  margin-bottom: 0.9rem;
-}
-
-.tx-list.is-transactions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 1rem;
-}
-
-.tx-list.is-transactions > *,
-.tx-list.is-transactions .tx-controls > * {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-
-.tx-list.is-transactions .tx-controls {
-  display: contents;
-}
-
-.tx-list.is-transactions .mer-views {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.tx-list.is-transactions .tx-count {
-  grid-column: 2;
-  grid-row: 1;
-  min-height: 0;
-  margin: 0 0 0.9rem;
-  align-self: center;
-}
-
-.tx-list.is-transactions .tx-search {
-  grid-row: 2;
-  margin-bottom: 0.7rem;
-}
-
-.tx-list.is-transactions .tx-chips {
-  grid-row: 3;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
 }
 
 .tx-search {
@@ -194,11 +260,27 @@
 
 .tx-count {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.25rem 0.75rem;
+  margin-top: -0.1rem;
+}
+
+.tx-count p {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 2.25rem;
-  margin: 0;
+  font-size: 0.875rem;
+  color: var(--quiet);
+}
+
+.tx-count-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-right: -0.6rem;
 }
 
 @media (max-width: 720px) {
@@ -207,98 +289,200 @@
     padding-inline: 1.1rem;
   }
 
-  .tx-count {
+  .tx-count p {
     min-height: var(--tap);
   }
 }
 
-/* The review card */
+/* The review card: the payment, then its likely answers as one tap each. An answer fills the button
+   with a tick while it saves, then the next card slides in. */
 .rev {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  max-width: 40rem;
-}
-
-.rev-facts,
-.rev-decide {
-  display: flex;
-  flex-direction: column;
   gap: 1rem;
-  min-width: 0;
+  max-width: 34rem;
+  animation: rev-in 0.36s var(--ease-out) backwards;
 }
 
-.rev-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+@keyframes rev-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
 }
 
-.rev-title {
-  min-width: 0;
+.rev-pay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  align-items: baseline;
 }
 
 .rev-desc {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.3;
+  font: 650 1.1rem/1.3 var(--sans);
+  letter-spacing: -0.01em;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
 
-.rev-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.7rem;
-  margin-top: 0.3rem;
-  font-size: 0.82rem;
-  color: var(--quiet);
-}
-
 .rev-amount {
-  flex: none;
-  font-size: 1.5rem;
-  line-height: 1.15;
+  display: inline-flex;
+  align-items: flex-start;
+  font: 650 1.6rem/1 var(--sans);
+  letter-spacing: -0.03em;
   color: var(--ink);
 }
 
 .rev-amount.is-in,
 .tx-table td.tx-amount.is-in,
 .strong-amount.is-in {
-  color: var(--moss);
+  color: var(--ok);
 }
 
-.rev-guess {
+.rev-amount.is-in .amount small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.rev-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--quiet);
+}
+
+.rev-ask {
+  margin-bottom: -0.35rem;
+  font-size: 0.875rem;
+  color: var(--quiet);
+}
+
+.rev-choices {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rev-choice {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.7rem 0.9rem;
-  font-size: 0.875rem;
+  gap: 0.6rem;
+  min-height: 3.1rem;
+  padding: 0 0.75rem 0 1rem;
+  border: 0;
+  border-radius: var(--r-row);
+  font: 600 0.95rem/1.2 var(--sans);
+  color: var(--ink);
+  text-align: left;
+  background: var(--card);
+  box-shadow: var(--raise-sm);
+  cursor: pointer;
+  transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out), color var(--press-out);
+}
+
+.rev-choice-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rev-choice-note {
+  flex: none;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--quiet);
+}
+
+.rev-choice.is-guess {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.rev-choice.is-guess .rev-choice-note {
   color: var(--text);
 }
 
-.rev-guess svg {
+@media (hover: hover) {
+  .rev-choice:hover:not(:disabled) {
+    box-shadow: 0 2px 6px -2px var(--shade-lg), 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+    transform: translateY(-1px);
+  }
+}
+
+.rev-choice:is(:active, .is-pressed):not(:disabled) {
+  transform: scale(0.98);
+  transition: transform var(--press-in), box-shadow var(--press-in), background-color var(--press-in);
+}
+
+.rev-choice:disabled {
+  cursor: default;
+}
+
+.rev.is-saving .rev-choice:not(.is-chosen) {
+  opacity: 0.45;
+}
+
+.rev-choice.is-chosen {
+  transition: transform var(--press-out), background-color var(--press-in), color var(--press-in);
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: none;
+  transform: scale(1.01);
+}
+
+.rev-choice.is-chosen .rev-choice-note {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.rev-choice-tick {
   flex: none;
-  color: var(--gold);
+  animation: rev-tick 0.28s var(--press-out) backwards;
 }
 
-.rev-guess-text {
-  flex: 1;
-  min-width: 0;
+@keyframes rev-tick {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
 }
 
-.rev-guess strong {
-  color: var(--ink);
+/* The key that answers, for a keyboard and mouse only. */
+.rev-key {
+  display: none;
+  flex: none;
+  min-width: 1.35rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  font: 500 0.75rem/1.3 var(--sans);
+  text-align: center;
+  color: var(--quiet);
+  box-shadow: inset 0 0 0 1px var(--hair);
 }
 
-.rev-field-head {
+@media (hover: hover) and (pointer: fine) {
+  .rev-key {
+    display: inline-block;
+  }
+}
+
+.rev-more {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 2.25rem;
+  gap: 0.5rem;
+}
+
+.rev-more .btn {
+  flex: 1 1 0;
+  padding-inline: 0.5rem;
+}
+
+.rev-decide {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .rev-actions {
@@ -308,17 +492,6 @@
 
 .rev-actions .btn-primary {
   flex: 1;
-}
-
-.rev-rule {
-  padding-block: 0.55rem;
-  font-weight: 400;
-  line-height: 1.3;
-  white-space: normal;
-}
-
-.rev-rule svg {
-  flex: none;
 }
 
 .tx-hint {
@@ -345,11 +518,52 @@
   }
 }
 
-/* The tick box that makes an answer the rule for its shop */
+/* The switch that makes an answer the rule for its shop. */
 .rev-remember {
   display: flex;
-  gap: 0.5rem;
   align-items: center;
+  gap: 0.65rem;
+  min-height: var(--tap);
+  margin-block: -0.4rem -0.5rem;
+  font-size: 0.875rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.rev-remember input {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.3rem;
+  height: 1.35rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--sunk);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-out);
+}
+
+.rev-remember input::after {
+  content: '';
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 2px var(--shade-lg);
+  transition: transform 0.24s var(--press-out);
+}
+
+.rev-remember input:checked {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.rev-remember input:checked::after {
+  transform: translateX(0.95rem);
 }
 
 /* A row of choices sharing the full width */
@@ -858,10 +1072,6 @@
   .tx-page .split-remove {
     width: var(--tap);
   }
-
-  .tx-page .rev-field-head {
-    min-height: var(--tap);
-  }
 }
 
 /* A mouse can hit smaller things. */
@@ -981,14 +1191,37 @@
   }
 }
 
-/* The card opens up: the transaction beside the decision. */
-@media (min-width: 1200px) and (max-width: 1679px) {
+/* The card opens up: the payment on the left, the answers beside it. */
+@media (min-width: 1100px) and (max-width: 1679px) {
   .rev {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    gap: 2.2rem;
-    max-width: 64rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    column-gap: 2.4rem;
+    row-gap: 1rem;
+    align-content: start;
+    max-width: 56rem;
     padding: 1.4rem 1.6rem;
+  }
+
+  .rev > * {
+    grid-column: 2;
+  }
+
+  .rev > .rev-pay {
+    grid-column: 1;
+    grid-row: 1 / span 5;
+    align-self: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rev-pay .rev-amount {
+    order: 2;
+    margin-top: 0.9rem;
+    font-size: 2.1rem;
+  }
+
+  .rev-pay .rev-meta {
+    order: 1;
   }
 }
 

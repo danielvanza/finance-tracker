@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Search, ChevronDown } from 'lucide-react'
 import type { Category } from '../../types'
 import CategorySelect from '../../components/CategorySelect'
@@ -20,12 +21,14 @@ interface TransactionsToolbarProps {
   onSearch: (q: string) => void
   onChange: (patch: Partial<ListFilters>) => void
   onClear: () => void
+  /** Quiet buttons at the end of the count line: the shop view, Select, CSV. */
+  actions?: ReactNode
 }
 
 const SOURCE_OPTIONS = SOURCE_FILTERS.map(s => ({ value: s, label: s === 'all' ? 'All sources' : s.toUpperCase() }))
 
 export default function TransactionsToolbar({
-  filters, categories, reviewCount, monthKnown, shown, total, counted, active, onSearch, onChange, onClear,
+  filters, categories, reviewCount, monthKnown, shown, total, counted, active, onSearch, onChange, onClear, actions,
 }: TransactionsToolbarProps) {
   const category = categories.find(c => c.id === filters.categoryId) ?? null
 
@@ -36,8 +39,8 @@ export default function TransactionsToolbar({
         <input
           className="field"
           type="search"
-          placeholder="Search description or amount"
-          aria-label="Search transactions"
+          placeholder="Search name or amount"
+          aria-label="Search payments"
           value={filters.q}
           onChange={e => onSearch(e.target.value)}
         />
@@ -78,12 +81,15 @@ export default function TransactionsToolbar({
         </button>
       </div>
 
-      <p className="tx-count" aria-live="polite">
-        <span className="lab num">
-          {!counted ? ' ' : active ? `${shown} of ${total}` : `${total} transaction${total === 1 ? '' : 's'}`}
-        </span>
-        {active && <button type="button" className="btn btn-sm" onClick={onClear}>Clear</button>}
-      </p>
+      <div className="tx-count">
+        <p aria-live="polite">
+          <span className="num">
+            {!counted ? ' ' : active ? `${shown} of ${total}` : `${total} payment${total === 1 ? '' : 's'}`}
+          </span>
+          {active && <button type="button" className="btn btn-sm btn-quiet" onClick={onClear}>Clear</button>}
+        </p>
+        {actions && <div className="tx-count-actions">{actions}</div>}
+      </div>
     </div>
   )
 }

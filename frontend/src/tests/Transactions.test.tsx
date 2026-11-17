@@ -78,18 +78,18 @@ describe('Transactions', () => {
 
   it('counts the review queue on its own, whatever the list is filtered to', async () => {
     show()
-    expect(await screen.findByText('115 to review')).toBeInTheDocument()
+    expect(await screen.findByText('115 to sort')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Source' }))
     await userEvent.click(screen.getByRole('option', { name: 'MANUAL' }))
     expect(await screen.findByText('1 of 4')).toBeInTheDocument()
-    expect(screen.getByText('115 to review')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Close review' })).toBeInTheDocument()
+    expect(screen.getByText('115 to sort')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sort now' })).toBeInTheDocument()
     expect(api.getTransactions).toHaveBeenCalledWith({ confirmed: 'false' })
   })
 
   it('keeps the review count while the list is still loading', async () => {
     show('/transactions', 'loading')
-    expect(await screen.findByText('115 to review')).toBeInTheDocument()
+    expect(await screen.findByText('115 to sort')).toBeInTheDocument()
     expect(screen.getByLabelText('Loading transactions')).toBeInTheDocument()
   })
 
@@ -104,7 +104,7 @@ describe('Transactions', () => {
   it('takes a new ?q= from a link while already on the page', async () => {
     show()
     await waitFor(() => expect(rows()).toHaveLength(4))
-    await userEvent.type(screen.getByLabelText('Search transactions'), 'jum')
+    await userEvent.type(screen.getByLabelText('Search payments'), 'jum')
     await userEvent.click(screen.getByRole('button', { name: 'go to etsy' }))
     expect(await screen.findByDisplayValue('etsy')).toBeInTheDocument()
     await waitFor(() => expect(rows()).toHaveLength(1))
@@ -112,7 +112,7 @@ describe('Transactions', () => {
 
   it('writes what is typed to ?q= and clears it again', async () => {
     show()
-    const box = await screen.findByLabelText('Search transactions')
+    const box = await screen.findByLabelText('Search payments')
     await userEvent.type(box, 'jumbo')
     expect(screen.getByTestId('where')).toHaveTextContent('/transactions?q=jumbo')
     await waitFor(() => expect(rows()).toHaveLength(1))
@@ -123,19 +123,19 @@ describe('Transactions', () => {
 
   it('finds an amount as it is shown, and says when nothing matches', async () => {
     show()
-    const box = await screen.findByLabelText('Search transactions')
+    const box = await screen.findByLabelText('Search payments')
     await userEvent.type(box, '29,03')
     await waitFor(() => expect(rows()).toHaveLength(1))
     await userEvent.clear(box)
     await userEvent.type(box, 'zzz')
-    expect(await screen.findByText('No transactions match these filters.')).toBeInTheDocument()
+    expect(await screen.findByText('No payments match these filters.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     await waitFor(() => expect(rows()).toHaveLength(4))
   })
 
   it('narrows with the chips: needs review, this month (financial), over 100, category', async () => {
     show()
-    await screen.findByText('115 to review')
+    await screen.findByText('115 to sort')
     await waitFor(() => expect(rows()).toHaveLength(4))
     await userEvent.click(screen.getByRole('button', { name: /^This month/ }))
     expect(rows()).toHaveLength(3) // the September row is outside 24 Oct to 23 Nov
@@ -206,9 +206,9 @@ describe('Transactions', () => {
   })
   it('holds the chips in the address: restores them on arrival, writes each one, and Clear takes them out', async () => {
     show('/transactions?review=1&over=1&category=999&source=zzz')
-    await screen.findByText('115 to review')
+    await screen.findByText('115 to sort')
     // An unknown category and an unknown source are ignored; the others apply.
-    expect(await screen.findByText('No transactions match these filters.')).toBeInTheDocument()
+    expect(await screen.findByText('No payments match these filters.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Needs review/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Over €100' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /^Category/ })).toHaveAttribute('aria-pressed', 'false')
@@ -260,7 +260,7 @@ describe('Transactions', () => {
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
       render(<QueryClientProvider client={qc}><MemoryRouter><Transactions /></MemoryRouter></QueryClientProvider>)
       const user = userEvent.setup()
-      await screen.findByText('2 remaining')
+      await screen.findByText('2 left')
       await user.click(await screen.findByRole('button', { name: /Select category/ }))
       await user.click(await screen.findByRole('option', { name: 'Utilities' }))
       await user.click(screen.getByRole('button', { name: 'Confirm category' }))
@@ -271,6 +271,9 @@ describe('Transactions', () => {
     it('says what was sorted and what followed, and Undo puts back exactly those', async () => {
       const user = await review()
       expect(screen.getByText('Sorted Etos Apotheek as Utilities. 1 more followed.').closest('[role="status"]')).not.toBeNull()
+      // The queue is empty now: the card closes into All sorted, counting the payment that followed.
+      expect(await screen.findByText(/These 2 payments count from now on/)).toBeInTheDocument()
+      expect(screen.getByRole('progressbar', { name: 'Sorted on this visit' })).toHaveAttribute('aria-valuenow', '2')
       await user.click(screen.getByRole('button', { name: 'Undo' }))
       expect(await screen.findByText('Put Etos Apotheek back in the queue with 1 more.')).toBeInTheDocument()
       expect(api.patchTransaction).toHaveBeenCalledWith(10, { confirmed: false })

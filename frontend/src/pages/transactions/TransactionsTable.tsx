@@ -203,10 +203,10 @@ export default function TransactionsTable({ transactions, categories, onCategory
               <td colSpan={selecting ? 7 : 6} className="empty">
                 {filtered ? (
                   <>
-                    No transactions match these filters.
+                    No payments match these filters.
                     <span className="tx-empty-action"><button type="button" className="btn" onClick={onClear}>Clear filters</button></span>
                   </>
-                ) : 'No transactions yet. Bring in a bank file or add one by hand.'}
+                ) : 'No payments yet. Bring in a bank file or add one by hand.'}
               </td>
             </tr>
           )}

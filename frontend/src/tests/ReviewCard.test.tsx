@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import ReviewCard from '../components/ReviewCard'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Category, Transaction } from '../types'
+import type { Category, ReviewTransaction, Transaction } from '../types'
 
 const mockTx: Transaction = {
   id: 1, date: '2026-03-12', amount_cents: -3499, description: 'Bol.com',
@@ -19,33 +19,89 @@ const mockCategories: Category[] = [
 const wrap = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>)
 
+const withOptions: ReviewTransaction = {
+  ...mockTx,
+  options: [
+    { category_id: 5, label: 'Recreation & Entertainment', refund: false },
+    { category_id: 1, label: 'Food - Essential', refund: false },
+  ],
+}
+
 test('renders transaction description and amount', () => {
   wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} />)
   expect(screen.getByText('Bol.com')).toBeInTheDocument()
-  expect(screen.getByText(/34.99/)).toBeInTheDocument()
+  expect(screen.getByLabelText('€34,99')).toBeInTheDocument()
 })
 
-test('shows the guess Claude was not sure of', () => {
-  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={vi.fn()} onSkip={vi.fn()} />)
-  expect(screen.getByText(/Claude was not sure/)).toBeInTheDocument()
-  expect(screen.getAllByText(/Recreation & Entertainment/).length).toBeGreaterThan(0)
+test('offers the likely categories as one tap each, Claude\'s guess first', () => {
+  const onConfirm = vi.fn()
+  wrap(<ReviewCard transaction={withOptions} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  expect(screen.getByText(/Claude wasn’t sure/)).toBeInTheDocument()
+  const choices = within(screen.getByRole('group', { name: /Which is it/ })).getAllByRole('button')
+  expect(choices.map(c => c.textContent)).toEqual(['Recreation & EntertainmentClaude’s guess1', 'Food - Essential2'])
+  fireEvent.click(choices[1])
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 1, is_refund: false })
 })
 
-test('calls onConfirm with the decision when confirm button clicked', () => {
+test('offers Claude\'s one guess when the server sends no options', () => {
   const onConfirm = vi.fn()
   wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
-  fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
-  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false })
+  fireEvent.click(screen.getByRole('button', { name: /^Recreation & Entertainment/ }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 5, is_refund: false })
 })
 
-test('remembers the shop only when the box is ticked', () => {
+test('remembers the shop only when the switch is on', () => {
   const onConfirm = vi.fn()
-  wrap(<ReviewCard transaction={mockTx} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
-  const box = screen.getByRole('checkbox', { name: 'Remember this shop for next time' })
-  expect(box).not.toBeChecked()
-  fireEvent.click(box)
-  fireEvent.click(screen.getByRole('button', { name: /confirm/i }))
-  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: mockTx.category_id, is_refund: false, remember: true })
+  wrap(<ReviewCard transaction={withOptions} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  const remember = screen.getByRole('switch', { name: /^Remember .+ for next time$/ })
+  expect(remember).not.toBeChecked()
+  fireEvent.click(remember)
+  fireEvent.click(screen.getByRole('button', { name: /^Food - Essential/ }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 1, is_refund: false, remember: true })
+})
+
+test('a refund option answers as a refund and makes no rule', () => {
+  const onConfirm = vi.fn()
+  const back: ReviewTransaction = { ...mockTx, amount_cents: 1200, options: [{ category_id: 5, label: 'Refund: Recreation & Entertainment', refund: true }] }
+  wrap(<ReviewCard transaction={back} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  fireEvent.click(screen.getByRole('switch'))
+  fireEvent.click(screen.getByRole('button', { name: /^Refund: Recreation/ }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 5, is_refund: true })
+})
+
+test('answers with 1 to 3 and skips with S, but not while typing', () => {
+  const onConfirm = vi.fn()
+  const onSkip = vi.fn()
+  wrap(<><input aria-label="elsewhere" /><ReviewCard transaction={withOptions} categories={mockCategories} onConfirm={onConfirm} onSkip={onSkip} /></>)
+  fireEvent.keyDown(screen.getByLabelText('elsewhere'), { key: '2' })
+  expect(onConfirm).not.toHaveBeenCalled()
+  fireEvent.keyDown(document.body, { key: 's' })
+  expect(onSkip).toHaveBeenCalledTimes(1)
+  fireEvent.keyDown(document.body, { key: '2' })
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 1, is_refund: false })
+})
+
+test('holds the chosen answer while it saves, and frees the card if it is refused', async () => {
+  let refuse: () => void = () => {}
+  const onConfirm = vi.fn(() => new Promise<void>((_, reject) => { refuse = () => reject(new Error('no')) }))
+  wrap(<ReviewCard transaction={withOptions} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: /^Food - Essential/ }))
+  expect(screen.getByRole('button', { name: /^Food - Essential/ })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: /^Recreation/ }))
+  expect(onConfirm).toHaveBeenCalledTimes(1)
+  refuse()
+  await waitFor(() => expect(screen.getByRole('button', { name: /^Food - Essential/ })).toBeEnabled())
+})
+
+test('Something else opens the full picker and confirms from it', () => {
+  const onConfirm = vi.fn()
+  wrap(<ReviewCard transaction={withOptions} categories={mockCategories} onConfirm={onConfirm} onSkip={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  expect(screen.getByRole('group', { name: /Which is it/ })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
+  fireEvent.click(screen.getByRole('button', { name: /confirm category/i }))
+  expect(onConfirm).toHaveBeenCalledWith(mockTx.id, { category_id: 5, is_refund: false })
 })
 
 describe('ReviewCard incoming-money choice', () => {
@@ -80,6 +136,7 @@ describe('ReviewCard incoming-money choice', () => {
         onSkip={vi.fn()}
       />
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
     // No income/refund/transfer choice for outgoing money
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /food/i }))
@@ -98,6 +155,7 @@ describe('ReviewCard incoming-money choice', () => {
         onSkip={vi.fn()}
       />
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
     expect(screen.getByRole('radio', { name: 'Income' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('button', { name: /salary/i }))
     const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
@@ -116,6 +174,7 @@ describe('ReviewCard incoming-money choice', () => {
         onSkip={vi.fn()}
       />
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Refund' }))
     // Category select now offers expense categories, defaulting to the first
     fireEvent.click(screen.getByRole('button', { name: /food/i }))
@@ -138,6 +197,7 @@ describe('ReviewCard incoming-money choice', () => {
         onSkip={vi.fn()}
       />
     )
+    fireEvent.click(screen.getByRole('button', { name: 'Something else…' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Transfer' }))
     fireEvent.click(screen.getByRole('button', { name: /internal transfer/i }))
     const optionTexts = screen.getAllByRole('option').map(o => o.textContent)
@@ -169,7 +229,7 @@ describe('ReviewCard splitting', () => {
         onSkip={vi.fn()}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /split…/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Split' }))
 
     const amountInputs = [
       screen.getByLabelText('Split part 1 amount'),
@@ -205,7 +265,7 @@ describe('ReviewCard splitting', () => {
         onSkip={vi.fn()}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /split…/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Split' }))
     fireEvent.change(screen.getByLabelText('Split part 1 amount'), { target: { value: '100' } })
     expect(screen.getByRole('button', { name: /confirm split/i })).toBeDisabled()
     expect(screen.getByText(/Remaining: €150,00/)).toBeInTheDocument()

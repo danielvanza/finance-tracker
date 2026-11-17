@@ -472,7 +472,9 @@ def test_seam_transactions_next_review(client):
     assert r.status_code == 200
     body = r.json()
     assert body is not None  # seeded review queue is non-empty
-    assert set(body.keys()) == TX_OUT_KEYS
+    assert set(body.keys()) == TX_OUT_KEYS | {"options"}
+    for o in body["options"]:
+        assert set(o.keys()) == {"category_id", "label", "refund"}
     assert isinstance(body["amount_cents"], int)
     assert body["confirmed"] is False
 
@@ -483,7 +485,7 @@ def test_seam_transactions_next_review(client):
     nxt = r2.json()
     if nxt is not None:
         assert nxt["id"] != body["id"]
-        assert set(nxt.keys()) == TX_OUT_KEYS
+        assert set(nxt.keys()) == TX_OUT_KEYS | {"options"}
 
 
 def test_seam_transaction_create(client, db):

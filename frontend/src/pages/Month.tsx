@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '../api'
 import { dayLabel } from '../dates'
-import { formatCents, formatEuros } from '../money'
+import { formatEuros } from '../money'
 import type { FreeToSpend, Pace } from '../types'
 import { Amount } from './overview/Amount'
 import NeedsYou from './overview/NeedsYou'
@@ -303,33 +303,6 @@ export default function Month() {
             <details className="ov-fold">
               <summary>Every category</summary>
               <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={known ? todayPct : null} kinds={known ? kinds : null} payments={payments} elapsed={known ? elapsed : null} onError={setActionError} />
-            </details>
-          )}
-          {summary && known && (
-            <details className="ov-fold">
-              <summary>The whole month</summary>
-              <dl className="whole">
-                <div>
-                  <dt className="lab">Income</dt>
-                  <dd>
-                    {formatCents(summary.total_income_cents)}
-                    {summary.income_breakdown.map(i => (
-                      <small key={i.category_id}>{i.category_name} · {formatCents(i.amount_cents)}</small>
-                    ))}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="lab">Spent</dt>
-                  <dd>
-                    {formatCents(summary.total_expenses_cents)}
-                    {summary.total_income_cents > 0 && (
-                      <small>{Math.round((summary.total_expenses_cents / summary.total_income_cents) * 100)}% of income</small>
-                    )}
-                  </dd>
-                </div>
-                <div><dt className="lab">Saved</dt><dd>{formatCents(summary.total_savings_cents)}</dd></div>
-                <div><dt className="lab">Net</dt><dd>{formatCents(summary.left_over_cents)}</dd></div>
-              </dl>
             </details>
           )}
           <ReportLink month={month}>

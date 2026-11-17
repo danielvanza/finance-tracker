@@ -71,12 +71,10 @@ describe('Month', () => {
     expect(screen.queryByText(/to review/)).toBeNull()
   })
 
-  it('shows the whole month from the summary wire shape', async () => {
+  it('leaves the whole month to Trends', async () => {
     show(okPace)
-    expect(await screen.findByText('€5.860,26')).toBeInTheDocument()
-    expect(screen.getByText('€3.420,00')).toBeInTheDocument()
-    expect(screen.getByText('€2.040,26')).toBeInTheDocument()
-    expect(screen.getByText(/Retained Salary/)).toBeInTheDocument()
+    await screen.findByRole('link', { name: 'Month report' })
+    expect(screen.queryByText('The whole month')).toBeNull()
   })
 
   it('says how far the files reach when they stop short of yesterday', async () => {

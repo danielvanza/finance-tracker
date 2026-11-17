@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Movers from '../pages/trends/Movers'
+import WholeMonth from '../pages/trends/WholeMonth'
 import { trendFacts } from '../pages/trends/facts'
 import { earlierMonths, findMovers } from '../pages/trends/movers'
 import { api } from '../api'
@@ -116,5 +117,31 @@ describe('Movers', () => {
       </QueryClientProvider>,
     )
     expect(container).toBeEmptyDOMElement()
+  })
+})
+
+describe('WholeMonth', () => {
+  const month = (over: Partial<DashboardSummary> = {}): DashboardSummary => ({
+    ...summary('2026-11', []), total_income_cents: 586026, total_expenses_cents: 342000, total_savings_cents: 40000,
+    left_over_cents: 204026, income_breakdown: [
+      { category_id: 1, category_name: 'Salary', amount_cents: 546026 },
+      { category_id: 2, category_name: 'Retained Salary', amount_cents: 40000 },
+    ], ...over,
+  })
+
+  it('says what came in and went out, with the four figures from the wire shape', () => {
+    render(<WholeMonth summary={month()} finished />)
+    expect(screen.getByText(/€5\.860 came in and €3\.420 went out\./)).toBeInTheDocument()
+    expect(screen.getByText(/58% of what came in/)).toBeInTheDocument()
+    expect(screen.getByLabelText('€5.860,26')).toBeInTheDocument()
+    expect(screen.getByLabelText('€3.420,00')).toBeInTheDocument()
+    expect(screen.getByLabelText('€2.040,26')).toBeInTheDocument()
+    expect(screen.getByText(/Retained Salary/)).toBeInTheDocument()
+  })
+
+  it('says so far while the month runs, and short when more went out than came in', () => {
+    render(<WholeMonth summary={month({ left_over_cents: -5000 })} finished={false} />)
+    expect(screen.getByText(/^So far /)).toBeInTheDocument()
+    expect(screen.getByText('Short')).toBeInTheDocument()
   })
 })

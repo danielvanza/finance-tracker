@@ -11,7 +11,8 @@ Organisation: three places. Overview (the five blocks below), Money (every payme
 Overview order: (1) free to spend until payday, per-day amount, days to payday; (2) pace line since payday; (3) Needs you: payments to sort, overspent categories, stale bank data; collapses to "All sorted" when empty; (4) still to pay before payday, bills and set-asides with dates; (5) needs / wants / savings planned vs spent, plus only the 1-3 categories near or over plan. Off the first screen: month totals, net worth, donuts, KPI tile rows, who spent it.
 Evidence: research on Copilot, Monarch, YNAB, Emma, Monzo, bunq and others (board at .impeccable/mocks/research/index.html). Synthetic figures only.
 Memorable moment: the pace line drawing in from payday to today and landing on a pill that says ahead or behind.
-Unresolved: desktop layout of Overview (side rail vs top tabs); whether Trends keeps its own view inside Money.
+Unresolved: desktop layout of Overview (side rail vs top tabs).
+Money (decided 2026-11-17, sketches in .impeccable/mocks/money): Trends keeps its own view; the Payments | Trends switch is the title (no visible h1, Import only in the shell); Claude's doubtful payments are answered with one tap from its likely categories (keys 1-3, S skips) and the queue closes into "All sorted"; Trends series are slate / heather / moss, none a status colour, running months striped; "The whole month" totals sit at the top of Trends for the month shown, not on the Overview.
 
 ## Direction contract
 

@@ -27,6 +27,19 @@ export interface Transaction {
   splits: TransactionSplit[]
 }
 
+/** A likely category for a payment waiting to be sorted, most likely first (Claude's guess leads). */
+export interface ReviewOption {
+  category_id: number
+  label: string
+  /** Money coming back on an earlier purchase in this category. */
+  refund: boolean
+}
+
+/** The next payment to sort, with the answers to offer as one tap. */
+export interface ReviewTransaction extends Transaction {
+  options?: ReviewOption[]
+}
+
 // Request payload for split parts — NO per-part refund on input (wire has none).
 export interface SplitInput {
   category_id: number

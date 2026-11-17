@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money: four decisions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Sketches only. Synthetic figures. Forest tokens copied from frontend/src/styles/base.css. */
+  :root { --bg:#eef1ec; --card:#fff; --sunk:#e6eae4; --hair:#dde2da; --ink:#1b2420; --text:#33403a; --quiet:#5c6862; --accent:#1f6f5c; --on-accent:#fff; --accent-soft:#dcede5; --ok:#2e8a55; --watch:#d9902b; --watch-ink:#8f530c; --watch-soft:#fbebd5; --over:#b1322a;
+    --n:#16558c; --w:#bf7fb9; --s:#3e7232; }
+  .night { --bg:#111814; --card:#1a231e; --sunk:#151d18; --hair:#2a352f; --ink:#eceae4; --text:#d3d6d0; --quiet:#a3ada6; --accent:#7fd8a8; --on-accent:#0f1a14; --accent-soft:#1f3a2d; --ok:#7fd8a8; --watch:#e8b04b; --watch-ink:#e8b04b; --watch-soft:#3a2e17;
+    --n:#5590cc; --w:#82477e; --s:#5e9352; }
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 15px/1.5 Geist, system-ui, sans-serif; background: #d9ded6; color: #1b2420; padding: 32px 24px 80px; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; }
+  .intro { max-width: 760px; color: #33403a; margin: 6px 0 36px; }
+  section.q { margin: 0 0 56px; }
+  section.q > h2 { font-size: 20px; letter-spacing: -0.01em; }
+  section.q > p { color: #33403a; max-width: 760px; margin: 4px 0 18px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .opt { width: 330px; }
+  .opt.wide { width: 700px; }
+  .opt h3 { font-size: 15px; margin-bottom: 8px; }
+  .opt h3 b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #1b2420; color: #fff; font-size: 13px; margin-right: 6px; }
+  .opt .rec { font-size: 12px; font-weight: 600; color: #1f6f5c; background: #dcede5; padding: 2px 8px; border-radius: 99px; margin-left: 6px; }
+  .opt .why { font-size: 13px; color: #33403a; margin-top: 8px; }
+  .phone { width: 330px; background: var(--bg); color: var(--ink); border-radius: 26px; padding: 14px 14px 18px; box-shadow: 0 1px 0 #0001, 0 12px 30px -16px #0005; overflow: hidden; }
+  .desk { background: var(--bg); color: var(--ink); border-radius: 14px; padding: 18px 22px; box-shadow: 0 12px 30px -16px #0005; }
+  .bar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+  .brand { font-weight: 700; font-size: 16px; flex: 1; }
+  .ib { width: 34px; height: 34px; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--hair); display: grid; place-items: center; font-size: 15px; color: var(--ink); }
+  .ib.solid { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+  .seg { display: inline-flex; background: var(--sunk); border-radius: 12px; padding: 3px; gap: 2px; }
+  .seg span { padding: 6px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 500; color: var(--quiet); }
+  .seg span.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px #0001, 0 0 0 1px var(--hair); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .sp { flex: 1; }
+  .card { background: var(--card); border-radius: 18px; box-shadow: 0 0 0 1px var(--hair), 0 1px 2px #0000000d; padding: 14px; }
+  .btn { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 12px; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--hair); font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .btn.solid { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
+  .btn.ghost { background: none; box-shadow: none; color: var(--quiet); padding: 0 6px; }
+  .h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 8px; }
+  .strike { outline: 2px dashed #b1322a; outline-offset: 2px; border-radius: 6px; }
+  .note { font-size: 11.5px; color: #b1322a; font-weight: 600; }
+  .search { height: 38px; border-radius: 12px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--hair); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--quiet); font-size: 13.5px; }
+  .chips { display: flex; gap: 6px; overflow: hidden; margin: 8px -14px 0 0; padding-right: 14px; white-space: nowrap; }
+  .chip { height: 30px; padding: 0 11px; border-radius: 99px; background: var(--card); box-shadow: 0 0 0 1px var(--hair); font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; color: var(--text); flex: none; }
+  .chip.on { background: var(--accent-soft); color: var(--ink); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); font-weight: 600; }
+  .lst .r { display: grid; grid-template-columns: 1fr auto; padding: 9px 0; border-top: 1px solid var(--hair); font-size: 13.5px; }
+  .lst .r:first-child { border-top: 0; }
+  .lst small { display: block; color: var(--quiet); font-size: 12px; }
+  .amt { font-weight: 600; text-align: right; }
+  .amt small { font-weight: 400; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--watch); margin-right: 5px; vertical-align: 2px; }
+  .meta { font-size: 12.5px; color: var(--quiet); }
+  .faded { opacity: .45; }
+  /* review */
+  .rv-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .rv-top b { font-size: 15px; }
+  .prog { display: flex; gap: 4px; margin: 2px 0 12px; }
+  .prog i { flex: 1; height: 4px; border-radius: 2px; background: var(--sunk); }
+  .prog i.d { background: var(--accent); }
+  .pay { display: flex; justify-content: space-between; align-items: baseline; }
+  .pay .n { font-size: 17px; font-weight: 650; }
+  .pay .a { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .pay .a small { font-size: 14px; font-weight: 500; color: var(--quiet); }
+  .ask { font-size: 13px; color: var(--quiet); margin: 10px 0 8px; }
+  .ch { display: grid; gap: 6px; }
+  .ch .c { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 12px; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--hair); font-weight: 550; font-size: 14px; }
+  .ch .c.first { box-shadow: 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
+  .ch .c kbd { font: 500 11px Geist, sans-serif; color: var(--quiet); border: 1px solid var(--hair); border-radius: 5px; padding: 0 5px; }
+  .ch .c em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--quiet); }
+  .more { display: flex; gap: 6px; margin-top: 8px; }
+  .more .btn { flex: 1; justify-content: center; }
+  .tick { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); margin-top: 10px; }
+  .tick i { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px var(--quiet); }
+  .sw { width: 34px; height: 20px; border-radius: 99px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--hair); position: relative; flex: none; }
+  .sw::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px #0003; }
+  .toast { margin-top: 10px; display: flex; align-items: center; gap: 8px; background: var(--ink); color: var(--bg); border-radius: 12px; padding: 8px 10px 8px 12px; font-size: 12.5px; }
+  .toast span { flex: 1; }
+  .toast u { text-decoration: none; font-weight: 600; color: var(--accent); }
+  .night .toast u { color: #1f6f5c; }
+  .stack { position: relative; }
+  .stack .card + .card { position: absolute; inset: 8px 8px auto; z-index: -1; height: 40px; }
+  .sorted { text-align: center; padding: 22px 10px; }
+  .sorted .big { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin: 0 auto 8px; font-size: 22px; }
+  /* chart */
+  .chart { display: flex; align-items: flex-end; gap: 14px; height: 120px; padding: 0 4px; border-bottom: 1px solid var(--hair); }
+  .col { flex: 1; display: flex; flex-direction: column-reverse; gap: 2px; }
+  .col i { display: block; border-radius: 3px; }
+  .col.unf { opacity: 1; }
+  .col.unf i { background-image: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--card) 55%, transparent) 3px 5px) !important; }
+  .mo { display: flex; gap: 14px; padding: 4px 4px 0; font-size: 11px; color: var(--quiet); }
+  .mo span { flex: 1; text-align: center; }
+  .lg { display: flex; gap: 12px; font-size: 12px; color: var(--text); margin-top: 8px; }
+  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .pair { display: flex; gap: 12px; }
+  .pair .card { flex: 1; }
+  .ramp { --n: #1f6f5c; --w: #5aa88a; --s: #b4d9c4; }
+  .night .ramp, .night.ramp { --n: #7fd8a8; --w: #3f9a6f; --s: #23573f; }
+  .cbtab { font-size: 12px; color: #33403a; margin-top: 8px; }
+  .cbtab td { padding: 1px 8px 1px 0; }
+  .cbtab .sw2 { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; }
+  /* whole month */
+  .whole { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+  .whole div { padding: 2px 10px; border-left: 1px solid var(--hair); }
+  .whole div:first-child { border-left: 0; padding-left: 0; }
+  .whole dt { font-size: 11.5px; color: var(--quiet); }
+  .whole dd { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+  .whole dd small { font-size: 11px; font-weight: 500; color: var(--quiet); }
+  .sent { font-size: 15px; font-weight: 600; line-height: 1.35; }
+  .sent em { font-style: normal; color: var(--quiet); font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>Money, part 2: four decisions</h1>
+<p class="intro">Sketches at phone width with synthetic figures. Pick one option per question in the chat; the build follows the picks. Night versions shown where colour is the question.</p>
+
+<!-- 1 -->
+<section class="q">
+  <h2>1 · The top of Payments</h2>
+  <p>Today the page says Money › Payments › "Transactions", repeats Import (already in the top row and the side rail), and puts Select, Close review and CSV in two wrapping rows above the list.</p>
+  <div class="opts">
+    <div class="opt">
+      <h3>Now</h3>
+      <div class="phone">
+        <div class="bar"><span class="brand">Finances</span><span class="ib">⌕</span><span class="ib">+</span><span class="ib solid">↑</span></div>
+        <div class="seg"><span class="on">Payments</span><span>Trends</span></div>
+        <div class="h1 strike">Transactions</div>
+        <div class="row" style="flex-wrap:wrap; gap:6px"><span class="btn strike">↑ Import <small>bank data to 14 Nov</small></span><span class="btn">Select</span><span class="btn">Close review</span><span class="btn">↓ CSV</span></div>
+        <p class="note" style="margin-top:8px">Title and Import said twice · 4 buttons over 2 rows</p>
+      </div>
+    </div>
+    <div class="opt">
+      <h3><b>A</b>The switch is the title <span class="rec">recommended</span></h3>
+      <div class="phone">
+        <div class="bar"><span class="brand">Finances</span><span class="ib">⌕</span><span class="ib">+</span><span class="ib solid">↑</span></div>
+        <div class="seg"><span class="on">Payments</span><span>Trends</span></div>
+        <div style="height:12px"></div>
+        <div class="card" style="padding:12px 14px"><div class="row"><b style="font-size:14px">5 to sort</b><span class="sp"></span><span class="meta">Claude wasn't sure</span></div></div>
+        <div style="height:12px"></div>
+        <div class="search">⌕ Search name or amount</div>
+        <div class="chips"><span class="chip">This month</span><span class="chip">Category ▾</span><span class="chip">Over €100</span><span class="chip">Source ▾</span></div>
+        <div class="row" style="margin-top:12px"><span class="meta">125 payments</span><span class="sp"></span><span class="btn ghost">By shop</span><span class="btn ghost">Select</span><span class="btn ghost">↓ CSV</span></div>
+      </div>
+      <p class="why">No page title (the Payments switch names it; a hidden h1 stays for screen readers). Import only in the shell. Select, CSV and the shop view become quiet text buttons on the count line, one row on a phone. Filter chips scroll sideways in one line.</p>
+    </div>
+    <div class="opt">
+      <h3><b>B</b>Keep a title, fold actions into ⋯</h3>
+      <div class="phone">
+        <div class="bar"><span class="brand">Finances</span><span class="ib">⌕</span><span class="ib">+</span><span class="ib solid">↑</span></div>
+        <div class="row"><div class="seg"><span class="on">Payments</span><span>Trends</span></div><span class="sp"></span><span class="ib">⋯</span></div>
+        <div class="h1">Payments</div>
+        <div class="search">⌕ Search name or amount</div>
+        <div class="chips"><span class="chip">This month</span><span class="chip">Category ▾</span><span class="chip">Over €100</span></div>
+      </div>
+      <p class="why">A heading stays, Select / CSV / By shop hide in a menu. Calmer, but one more tap for each and the title still repeats the switch.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="q">
+  <h2>2 · Sorting Claude's doubtful payments</h2>
+  <p>Today: a dropdown with Claude's guess picked, then Confirm, then a tick box and a hint, so every answer is 2–3 taps. The backend already keeps Claude's other options per payment; the card can show them.</p>
+  <div class="opts">
+    <div class="opt">
+      <h3><b>A</b>One tap per answer <span class="rec">recommended</span></h3>
+      <div class="phone">
+        <div class="card">
+          <div class="rv-top"><b>To sort</b><span class="meta">2 of 5 · Later</span></div>
+          <div class="prog"><i class="d"></i><i class="d"></i><i></i><i></i><i></i></div>
+          <div class="pay"><span class="n">Gamma Bouwmarkt</span><span class="a">−€32<small>,45</small></span></div>
+          <div class="meta">12 Nov · Utrecht</div>
+          <p class="ask">Claude wasn't sure. Which is it?</p>
+          <div class="ch">
+            <div class="c first">Miscellaneous <em>Claude's guess</em><kbd>1</kbd></div>
+            <div class="c">Utilities <kbd>2</kbd></div>
+            <div class="c">Home &amp; garden <kbd>3</kbd></div>
+          </div>
+          <div class="more"><span class="btn">Something else…</span><span class="btn">Split</span><span class="btn">Skip</span></div>
+          <div class="tick"><span class="sw"></span>Remember Gamma for next time</div>
+        </div>
+        <div class="toast"><span>Gamma → Miscellaneous. 1 more like it sorted too.</span><u>Undo</u></div>
+      </div>
+      <p class="why">Tap a choice and it's answered: the card slides away, the bar fills a step, the next one slides in. Keys 1–3, S skips. The last answer closes the card into "All sorted" (as on the Overview).</p>
+    </div>
+    <div class="opt">
+      <h3><b>B</b>Pick, then confirm</h3>
+      <div class="phone">
+        <div class="card">
+          <div class="rv-top"><b>To sort</b><span class="meta">2 of 5</span></div>
+          <div class="pay"><span class="n">Gamma Bouwmarkt</span><span class="a">−€32<small>,45</small></span></div>
+          <div class="meta">12 Nov · Utrecht</div>
+          <div class="chips" style="flex-wrap:wrap;margin-top:12px"><span class="chip on">Miscellaneous</span><span class="chip">Utilities</span><span class="chip">Home &amp; garden</span><span class="chip">Other ▾</span></div>
+          <div class="row" style="margin-top:12px"><span class="btn solid" style="flex:1;justify-content:center">Confirm</span><span class="btn">Skip</span></div>
+          <div class="tick"><i></i>Remember this shop</div>
+        </div>
+      </div>
+      <p class="why">Chips instead of a dropdown, but a Confirm stays: two taps, a little safer against a slip (Undo covers that in A too).</p>
+    </div>
+    <div class="opt">
+      <h3>The end of the queue (A)</h3>
+      <div class="phone">
+        <div class="card sorted">
+          <div class="big">✓</div>
+          <b>All sorted</b>
+          <p class="meta">5 payments answered. They count from now on.</p>
+        </div>
+      </div>
+      <p class="why">Stays a moment, then folds away; the list moves up.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="q">
+  <h2>3 · Trends colours</h2>
+  <p>Today's blue and orange are leftovers that clash with Forest, and orange reads as the amber "watch" status. Both options below pass the colour-blind check (protan and deutan, every pair) on the card in both themes. Unfinished months get stripes instead of paler colour, so no colour means two things.</p>
+  <div class="opts">
+    <div class="opt wide">
+      <h3><b>A</b>Three quiet hues, none a status <span class="rec">recommended</span></h3>
+      <div class="pair">
+        <div class="card" style="--card:#fff">
+          <div class="chart">
+            <div class="col"><i style="height:70px;background:var(--n)"></i><i style="height:14px;background:var(--w)"></i><i style="height:8px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:78px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:74px;background:var(--n)"></i><i style="height:16px;background:var(--w)"></i><i style="height:6px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:72px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col unf"><i style="height:60px;background:var(--n)"></i><i style="height:9px;background:var(--w)"></i></div>
+          </div>
+          <div class="mo"><span>Jul</span><span>Aug</span><span>Sept</span><span>Oct</span><span>Nov</span></div>
+          <div class="lg"><span><i style="background:var(--n)"></i>Needs</span><span><i style="background:var(--w)"></i>Wants</span><span><i style="background:var(--s)"></i>Savings</span></div>
+        </div>
+        <div class="card night" style="background:var(--card);color:var(--ink)">
+          <div class="chart">
+            <div class="col"><i style="height:70px;background:var(--n)"></i><i style="height:14px;background:var(--w)"></i><i style="height:8px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:78px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:74px;background:var(--n)"></i><i style="height:16px;background:var(--w)"></i><i style="height:6px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:72px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col unf"><i style="height:60px;background:var(--n)"></i><i style="height:9px;background:var(--w)"></i></div>
+          </div>
+          <div class="mo"><span>Jul</span><span>Aug</span><span>Sept</span><span>Oct</span><span>Nov</span></div>
+          <div class="lg"><span><i style="background:var(--n)"></i>Needs</span><span><i style="background:var(--w)"></i>Wants</span><span><i style="background:var(--s)"></i>Savings</span></div>
+        </div>
+      </div>
+      <table class="cbtab"><tr><td>Day</td><td><span class="sw2" style="background:#16558c"></span> slate #16558c</td><td><span class="sw2" style="background:#bf7fb9"></span> heather #bf7fb9</td><td><span class="sw2" style="background:#3e7232"></span> moss #3e7232</td><td>worst colour-blind ΔE 18.3 (pass ≥ 8)</td></tr>
+        <tr><td>Night</td><td><span class="sw2" style="background:#5590cc"></span> #5590cc</td><td><span class="sw2" style="background:#82477e"></span> #82477e</td><td><span class="sw2" style="background:#5e9352"></span> #5e9352</td><td>worst colour-blind ΔE 15.2</td></tr></table>
+      <p class="why">Slate, heather, moss: muted, earthy, and far from the amber and red that mean "watch" and "over". The accent green stays for what you tap.</p>
+    </div>
+    <div class="opt wide">
+      <h3><b>B</b>One green, three depths</h3>
+      <div class="pair ramp">
+        <div class="card">
+          <div class="chart">
+            <div class="col"><i style="height:70px;background:var(--n)"></i><i style="height:14px;background:var(--w)"></i><i style="height:8px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:78px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:74px;background:var(--n)"></i><i style="height:16px;background:var(--w)"></i><i style="height:6px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:72px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col unf"><i style="height:60px;background:var(--n)"></i><i style="height:9px;background:var(--w)"></i></div>
+          </div>
+          <div class="mo"><span>Jul</span><span>Aug</span><span>Sept</span><span>Oct</span><span>Nov</span></div>
+          <div class="lg"><span><i style="background:var(--n)"></i>Needs</span><span><i style="background:var(--w)"></i>Wants</span><span><i style="background:var(--s)"></i>Savings</span></div>
+        </div>
+        <div class="card night ramp" style="background:var(--card);color:var(--ink)">
+          <div class="chart">
+            <div class="col"><i style="height:70px;background:var(--n)"></i><i style="height:14px;background:var(--w)"></i><i style="height:8px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:78px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:74px;background:var(--n)"></i><i style="height:16px;background:var(--w)"></i><i style="height:6px;background:var(--s)"></i></div>
+            <div class="col"><i style="height:72px;background:var(--n)"></i><i style="height:12px;background:var(--w)"></i><i style="height:10px;background:var(--s)"></i></div>
+            <div class="col unf"><i style="height:60px;background:var(--n)"></i><i style="height:9px;background:var(--w)"></i></div>
+          </div>
+          <div class="mo"><span>Jul</span><span>Aug</span><span>Sept</span><span>Oct</span><span>Nov</span></div>
+          <div class="lg"><span><i style="background:var(--n)"></i>Needs</span><span><i style="background:var(--w)"></i>Wants</span><span><i style="background:var(--s)"></i>Savings</span></div>
+        </div>
+      </div>
+      <p class="why">Purest to the "colour means status" thesis, but lightness alone separates three kinds, so the pale step is under 2:1 on white and the legend matters more. Green can also read as "under plan".</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="q">
+  <h2>4 · Where "The whole month" goes</h2>
+  <p>Income, spent, saved, net for one financial month. Today it is a fold at the bottom of the Overview; the direction says month totals belong in Money, off the first screen.</p>
+  <div class="opts">
+    <div class="opt">
+      <h3><b>A</b>Top of Trends, for the month shown <span class="rec">recommended</span></h3>
+      <div class="phone">
+        <div class="seg"><span>Payments</span><span class="on">Trends</span></div>
+        <div class="row" style="margin:12px 0 10px"><b style="font-size:15px">24 Oct – 23 Nov</b><span class="sp"></span><span class="ib">‹</span><span class="ib">›</span></div>
+        <div class="card">
+          <p class="sent">€5.500 came in, €2.462 went out. <em>45% of income.</em></p>
+          <dl class="whole" style="margin-top:10px"><div><dt>In</dt><dd>€5.500</dd></div><div><dt>Spent</dt><dd>€2.462</dd></div><div><dt>Saved</dt><dd>€0</dd></div><div><dt>Left</dt><dd>€3.038</dd></div></dl>
+        </div>
+        <div class="card faded" style="margin-top:10px;height:60px"></div>
+      </div>
+      <p class="why">Trends already steps through months; the totals follow the arrows. One sentence and one ledger line, not four tiles. The Overview loses the fold; the printed report keeps its own.</p>
+    </div>
+    <div class="opt">
+      <h3><b>B</b>Above the Payments list, with "This month"</h3>
+      <div class="phone">
+        <div class="seg"><span class="on">Payments</span><span>Trends</span></div>
+        <div style="height:12px"></div>
+        <div class="search">⌕ Search name or amount</div>
+        <div class="chips"><span class="chip on">This month</span><span class="chip">Category ▾</span></div>
+        <div class="card" style="margin-top:10px"><dl class="whole"><div><dt>In</dt><dd>€5.500</dd></div><div><dt>Spent</dt><dd>€2.462</dd></div><div><dt>Saved</dt><dd>€0</dd></div><div><dt>Left</dt><dd>€3.038</dd></div></dl></div>
+      </div>
+      <p class="why">Shows only while "This month" is on. Close to the rows behind the numbers, but only ever the current month and it pushes the list down.</p>
+    </div>
+  </div>
+</section>
+</body>
+</html>

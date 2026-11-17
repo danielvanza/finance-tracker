@@ -65,7 +65,7 @@ export default function Setup() {
   return (
     <>
       <div className="page-head">
-        <h1>Setup</h1>
+        <h1>Plan</h1>
       </div>
       <nav className="setup-jump" aria-label="Jump to a section">
         {SETUP_SECTIONS.map(s => (

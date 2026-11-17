@@ -1,0 +1,48 @@
+{
+  "title": "Forest, bolder",
+  "question": "Still deep green and Geist, now bigger, more colour and more feel. Every variant gets the same feel: numbers count up, buttons press down with a spring, a sorted payment ticks off. Pick one, or steer.",
+  "options": [
+    {
+      "id": "forest-deep",
+      "kind": "grounded",
+      "label": "D · Deep Forest",
+      "lineage": "Forest Card, colour taken all the way",
+      "thesis": "The whole app is green: a dark forest ground, lighter green panels, the number in mint at full size.",
+      "palette": ["#0F3B2C", "#17503C", "#1F5C46", "#B8F2CF", "#F7F3EA", "#FFB25C"],
+      "materials": ["dark green ground", "raised green panels", "mint highlights"],
+      "viewport": "Green everywhere; €1.180 huge in mint; pace line in mint; Needs you as an amber-edged panel; pill tab bar.",
+      "risk": "A lot of one colour; long lists on Money need lighter rows to stay readable.",
+      "html": ".impeccable/mocks/decision/forest-deep.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-tiles",
+      "kind": "grounded",
+      "label": "E · Big Tiles",
+      "lineage": "Forest Card with chunky, tappable blocks",
+      "thesis": "Green hero card, then needs, wants and savings as big coloured tiles with thick rings you want to tap.",
+      "palette": ["#1F5C46", "#B8F2CF", "#FFD8A8", "#D7E3FF", "#F4F6F3", "#16201B"],
+      "materials": ["green hero", "pastel tiles", "thick progress rings"],
+      "viewport": "Green card with the number; three tiles in mint, peach and sky with rings; a sorting card in peach with one big button.",
+      "risk": "Tiles are a common pattern; the rings must carry real numbers, not decoration.",
+      "html": ".impeccable/mocks/decision/forest-tiles.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-stack",
+      "kind": "grounded",
+      "label": "F · Card Stack",
+      "lineage": "Apple Wallet's stacked cards",
+      "thesis": "Cards stacked like a wallet: free-to-spend on top, what needs you peeking out behind it in amber.",
+      "palette": ["#1F5C46", "#E0812B", "#2B4C7E", "#F4F6F3", "#FFFFFF", "#16201B"],
+      "materials": ["stacked coloured cards", "huge numerals", "swipe between cards"],
+      "viewport": "A giant green card with €1.180 at 88px; an amber card behind it reading '3 to sort'; a blue card for still to pay; tabs below.",
+      "risk": "Stacked cards hide content behind a swipe; the top card must answer the question alone.",
+      "html": ".impeccable/mocks/decision/forest-stack.html",
+      "htmlFrame": "390x844"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "steer": true
+}

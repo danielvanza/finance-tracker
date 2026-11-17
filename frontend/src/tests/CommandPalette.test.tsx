@@ -50,7 +50,7 @@ describe('Find places', () => {
     fireEvent.change(box, { target: { value: typed } })
     expect(screen.getByText('Places')).toBeInTheDocument()
     const hit = screen.getByRole('option', { name: new RegExp(label) })
-    expect(hit).toHaveTextContent(/Setup|Month/)
+    expect(hit).toHaveTextContent(/Plan|Overview/)
     fireEvent.click(hit)
     expect(screen.getByTestId('where')).toHaveTextContent(to)
   })

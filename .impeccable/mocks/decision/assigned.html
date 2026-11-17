@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:390px;height:844px;overflow:hidden;font-family:Overpass,system-ui,sans-serif;background:#E7EBF3;color:#0B2A6F;font-variant-numeric:tabular-nums}
+.top{background:#F5C400;padding:14px 16px 0}
+.row{display:flex;justify-content:space-between;align-items:center}
+.brand{font-weight:800;font-size:18px}
+.imp{background:#0B2A6F;color:#fff;border:0;border-radius:6px;font:600 14px Overpass;padding:8px 12px}
+.tabs{display:flex;gap:4px;margin-top:12px}
+.tabs a{flex:1;text-align:center;padding:10px 0;font-weight:600;font-size:15px;color:#0B2A6F;text-decoration:none;border-radius:6px 6px 0 0}
+.tabs a.on{background:#fff}
+.hero{background:#fff;padding:18px 16px 16px}
+.lbl{font-size:13px;font-weight:600;color:#4A5B85}
+.big{font-size:64px;font-weight:800;line-height:1;margin:6px 0 4px;letter-spacing:-.02em}
+.sub{font-size:15px}
+.route{position:relative;margin:22px 4px 6px;height:44px}
+.line{position:absolute;top:14px;left:0;right:0;height:6px;background:#0B2A6F;border-radius:3px}
+.done{position:absolute;top:14px;left:0;width:78%;height:6px;background:#F5C400;border-radius:3px}
+.stop{position:absolute;top:10px;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid #0B2A6F}
+.you{position:absolute;top:4px;left:calc(78% - 12px);width:26px;height:26px;border-radius:50%;background:#0B2A6F;border:4px solid #F5C400}
+.rl{position:absolute;top:32px;font-size:11px;font-weight:600;color:#4A5B85}
+.card{background:#fff;margin:10px 12px 0;border-radius:8px;padding:12px 14px}
+h3{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.need{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #E7EBF3;font-size:15px}
+.need b{font-weight:800}
+.hatch{display:inline-block;width:28px;height:10px;background:repeating-linear-gradient(45deg,#C8102E 0 2px,transparent 2px 5px);vertical-align:middle;margin-right:6px}
+.dep{display:grid;grid-template-columns:54px 1fr auto;gap:8px;padding:8px 0;border-top:1px solid #E7EBF3;font-size:15px}
+.dep.next{background:#0B2A6F;color:#fff;margin:0 -14px;padding:8px 14px;border:0}
+.dep .d{font-weight:800}
+.chat{position:absolute;right:16px;bottom:18px;width:52px;height:52px;border-radius:50%;background:#0B2A6F;color:#F5C400;font-size:22px;display:grid;place-items:center;font-weight:800}
+</style></head><body>
+<div class="top"><div class="row"><span class="brand">Finances</span><button class="imp">Import ↑</button></div>
+<div class="tabs"><a class="on">Overview</a><a>Money</a><a>Plan</a></div></div>
+<div class="hero"><div class="lbl">Free to spend until payday · 24 Oct – 23 Nov</div>
+<div class="big">€1.180</div>
+<div class="sub">€196 a day · 6 days to payday · €84 over pace</div>
+<div class="route"><div class="line"></div><div class="done"></div>
+<div class="stop" style="left:0"></div><div class="stop" style="left:86%"></div><div class="stop" style="left:93%"></div><div class="stop" style="left:calc(100% - 14px)"></div>
+<div class="you"></div>
+<span class="rl" style="left:0">24 Oct</span><span class="rl" style="left:70%">today</span><span class="rl" style="right:0">payday 24 Nov</span></div></div>
+<div class="card"><h3>Needs you</h3>
+<div class="need"><span>3 payments to sort</span><b>Answer ›</b></div>
+<div class="need"><span><i class="hatch"></i>Utilities €13 over</span><b>See ›</b></div></div>
+<div class="card"><h3>Still to pay before payday</h3>
+<div class="dep next"><span class="d">20 Nov</span><span>Ziggo internet</span><span>€62</span></div>
+<div class="dep"><span class="d">22 Nov</span><span>Health insurance</span><span>€284</span></div>
+<div class="dep"><span class="d">23 Nov</span><span>Set aside: car insurance</span><span>€45</span></div></div>
+<div class="card"><h3>Needs · Wants · Savings</h3>
+<div class="need"><span>Needs</span><span>€1.538 of €3.250</span></div>
+<div class="need"><span>Wants</span><span>€1.307 of €2.100</span></div></div>
+<div class="chat">?</div>
+</body></html>

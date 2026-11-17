@@ -1,6 +1,6 @@
-/* Shell. Phone first: a slim clay top row, the page, and the nav as a clay slab along the bottom.
-   Desktop: the side panel is one raised clay card. Pressable things lift a pixel under the
-   pointer and sink when pressed; the current tab is pressed in. */
+/* Shell. Phone first: a top row (Finances, then Find, Add, Import and the way back), the page, and
+   the three places in a floating pill bar along the bottom. Desktop: a white side rail. The current
+   place is a green pill that glides from tab to tab (useTabWell in App.tsx places it). */
 
 .shell {
   min-height: 100svh;
@@ -9,21 +9,17 @@
 .side {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  margin: calc(0.6rem + env(safe-area-inset-top)) max(1.1rem, env(safe-area-inset-right)) 0
+  padding: calc(0.75rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.25rem
     max(1.1rem, env(safe-area-inset-left));
-  padding: 0.5rem 0.75rem 0.5rem 1.25rem;
-  background: var(--card);
-  border-radius: var(--r-row);
-  box-shadow: var(--raise-sm);
 }
 
 .brand {
-  font: italic 400 1.35rem/1 var(--serif);
+  font: 700 1.2rem/1 var(--sans);
+  letter-spacing: -0.025em;
   color: var(--ink);
   text-decoration: none;
-  border-radius: var(--r-chip);
+  border-radius: 6px;
 }
 
 .brand:hover {
@@ -32,36 +28,29 @@
 
 .side .brand:focus-visible,
 .side .back:focus-visible,
-.tabbar a:focus-visible::before {
-  outline: 2px solid var(--shu);
-  outline-offset: 3px;
-}
-
 .tabbar a:focus-visible {
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .content {
   overflow-wrap: anywhere;
-  padding: 0.6rem max(1.1rem, env(safe-area-inset-right)) calc(var(--bar-h) + 2.5rem + env(safe-area-inset-bottom))
-    max(1.1rem, env(safe-area-inset-left));
+  padding: 0.75rem max(1rem, env(safe-area-inset-right)) calc(var(--bar-h) + 2.5rem + env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
 }
 
-/* The way back to the dashboard: a raised clay chip. */
+/* The way back to the dashboard. */
 .back {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   min-height: var(--tap);
   padding: 0 0.8rem;
   border-radius: var(--r-chip);
-  font: 400 0.7rem/1 var(--mono);
-  letter-spacing: 0.12em;
+  font: 500 0.875rem/1 var(--sans);
   white-space: nowrap;
-  color: var(--text);
-  background: var(--raised);
-  box-shadow: var(--raise-sm);
+  color: var(--quiet);
 }
 
 .back:hover {
@@ -69,22 +58,20 @@
   text-decoration: none;
 }
 
+/* Phone: a floating pill bar with the three places. */
 .tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: max(0.75rem, env(safe-area-inset-left));
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
-  justify-content: space-around;
-  gap: 0.2rem;
-  padding: 0 max(0.5rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.5rem, env(safe-area-inset-left));
+  padding: 0.3rem;
   background: var(--card);
-  border-radius: var(--r-row) var(--r-row) 0 0;
-  box-shadow: var(--raise);
+  border-radius: 1.4rem;
+  box-shadow: var(--raise-lg);
 }
 
-/* Each tab is the full height of the bar (an easy target); its clay chip is drawn inside it. */
 .tabbar a {
   position: relative;
   flex: 1;
@@ -92,23 +79,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--bar-h);
-  font: 400 0.6rem/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  min-height: 2.9rem;
+  border-radius: 1.1rem;
+  font: 600 0.9375rem/1 var(--sans);
   white-space: nowrap;
-  color: var(--text);
+  color: var(--quiet);
   text-decoration: none;
-}
-
-.tabbar a::before {
-  content: '';
-  position: absolute;
-  inset: 0.5rem 0.3rem;
-  z-index: 0;
-  border-radius: var(--r-chip);
-  background: var(--raised);
-  box-shadow: var(--raise-sm);
 }
 
 .tabbar a:hover {
@@ -116,76 +92,26 @@
   text-decoration: none;
 }
 
-@media (hover: hover) {
-  .tabbar a:not([aria-current='page']):hover {
-    transform: translateY(-1px);
-  }
-}
-
-/* The current tab: ink label (navigation text keeps 4.5:1), marked with a vermilion underline. */
 .tabbar a[aria-current='page'],
 .tabbar a[aria-current='page']:hover {
-  color: var(--ink);
-  text-decoration: underline 2px var(--shu);
-  text-underline-offset: 0.45em;
+  color: var(--on-accent);
+  transition: color 0.2s var(--ease-out);
+}
+
+/* The current tab's pill, under its label; it waits hidden while the gliding one is on its way. */
+.tabbar a::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: transparent;
 }
 
 .tabbar a[aria-current='page']::before {
-  background: var(--bg);
-  box-shadow: var(--press-sm);
+  background: var(--accent);
 }
 
-@media (max-width: 380px) {
-  .tabbar a {
-    letter-spacing: 0.04em;
-  }
-}
-
-/* With Find and Add beside it the top row is full: the way back keeps its chevron only (every
-   screen under the side panel's). */
-@media (max-width: 1023.98px) {
-  .back {
-    justify-content: center;
-    min-width: var(--tap);
-    padding: 0;
-  }
-
-  .back-label {
-    display: none;
-  }
-}
-
-/* Large text on a phone (about 130% and up): the top row may wrap and the four tabs make two rows
-   of two, so no label overprints another; --bar-h is the slab's height (content and the chat button
-   clear it). */
-@media (max-width: 19em) {
-  .side {
-    flex-wrap: wrap;
-  }
-
-  :root:root {
-    --bar-h: 5.6rem;
-  }
-
-  .tabbar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .tabbar a {
-    height: 2.8rem;
-    letter-spacing: 0.06em;
-  }
-
-  .tabbar a::before {
-    inset: 0.25rem 0.3rem;
-  }
-}
-
-/* Switching tabs: one pressed-in well glides from the old tab to the new one, between the chips
-   and their labels (useTabWell in App.tsx places it). At rest it lies under the current tab, which
-   sits on top (a pressed tab is still scaled while the well arrives) and draws the same pressed
-   chip; that chip waits, hidden, while the well is on its way. */
 .tab-label {
   position: relative;
   z-index: 2;
@@ -200,24 +126,82 @@
   top: 0;
   left: 0;
   z-index: 1;
-  background: var(--bg);
-  box-shadow: var(--press-sm);
+  background: var(--accent);
   pointer-events: none;
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.42s cubic-bezier(0.34, 1.2, 0.64, 1), width 0.3s var(--ease-out);
 }
 
 .tabbar[data-gliding] a[aria-current='page']::before {
   opacity: 0;
 }
 
-/* A new tab's page fades in. */
+/* Large text on a phone: the top row wraps, the bar grows. */
+@media (max-width: 19em) {
+  .side {
+    flex-wrap: wrap;
+  }
+
+  :root:root {
+    --bar-h: 5rem;
+  }
+
+  .tabbar a {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .back {
+    justify-content: center;
+    min-width: var(--tap);
+    padding: 0;
+  }
+
+  .back-label {
+    display: none;
+  }
+}
+
+/* Money's two views. */
+.subnav {
+  display: inline-flex;
+  gap: 0.2rem;
+  margin-bottom: 1.1rem;
+  padding: 0.25rem;
+  background: var(--sunk);
+  border-radius: var(--r-chip);
+}
+
+.subnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.95rem;
+  border-radius: 9px;
+  font: 600 0.875rem/1 var(--sans);
+  color: var(--quiet);
+}
+
+.subnav a:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.subnav a[aria-current='page'] {
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: 0 1px 2px var(--shade), 0 0 0 1px var(--hair);
+}
+
+/* A new page fades and rises in a little. */
 .content {
-  animation: page-in 0.18s ease-out backwards;
+  animation: page-in 0.32s var(--ease-out) backwards;
 }
 
 @keyframes page-in {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
 }
 
@@ -231,8 +215,7 @@
   }
 }
 
-/* Desktop: the side panel is one raised clay card. */
-
+/* Desktop: a white side rail with the places, Import, Find and Add. */
 @media (min-width: 1024px) {
   .shell {
     display: grid;
@@ -241,29 +224,26 @@
 
   .side {
     position: sticky;
-    top: 1.2rem;
-    height: calc(100svh - 2.4rem);
-    margin: 1.2rem 0 1.2rem 1.2rem;
+    top: 0;
+    height: 100svh;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 1.4rem;
-    padding: 2.1rem 1.1rem 1.6rem;
+    gap: 1rem;
+    padding: 1.75rem 1rem 1.25rem;
     overflow-y: auto;
-    border-radius: var(--r-card);
-    box-shadow: var(--raise-lg);
+    background: var(--card);
+    box-shadow: 1px 0 0 var(--hair);
   }
 
-  /* One left edge: the brand sits on the tab labels, the way back on the tab chips, and the
-     way back rests at the foot of the panel. */
-  /* At large text the panel scrolls inside, its rows keep their size. */
   .side > * {
     flex-shrink: 0;
   }
 
   .side > .brand {
     align-self: flex-start;
-    margin-left: 0.8rem;
+    margin: 0 0 0.5rem 0.75rem;
+    font-size: 1.35rem;
   }
 
   .side > .back {
@@ -272,17 +252,13 @@
     margin-top: auto;
   }
 
-  .brand {
-    font-size: 1.6rem;
-  }
-
-  /* The tabs are raised clay rows in the card; the current one is pressed in. */
   .tabbar {
     position: relative;
+    inset: auto;
     isolation: isolate;
     order: 2;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.2rem;
     padding: 0;
     background: none;
     border-radius: 0;
@@ -290,35 +266,26 @@
   }
 
   .tabbar a {
-    height: auto;
-    min-height: var(--tap);
     justify-content: flex-start;
-    padding: 0.8rem;
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
-  }
-
-  .tabbar a::before {
-    inset: 0;
-    border-radius: var(--r-row);
+    min-height: var(--tap);
+    padding: 0 0.85rem;
+    border-radius: var(--r-chip);
+    font-size: 0.95rem;
   }
 
   .content {
-    padding: 2.4rem 3.5rem 4rem;
-    max-width: 92rem;
+    padding: 2.25rem 3rem 4rem;
+    max-width: 84rem;
   }
 }
 
-/* Wide screens: the pages use the width. */
 @media (min-width: 1600px) {
   .content {
-    max-width: none;
+    padding-inline: 4rem;
   }
 }
 
-
-/* The day/night switch: colours and shadows fade in place (about 0.7 s). The class is only on
-   while switching, so it never slows other transitions down. Nothing covers the page. */
+/* The day/night switch: colours fade in place (about 0.7 s), only while switching. */
 html.theme-fading,
 html.theme-fading *,
 html.theme-fading *::before,
@@ -331,5 +298,40 @@ html.theme-fading *::after {
   html.theme-fading,
   html.theme-fading * {
     transition: none !important;
+  }
+}
+
+/* Phone: the chat button rides at the end of the tab bar, the same height, so it never covers a row. */
+@media (max-width: 1023.98px) {
+  :root:root {
+    --chat-fab: 3.5rem;
+    --chat-fab-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .tabbar {
+    right: calc(max(0.75rem, env(safe-area-inset-right)) + var(--chat-fab) + 0.5rem);
+  }
+
+  .shell .chat-fab {
+    right: max(0.75rem, env(safe-area-inset-right));
+    box-shadow: var(--raise-lg);
+  }
+}
+
+/* Desktop: Import is the rail's one solid button; the current place is a soft green row. The
+   chat button keeps a lane of its own at the right. */
+@media (min-width: 1024px) {
+  .tab-well,
+  .tabbar a[aria-current='page']::before {
+    background: var(--accent-soft);
+  }
+
+  .tabbar a[aria-current='page'],
+  .tabbar a[aria-current='page']:hover {
+    color: var(--accent);
+  }
+
+  .shell .content {
+    padding-right: calc(1.5rem + var(--chat-fab) + 1.25rem);
   }
 }

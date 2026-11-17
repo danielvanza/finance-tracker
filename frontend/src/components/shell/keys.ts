@@ -1,9 +1,9 @@
 /** The pages the palette and the "g then letter" jumps reach. */
 export const PAGES = [
-  { to: '/', label: 'Month', key: 'm' },
-  { to: '/transactions', label: 'Transactions', key: 't' },
+  { to: '/', label: 'Overview', key: 'o' },
+  { to: '/transactions', label: 'Money', key: 'm' },
   { to: '/trends', label: 'Trends', key: 'r' },
-  { to: '/setup', label: 'Setup', key: 's' },
+  { to: '/setup', label: 'Plan', key: 'p' },
   { to: '/import', label: 'Import', key: 'i' },
 ]
 
@@ -13,17 +13,17 @@ export const PAGES = [
  * Recurring payments and Savings goals are sheets that hide when empty, so they lead to their page.
  */
 export const PLACES = [
-  { label: 'Budget plan', sub: 'Setup · Budget', to: '/setup#budget', words: 'plan planned amounts month ahead next' },
-  { label: 'Rules', sub: 'Setup · Rules', to: '/setup#rules', words: 'rule pattern shop sort' },
-  { label: 'Categories', sub: 'Setup · Categories', to: '/setup#categories', words: 'category needs wants savings' },
-  { label: 'Set-asides', sub: 'Setup · Set-asides', to: '/setup#set-asides', words: 'set aside bills yearly' },
-  { label: 'Target split', sub: 'Setup · Target split', to: '/setup#target-split', words: 'aim 50/30/20 needs wants savings percent' },
-  { label: 'Your own accounts', sub: 'Setup · Your own accounts', to: '/setup#own-accounts', words: 'personal names own' },
-  { label: 'Financial month start day', sub: 'Setup · Settings', to: '/setup#month-start', words: 'payday salary period' },
-  { label: 'Your data', sub: 'Setup · Your data', to: '/setup#your-data', words: 'export download csv backup' },
-  { label: 'Month report', sub: 'Month · Report', to: '/report', words: 'summary print pdf' },
-  { label: 'Recurring payments', sub: 'Month · Recurring', to: '/', words: 'subscriptions regular bills' },
-  { label: 'Savings goals', sub: 'Trends · Savings goals', to: '/trends', words: 'goal target saving' },
+  { label: 'Budget plan', sub: 'Plan · Budget', to: '/setup#budget', words: 'plan planned amounts month ahead next' },
+  { label: 'Rules', sub: 'Plan · Rules', to: '/setup#rules', words: 'rule pattern shop sort' },
+  { label: 'Categories', sub: 'Plan · Categories', to: '/setup#categories', words: 'category needs wants savings' },
+  { label: 'Set-asides', sub: 'Plan · Set-asides', to: '/setup#set-asides', words: 'set aside bills yearly' },
+  { label: 'Target split', sub: 'Plan · Target split', to: '/setup#target-split', words: 'aim 50/30/20 needs wants savings percent' },
+  { label: 'Your own accounts', sub: 'Plan · Your own accounts', to: '/setup#own-accounts', words: 'personal names own' },
+  { label: 'Financial month start day', sub: 'Plan · Settings', to: '/setup#month-start', words: 'payday salary period' },
+  { label: 'Your data', sub: 'Plan · Your data', to: '/setup#your-data', words: 'export download csv backup' },
+  { label: 'Month report', sub: 'Overview · Report', to: '/report', words: 'summary print pdf' },
+  { label: 'Recurring payments', sub: 'Overview · Recurring', to: '/', words: 'subscriptions regular bills' },
+  { label: 'Savings goals', sub: 'Money · Trends', to: '/trends', words: 'goal target saving' },
 ]
 
 export const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform) ? '⌘' : 'Ctrl'

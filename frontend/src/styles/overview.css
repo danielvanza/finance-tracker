@@ -1,0 +1,608 @@
+/* Overview: the hero (free to spend, the pace line), then Needs you and Still to pay, then needs /
+   wants / savings, then the folds with every category and the whole month. Phone: one column.
+   Desktop: the hero and the groups on the left, Needs you and Still to pay beside them. */
+
+.ov-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.ov-period {
+  font: 500 0.875rem/1.3 var(--sans);
+  color: var(--quiet);
+}
+
+.ov-nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn-icon {
+  width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border-radius: 999px;
+}
+
+@media (pointer: coarse) {
+  .btn-icon {
+    width: var(--tap);
+    min-height: var(--tap);
+  }
+}
+
+.ov {
+  display: grid;
+  gap: 0.875rem;
+  transition: opacity 0.2s;
+}
+
+.ov.is-loading {
+  opacity: 0.55;
+}
+
+/* The hero sits on the ground, not in a card: it is the page. */
+.ov-hero {
+  padding: 0.5rem 0.125rem 0.25rem;
+}
+
+.ov-label {
+  font: 500 0.95rem/1.3 var(--sans);
+  color: var(--quiet);
+}
+
+.ov-figure {
+  margin: 0.35rem 0 0.4rem;
+  font: 650 3.5rem/1 var(--sans);
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
+.ov-figure.is-over {
+  color: var(--over);
+}
+
+.amount {
+  display: inline-flex;
+  align-items: flex-start;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount small {
+  font-size: 0.52em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--quiet);
+}
+
+.ov-figure.is-over .amount small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.amount small:first-child {
+  margin-right: 0.08em;
+}
+
+.ov-sub {
+  font-size: 1rem;
+  color: var(--text);
+  text-wrap: pretty;
+}
+
+.ov-sub a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ov-note {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--quiet);
+}
+
+.ov-unknown {
+  font: 650 2.25rem/1.1 var(--sans);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.5rem;
+}
+
+.ov-cta {
+  margin-top: 1.1rem;
+}
+
+/* The pace line. */
+.ov-hero .pace {
+  margin-top: 1.4rem;
+}
+
+.pace-plot {
+  height: 7.5rem;
+}
+
+.pace-plot svg {
+  animation: pace-draw 1s var(--ease-out) 0.1s backwards;
+}
+
+@keyframes pace-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.pace-plan {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+  opacity: 0.8;
+}
+
+.pace-spent {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.pace-fade-top {
+  stop-color: var(--accent);
+  stop-opacity: 0.2;
+}
+
+.pace-fade-end {
+  stop-color: var(--accent);
+  stop-opacity: 0;
+}
+
+.pace-now,
+[data-theme='night'] .pace-now {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: -0.475rem 0 0 -0.475rem;
+  background: var(--watch);
+  box-shadow: 0 0 0 3px var(--bg), 0 2px 6px var(--shade-lg);
+  animation: pace-pop 0.5s var(--ease-out) 0.9s backwards;
+}
+
+[data-theme='night'] .pace-now {
+  box-shadow: 0 0 0 3px var(--bg), 0 0 12px color-mix(in srgb, var(--watch) 55%, transparent);
+}
+
+.pace-now.is-open,
+[data-theme='night'] .pace-now.is-open {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 2px var(--quiet), 0 0 0 3px var(--bg);
+}
+
+.pace-pill {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, calc(-100% - 0.85rem));
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font: 600 0.8rem/1.2 var(--sans);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: pace-pop 0.5s var(--ease-out) 1s backwards;
+}
+
+.pace-pill[style*='right'] {
+  transform: translate(50%, calc(-100% - 0.85rem));
+}
+
+.pace-pill.is-over {
+  color: var(--watch-ink);
+  background: var(--watch-soft);
+}
+
+.pace-pill.is-under {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@keyframes pace-pop {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+.pace-tip {
+  background: var(--card);
+  box-shadow: var(--float-pop);
+}
+
+.pace-cross {
+  background: var(--hair);
+}
+
+/* Cards: Needs you, Still to pay, the groups, the folds. */
+.ov-card,
+.ov-fold {
+  padding: 0.35rem 1rem 0.5rem;
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--raise);
+}
+
+.ov-card > h2,
+.ov-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0 0.35rem;
+  font: 600 0.95rem/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.ov-card-head span {
+  font-weight: 500;
+  color: var(--quiet);
+}
+
+.ov-list {
+  list-style: none;
+}
+
+.ov-list > li + li {
+  border-top: 1px solid var(--hair);
+}
+
+.ov-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0.55rem 0;
+  margin: 0 -0.5rem;
+  padding-inline: 0.5rem;
+  border-radius: var(--r-chip);
+  color: var(--ink);
+}
+
+li.ov-row {
+  margin: 0;
+  padding-inline: 0;
+}
+
+a.ov-row:hover {
+  text-decoration: none;
+  background: var(--press-tint);
+}
+
+.ov-row-text {
+  flex: 1;
+  min-width: 0;
+  font: 500 0.95rem/1.3 var(--sans);
+}
+
+.ov-row-text small {
+  display: block;
+  margin-top: 0.1rem;
+  font: 400 0.84rem/1.35 var(--sans);
+  color: var(--quiet);
+}
+
+.ov-chev {
+  flex: none;
+  color: var(--muted);
+}
+
+.ov-amt {
+  font: 500 0.95rem/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.ov-icon,
+.ov-date {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 11px;
+  color: var(--text);
+  background: var(--sunk);
+}
+
+.ov-icon.is-watch {
+  color: var(--watch-ink);
+  background: var(--watch-soft);
+}
+
+.ov-icon.is-over {
+  color: var(--over);
+  background: var(--over-soft);
+}
+
+.ov-icon.is-ok {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ov-date {
+  align-content: center;
+  gap: 0.05rem;
+  font: 500 0.66rem/1 var(--sans);
+  color: var(--quiet);
+}
+
+.ov-date b {
+  font: 650 0.95rem/1 var(--sans);
+  color: var(--ink);
+}
+
+.ov-sorted {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  font: 600 0.95rem/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.ov-sorted .ov-icon {
+  animation: pace-pop 0.5s var(--ease-out) backwards;
+}
+
+.ov-empty {
+  padding: 0.5rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--quiet);
+}
+
+/* Needs, wants and savings. */
+.ov-group-list {
+  list-style: none;
+  padding-bottom: 0.4rem;
+}
+
+.ov-group {
+  padding: 0.7rem 0 0.6rem;
+}
+
+.ov-group + .ov-group {
+  border-top: 1px solid var(--hair);
+}
+
+.ov-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ov-group-name {
+  font: 600 0.95rem/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.ov-group-left {
+  font: 600 0.95rem/1.3 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.ov-group-left.is-over {
+  color: var(--over);
+}
+
+.ov-group-of {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--quiet);
+}
+
+.ov-meter {
+  position: relative;
+  display: block;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--sunk);
+}
+
+.ov-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: bar-grow 0.9s var(--ease-out) 0.15s backwards;
+  transform-origin: left;
+}
+
+.ov-meter.is-watch i {
+  background: var(--watch);
+}
+
+.ov-meter.is-over i {
+  background: repeating-linear-gradient(-45deg, var(--over) 0 6px, color-mix(in srgb, var(--over) 78%, var(--card)) 6px 9px);
+}
+
+.ov-meter b {
+  position: absolute;
+  top: -0.25rem;
+  bottom: -0.25rem;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink);
+  opacity: 0.55;
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.ov-looks {
+  list-style: none;
+  margin-top: 0.5rem;
+}
+
+.ov-looks a {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--sunk);
+}
+
+.ov-looks li + li {
+  margin-top: 0.3rem;
+}
+
+.ov-looks a:hover {
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.ov-look-note {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-look-note.is-over {
+  color: var(--over);
+}
+
+.ov-look-note.is-watch {
+  color: var(--watch-ink);
+}
+
+/* How it is worked out: a quiet disclosure under the hero. */
+.ov-how {
+  margin-top: 0.9rem;
+}
+
+.ov-how > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font: 600 0.875rem/1 var(--sans);
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.ov-how > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ov-how .ledger {
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--raise);
+}
+
+/* The folds: every category, the whole month. */
+.ov-more {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.ov-fold > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.25rem;
+  font: 600 0.95rem/1.3 var(--sans);
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.ov-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ov-fold > summary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.3s var(--ease-out);
+}
+
+.ov-fold[open] > summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+
+.ov-fold[open] {
+  padding-bottom: 1rem;
+}
+
+.gap-list > h2 {
+  padding: 0.65rem 0 0.35rem;
+  font: 600 0.95rem/1.3 var(--sans);
+}
+
+@media (min-width: 1024px) {
+  .ov {
+    grid-template-columns: minmax(0, 1.55fr) minmax(19rem, 1fr);
+    grid-template-areas:
+      'hero side'
+      'main side'
+      'more more';
+    align-items: start;
+    gap: 1.25rem 2.25rem;
+  }
+
+  .ov-hero {
+    grid-area: hero;
+  }
+
+  .ov-side {
+    grid-area: side;
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .ov-main {
+    grid-area: main;
+  }
+
+  .ov-more {
+    grid-area: more;
+  }
+
+  .ov-figure {
+    font-size: 4.5rem;
+  }
+
+  .pace-plot {
+    height: 10rem;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .ov-side {
+    display: grid;
+    gap: 0.875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pace-plot svg,
+  .pace-now,
+  .pace-pill,
+  .ov-meter i,
+  .ov-sorted .ov-icon {
+    animation: none;
+  }
+}

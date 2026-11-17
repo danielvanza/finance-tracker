@@ -1,4 +1,5 @@
-import { Plus, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Search, Upload } from 'lucide-react'
 import { MOD } from './keys'
 import './shell-entries.css'
 
@@ -33,5 +34,20 @@ export function AddRow({ onOpen }: { onOpen: () => void }) {
       <span>Add transaction</span>
       <kbd className="kbd">N</kbd>
     </button>
+  )
+}
+
+/** Import, from every page: an icon chip in the phone's top row, the primary button in the desktop side panel. */
+export function ImportEntries() {
+  return (
+    <>
+      <Link to="/import" className="import-chip" aria-label="Import a bank file">
+        <Upload size={18} aria-hidden="true" />
+      </Link>
+      <Link to="/import" className="btn btn-primary import-row">
+        <Upload size={16} aria-hidden="true" />
+        <span>Import bank file</span>
+      </Link>
+    </>
   )
 }

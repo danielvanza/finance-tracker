@@ -11,7 +11,7 @@ function fadeTo(theme: Theme) {
   window.setTimeout(() => root.classList.remove('theme-fading'), FADE_MS + 100)
 }
 
-/** Follows the sun like the dashboard, and a flip made there: at /finances both apps share one localStorage. */
+/** Follows the device's light / dark setting; a flip from Find holds until the next sunrise or sunset. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => Date.now())
   const applied = useRef(false)
@@ -21,7 +21,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(tick, 30_000)
     document.addEventListener('visibilitychange', tick)
     window.addEventListener('storage', tick)
+    const scheme = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null
+    scheme?.addEventListener('change', tick)
     return () => {
+      scheme?.removeEventListener('change', tick)
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', tick)
       window.removeEventListener('storage', tick)

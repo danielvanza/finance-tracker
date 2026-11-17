@@ -50,21 +50,19 @@ const show = (pace: Pace) => {
 describe('Month', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leads with the money left, and compares spending with the plan beside it', async () => {
+  it('leads with how the month stands against the plan, and lists what needs you', async () => {
     show(okPace)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Left to spend€3.265' })).toBeInTheDocument()
-    expect(screen.getByText('Against the plan')).toBeInTheDocument()
-    expect(screen.getByText('€1.725 under')).toBeInTheDocument()
-    expect(screen.getByText('spent €2.115 of €3.840')).toBeInTheDocument()
-    expect(screen.getByText('14 transactions to review').closest('a')).toHaveAttribute('href', '/transactions')
-    expect(screen.queryByRole('link', { name: 'Bring in bank files' })).toBeNull()
+    expect(await screen.findByRole('heading', { level: 1, name: '€1.725,00' })).toBeInTheDocument()
+    expect(screen.getByText('Under the plan')).toBeInTheDocument()
+    expect(screen.getByText('Spent €2.115 of €3.840 planned.')).toBeInTheDocument()
+    expect(screen.getByText('14 payments to sort').closest('a')).toHaveAttribute('href', '/transactions?review=1')
+    expect(screen.queryByRole('link', { name: 'Import a bank file' })).toBeNull()
   })
 
-  it('keeps the month report one tap away, under the review row, whatever the status', async () => {
+  it('keeps the month report one tap away', async () => {
     show(okPace)
     const report = await screen.findByRole('link', { name: 'Month report' })
     expect(report).toHaveAttribute('href', '/report?month=2026-11')
-    expect(screen.getByText('14 transactions to review').closest('a')?.parentElement).toBe(report.parentElement)
   })
 
   it('offers the month report with no review row and no bank files', async () => {
@@ -83,7 +81,7 @@ describe('Month', () => {
 
   it('says how far the files reach when they stop short of yesterday', async () => {
     show({ ...okPace, daily: okPace.daily.slice(0, 1), data_through: '2026-10-24' })
-    expect(await screen.findByText('Bank files run to 24 Oct.')).toBeInTheDocument()
+    expect(await screen.findByText('Bank data runs to 24 Oct.')).toBeInTheDocument()
   })
 
   it('does not guess after a gap: it names the gap and offers the import', async () => {
@@ -94,8 +92,7 @@ describe('Month', () => {
     })
     expect(await screen.findByRole('heading', { level: 1, name: "Can't tell yet" })).toBeInTheDocument()
     expect(screen.getByText(/stops on 12 Aug/)).toBeInTheDocument()
-    expect(screen.getByText(/Money left, the average day and the month end show once files reach this month/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Bring in bank files' })).toHaveAttribute('href', '/import')
+    expect(screen.getByRole('link', { name: 'Import a bank file' })).toHaveAttribute('href', '/import')
     expect(screen.getByText('4 months')).toBeInTheDocument()
     expect(screen.queryByText(/ left$/)).toBeNull()
   })

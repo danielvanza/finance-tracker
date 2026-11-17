@@ -1,0 +1,48 @@
+{
+  "title": "Forest, built on what the best apps do",
+  "question": "Each applies the research: one hero number with small cents, colour only for status, a pill at today on the pace line, familiar rows. They differ in light, dark, and how the top is framed.",
+  "options": [
+    {
+      "id": "forest-light",
+      "kind": "grounded",
+      "label": "G · Forest Light",
+      "lineage": "Copilot Money and Apple's grouped screens",
+      "thesis": "Sage-grey ground, white cards, deep green only for what you tap; the pace line carries a pill at today.",
+      "palette": ["#EEF1EC", "#FFFFFF", "#1B2420", "#1F6F5C", "#2E9E5B", "#D9902B", "#D2453B"],
+      "materials": ["tinted ground", "white cards with hairline", "area fill fading out"],
+      "viewport": "Free to spend €1.180 with small cents, per-day line; pace line with '€84 over' pill at today; Needs you rows with icons; Still to pay; groups as three slim bars.",
+      "risk": "Closest to Copilot; its own character rests on the green and the feel.",
+      "html": ".impeccable/mocks/decision/forest-light.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-night",
+      "kind": "grounded",
+      "label": "H · Forest Night",
+      "lineage": "bunq and Copilot's dark modes, warm, no neon",
+      "thesis": "The same screen in deep green-black; mint for the line, amber for today.",
+      "palette": ["#111814", "#1A231E", "#ECEAE4", "#7FD8A8", "#E8B04B", "#F07167"],
+      "materials": ["green-black ground", "cards with a faint top highlight", "glowing dot only at today"],
+      "viewport": "Same layout as G, dark: number in warm white, mint pace line, amber dot and pill at today.",
+      "risk": "Dark money apps drift toward the neon look; it stays warm only if glow is kept to the one dot.",
+      "html": ".impeccable/mocks/decision/forest-night.html",
+      "htmlFrame": "390x844"
+    },
+    {
+      "id": "forest-wash",
+      "kind": "grounded",
+      "label": "I · Forest Wash",
+      "lineage": "Copilot's coloured top fading into the page",
+      "thesis": "A soft green wash behind the number and line, fading into the page; centred number; groups as three rings.",
+      "palette": ["#CFE8DA", "#EEF1EC", "#FFFFFF", "#1B2420", "#1F6F5C", "#D9902B"],
+      "materials": ["green wash fading down", "centred hero", "three thin rings"],
+      "viewport": "Centred €1.180 on a green wash, pace line across the full width, three rings for needs/wants/savings, then Needs you and Still to pay.",
+      "risk": "The wash is a gradient on chrome; it must stay one soft colour, or it tips into the AI look.",
+      "html": ".impeccable/mocks/decision/forest-wash.html",
+      "htmlFrame": "390x844"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "steer": true
+}

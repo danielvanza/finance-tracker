@@ -140,7 +140,7 @@ export default function Import() {
     <>
       <Link to="/" className="btn import-back">
         <ChevronLeft size={16} aria-hidden="true" />
-        Back to Month
+        Back to Overview
       </Link>
 
       <div className="page-head">

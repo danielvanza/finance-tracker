@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:390px;height:844px;overflow:hidden;font-family:Geist,system-ui,sans-serif;background:#F4F6F3;color:#16201B;font-variant-numeric:tabular-nums;position:relative}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
+.brand{font-weight:800;font-size:20px;letter-spacing:-.02em}
+.imp{border:0;background:#16201B;color:#fff;border-radius:14px;padding:10px 15px;font:700 14px Geist}
+.hero{margin:0 14px;background:#1F5C46;color:#fff;border-radius:26px;padding:20px 20px 18px}
+.lbl{font-size:14px;opacity:.8}
+.big{font-size:72px;font-weight:800;letter-spacing:-.055em;line-height:1;margin:8px 0;color:#B8F2CF}
+.sub{font-size:15px}
+.pill{display:inline-block;background:#FFD8A8;color:#16201B;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700;margin-left:4px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 14px 0}
+.t{border-radius:22px;padding:14px 10px;text-align:center}
+.ring{width:64px;height:64px;margin:0 auto 8px}
+.t b{display:block;font-size:18px;font-weight:800;letter-spacing:-.03em}
+.t span{font-size:12px;font-weight:600}
+.sort{margin:12px 14px 0;background:#FFD8A8;border-radius:24px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center}
+.sort b{font-size:20px;font-weight:800;display:block}
+.sort span{font-size:14px}
+.btn{background:#16201B;color:#fff;border-radius:16px;padding:13px 18px;font-weight:700;font-size:15px}
+.p{background:#fff;margin:12px 14px 0;border-radius:22px;padding:10px 16px}
+.r{display:flex;justify-content:space-between;padding:8px 0;font-size:15px}
+.tabs{position:absolute;left:14px;right:14px;bottom:14px;background:#16201B;border-radius:22px;display:flex;padding:6px}
+.tabs a{flex:1;text-align:center;font-size:14px;font-weight:600;padding:11px 0;border-radius:16px;color:#A9B5AE}
+.tabs a.on{background:#B8F2CF;color:#16201B}
+</style></head><body>
+<div class="nav"><span class="brand">Finances</span><button class="imp">Import</button></div>
+<div class="hero"><div class="lbl">Free to spend until payday</div><div class="big">€1.180</div><div class="sub">€196 a day · 6 days left <span class="pill">€84 over pace</span></div></div>
+<div class="tiles">
+<div class="t" style="background:#D7E3FF"><svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" stroke="#fff" stroke-width="9" fill="none"/><circle cx="32" cy="32" r="26" stroke="#16201B" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="77 163" transform="rotate(-90 32 32)"/></svg><b>€1.712</b><span>Needs left</span></div>
+<div class="t" style="background:#B8F2CF"><svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" stroke="#fff" stroke-width="9" fill="none"/><circle cx="32" cy="32" r="26" stroke="#16201B" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="101 163" transform="rotate(-90 32 32)"/></svg><b>€793</b><span>Wants left</span></div>
+<div class="t" style="background:#FFF1C9"><svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" stroke="#fff" stroke-width="9" fill="none"/><circle cx="32" cy="32" r="26" stroke="#16201B" stroke-width="9" fill="none" stroke-linecap="round" stroke-dasharray="103 163" transform="rotate(-90 32 32)"/></svg><b>€150</b><span>Savings to go</span></div></div>
+<div class="sort"><div><b>3 to sort</b><span>Claude wasn't sure</span></div><span class="btn">Answer</span></div>
+<div class="p"><div class="r"><span>Ziggo · Thu 20 Nov</span><span>€62</span></div><div class="r"><span>Health insurance · Sat 22</span><span>€284</span></div></div>
+<div class="tabs"><a class="on">Overview</a><a>Money</a><a>Plan</a></div>
+</body></html>

@@ -6,7 +6,10 @@ import { api } from '../api'
 import { dayLabel } from '../dates'
 import { formatCents, formatEuros } from '../money'
 import type { FreeToSpend, Pace } from '../types'
-import ImportLink from '../components/ImportLink'
+import { Amount } from './overview/Amount'
+import NeedsYou from './overview/NeedsYou'
+import StillToPay from './overview/StillToPay'
+import Groups from './overview/Groups'
 import { aimsOf } from '../components/budget/plan'
 import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
 import RecurringLink from '../components/recurring/RecurringLink'
@@ -22,19 +25,6 @@ function shiftMonth(label: string, by: number) {
   const [y, m] = label.split('-').map(Number)
   const d = new Date(y, m - 1 + by, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-const UNSURE = "Can't tell yet"
-
-/** One of the figures in the top panel. A figure that cannot be said reads "Can't tell yet" and says when. */
-function Cell({ label, figure, note, unsure }: { label: string; figure: string; note: string; unsure?: boolean }) {
-  return (
-    <div className={`cell${unsure ? ' is-unsure' : ''}`}>
-      <span className="lab">{label}</span>
-      <b>{unsure ? UNSURE : figure}</b>
-      <small>{note}</small>
-    </div>
-  )
 }
 
 const eurosOrShort = (cents: number) => (cents < 0 ? `${formatEuros(-cents)} short` : formatEuros(cents))
@@ -74,7 +64,7 @@ function Ledger({ free, end, daysToPayday }: { free: FreeToSpend; end: string; d
   )
   const days = free.days_ahead
   return (
-    <details className="free-how how-ledger">
+    <details className="ov-how">
       <summary>How this is worked out</summary>
       <div className="ledger">
         <h3>Left to spend</h3>
@@ -130,12 +120,13 @@ function Ledger({ free, end, daysToPayday }: { free: FreeToSpend; end: string; d
   )
 }
 
-function Verdict({ p }: { p: Pace }) {
+/** The headline: what is free until payday, or what the month came to, or why it can't be said yet. */
+function Hero({ p }: { p: Pace }) {
   if (p.status === 'empty') {
     return (
-      <div className="verdict">
-        <h1 className="is-unknown">No bank files yet</h1>
-        <p>Bring in a file from a bank to see how the month is going.</p>
+      <div className="ov-hero-text">
+        <h1 className="ov-unknown">No bank files yet</h1>
+        <p className="ov-sub">Import a file from ING to see what is free to spend until payday.</p>
       </div>
     )
   }
@@ -143,77 +134,45 @@ function Verdict({ p }: { p: Pace }) {
     const last = p.last_import_by_bank.map(b => b.last_date).filter(Boolean).sort().pop()
     const current = p.month === p.current_month
     return (
-      <div className="verdict">
-        <h1 className="is-unknown">Can't tell yet</h1>
-        <p>{current
-          ? `The last bank file stops on ${dayLabel(last!)}, so this month has no bank transactions in it.`
+      <div className="ov-hero-text">
+        <h1 className="ov-unknown">Can't tell yet</h1>
+        <p className="ov-sub">{current
+          ? `The last bank file stops on ${dayLabel(last!)}, so this month has no payments in it yet.`
           : 'No bank files reach this month.'}</p>
-        {current && <p className="verdict-caveat">Money left, the average day and the month end show once files reach this month.</p>}
       </div>
     )
   }
   if (p.spendable_plan_cents === 0) {
     return (
-      <div className="verdict">
-        <h1>{formatEuros(p.spendable_actual_cents)} spent</h1>
-        <p>No budget is set for this month yet.</p>
+      <div className="ov-hero-text">
+        <p className="ov-label">Spent this month</p>
+        <h1 className="ov-figure"><Amount cents={p.spendable_actual_cents} count /></h1>
+        <p className="ov-sub">No budget is set for this month yet. <Link to="/setup#budget">Set one in Plan</Link></p>
       </div>
     )
   }
-  const caveats = (
-    <>
-      {p.to_review_in_month > 0 && (
-        <p className="verdict-caveat">
-          {p.to_review_in_month} payment{p.to_review_in_month === 1 ? '' : 's'} this month still wait{p.to_review_in_month === 1 ? 's' : ''} for an answer and {p.to_review_in_month === 1 ? 'is' : 'are'} not counted.{' '}
-          <Link to="/transactions" className="verdict-go">Answer {p.to_review_in_month === 1 ? 'it' : 'them'}</Link>
-        </p>
-      )}
-      {p.day_number !== null && p.daily.length < p.day_number - 1 && (
-        <p className="verdict-caveat">Bank files run to {dayLabel(p.data_through!)}.</p>
-      )}
-    </>
-  )
-  const end = dayLabel(p.end_date)
   if (p.free) {
     const f = p.free
-    const early = f.avg_day_cents === null
-    const why = p.day_number !== null && p.day_number <= 5 ? 'shows after day 5' : 'no ordinary day yet'
-    const inBudget = f.free_cents > 0 ? f.per_day_cents! : null
+    const days = p.days_left! + 1
+    const over = f.free_cents < 0
     return (
-      <div className="verdict">
-        <p className="verdict-sub">{f.still_to_come_cents > 0 ? `After ${formatEuros(f.still_to_come_cents)} still to come, until payday, ${end}` : `Until payday, ${end}`}</p>
-        <div className="panel four">
-          <div className="cell">
-            <h1><span className="lab">Left to spend</span><span className="fig">{eurosOrShort(f.cash_left_cents)}</span></h1>
-            <small>money in less money out</small>
-          </div>
-          <Cell label="Average day" figure={formatEuros(f.avg_day_cents ?? 0)} note={early ? why : 'ordinary days so far'} unsure={early} />
-          <Cell label="If it goes on" figure={eurosOrShort(f.month_end_cents ?? 0)}
-            note={f.month_end_cents !== null && f.month_end_cents < 0 ? `short on ${end}` : early ? why : `left on ${end}`} unsure={f.month_end_cents === null} />
-          <Cell label="To stay in budget"
-            figure={inBudget !== null ? formatEuros(inBudget) : f.free_cents < 0 ? `${formatEuros(-f.free_cents)} over` : formatEuros(0)}
-            note={inBudget !== null ? `a day, for ${p.days_left! + 1} days` : 'plan used up'} />
-        </div>
-        {caveats}
-        <Ledger free={f} end={p.end_date} daysToPayday={p.days_left! + 1} />
+      <div className="ov-hero-text">
+        <p className="ov-label">{over ? 'Over plan until payday' : 'Free to spend until payday'}</p>
+        <h1 className={`ov-figure${over ? ' is-over' : ''}`}><Amount cents={f.free_cents} count /></h1>
+        <p className="ov-sub">
+          {over || f.per_day_cents === null
+            ? `The plan for this month is used up. ${days} day${days === 1 ? '' : 's'} to payday.`
+            : `About ${formatEuros(f.per_day_cents)} a day · ${days} day${days === 1 ? '' : 's'} to payday`}
+        </p>
       </div>
     )
   }
   const over = p.spendable_actual_cents - p.spendable_plan_cents
-  const leftOver = p.money_in_cents - p.actual_cents.needs - p.actual_cents.wants - p.actual_cents.savings
-  const avg = p.ordinary_day
   return (
-    <div className="verdict">
-      <div className="panel four has-three">
-        <div className="cell">
-          <h1><span className="lab">{p.day_number === null ? 'Left over' : 'Left to spend'}</span><span className="fig">{eurosOrShort(leftOver)}</span></h1>
-          <small>{p.day_number === null ? 'this month is finished' : 'money in less money out'}</small>
-        </div>
-        <Cell label="Average day" figure={formatEuros(avg?.avg_cents ?? 0)} note="ordinary days" unsure={!avg} />
-        <Cell label="Against the plan" figure={over > 0 ? `${formatEuros(over)} over` : `${formatEuros(-over)} under`}
-          note={`spent ${formatEuros(p.spendable_actual_cents)} of ${formatEuros(p.spendable_plan_cents)}`} />
-      </div>
-      {caveats}
+    <div className="ov-hero-text">
+      <p className="ov-label">{over > 0 ? 'Over the plan' : 'Under the plan'}</p>
+      <h1 className={`ov-figure${over > 0 ? ' is-over' : ''}`}><Amount cents={over} count /></h1>
+      <p className="ov-sub">Spent {formatEuros(p.spendable_actual_cents)} of {formatEuros(p.spendable_plan_cents)} planned.</p>
     </div>
   )
 }
@@ -224,12 +183,12 @@ function GapToFill({ p }: { p: Pace }) {
     ? `${monthName(behind[0])} – ${monthName(behind[behind.length - 1])}`
     : behind.length === 1 ? monthName(behind[0]) : null
   return (
-    <div className="panel gap-list">
-      <h3>{range ? 'Gap to fill' : 'Banks'}</h3>
+    <div className="ov-card gap-list">
+      <h2>{range ? 'Gap to fill' : 'Bank data'}</h2>
       {range && <div><span>{range}</span><small>{behind.length} month{behind.length === 1 ? '' : 's'}</small></div>}
       {p.last_import_by_bank.map(b => (
         <div key={b.source}>
-          <span>{b.source.toUpperCase()}</span>
+          <span>{b.source.toUpperCase()} bank data</span>
           <small>{b.last_date ? dayLabel(b.last_date) : 'no file yet'}</small>
         </div>
       ))}
@@ -292,89 +251,91 @@ export default function Month() {
     savings: { actual: p.actual_cents.savings, plan: p.plan_cents.savings, incomePct: income > 0 ? Math.round((p.actual_cents.savings / income) * 100) : null, aim: aims.savings },
   }
 
+  const free = known && isCurrent ? p.free : null
+
   return (
     <>
       {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />}
 
-      <div className="month-bar">
-        <span className="lab">{period}{p.day_number !== null && <span className="month-day"> · day {p.day_number} of {p.days_total}</span>}</span>
-        <div className="month-nav">
-          <ImportLink />
-          <button type="button" className="btn" aria-label="Previous month" onClick={() => setPicked(shiftMonth(shownMonth, -1))}>
-            <ChevronLeft size={16} aria-hidden="true" />
+      <div className="ov-bar">
+        <span className="ov-period">{period}{p.day_number !== null && <span className="ov-day"> · day {p.day_number} of {p.days_total}</span>}</span>
+        <div className="ov-nav">
+          <button type="button" className="btn btn-icon" aria-label="Previous month" onClick={() => setPicked(shiftMonth(shownMonth, -1))}>
+            <ChevronLeft size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn-icon"
             aria-label="Next month"
             disabled={shownMonth === p.current_month}
             onClick={() => setPicked(shiftMonth(shownMonth, 1))}
           >
-            <ChevronRight size={16} aria-hidden="true" />
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      <div className={`month-body${loadingMonth ? ' is-loading' : ''}`} aria-busy={loadingMonth}>
-        <div className={`month-top${known ? '' : ' is-open'}`}>
-          <Verdict p={p} />
-          <PaceLine pace={p} />
-          {!known && <Link to="/import" className="btn btn-primary btn-wide month-cta">Bring in bank files</Link>}
+      <div className={`ov${loadingMonth ? ' is-loading' : ''}`} aria-busy={loadingMonth}>
+        <section className={`ov-hero${known ? '' : ' is-open'}`} aria-label="This month">
+          <Hero p={p} />
+          {known && p.day_number !== null && p.daily.length < p.day_number - 1 && p.data_through && (
+            <p className="ov-note">Bank data runs to {dayLabel(p.data_through)}.</p>
+          )}
+          {known && <PaceLine key={month} pace={p} />}
+          {!known && <Link to="/import" className="btn btn-primary ov-cta">Import a bank file</Link>}
+          {free && <Ledger free={free} end={p.end_date} daysToPayday={p.days_left! + 1} />}
+        </section>
 
-          <div className="side-stack">
-            {!known && isCurrent && <GapToFill p={p} />}
-            <ReportLink month={month}>
-              {p.to_review > 0 && (
-                <Link to="/transactions" className="link-row">
-                  <span>{p.to_review} transaction{p.to_review === 1 ? '' : 's'} to review</span>
-                  <ChevronRight size={16} aria-hidden="true" />
-                </Link>
-              )}
-              <RecurringLink month={month} />
-            </ReportLink>
-          </div>
+        <div className="ov-side">
+          {!known && isCurrent && <GapToFill p={p} />}
+          {known && <NeedsYou pace={p} rows={rows} categories={categories} />}
+          {free && <StillToPay free={free} />}
         </div>
 
-        {summary && known && (
-          <section className="section">
-            <h2>The whole month</h2>
-            <dl className="panel whole">
-              <div>
-                <dt className="lab">Income</dt>
-                <dd>
-                  {formatCents(summary.total_income_cents)}
-                  {summary.income_breakdown.map(i => (
-                    <small key={i.category_id}>{i.category_name} · {formatCents(i.amount_cents)}</small>
-                  ))}
-                </dd>
-              </div>
-              <div>
-                <dt className="lab">Spent</dt>
-                <dd>
-                  {formatCents(summary.total_expenses_cents)}
-                  {summary.total_income_cents > 0 && (
-                    <small>{Math.round((summary.total_expenses_cents / summary.total_income_cents) * 100)}% of income</small>
-                  )}
-                </dd>
-              </div>
-              <div><dt className="lab">Saved</dt><dd>{formatCents(summary.total_savings_cents)}</dd></div>
-              <div><dt className="lab">Net</dt><dd>{formatCents(summary.left_over_cents)}</dd></div>
-            </dl>
-          </section>
+        {known && rows.length > 0 && (
+          <div className="ov-main">
+            <Groups pace={p} rows={rows} categories={categories} payments={payments} elapsed={elapsed} />
+          </div>
         )}
 
-        {rows.length > 0 && (known ? (
-          <section className="section">
-            <h2>By category</h2>
-            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={todayPct} kinds={kinds} payments={payments} elapsed={elapsed} onError={setActionError} />
-          </section>
-        ) : (
-          <details className="section plan-fold">
-            <summary>The plan</summary>
-            <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={null} kinds={null} payments={payments} elapsed={null} onError={setActionError} />
-          </details>
-        ))}
-
+        <div className="ov-more">
+          {rows.length > 0 && (
+            <details className="ov-fold">
+              <summary>Every category</summary>
+              <Categories key={month} rows={rows} month={month} isCurrent={isCurrent} categories={categories} todayPct={known ? todayPct : null} kinds={known ? kinds : null} payments={payments} elapsed={known ? elapsed : null} onError={setActionError} />
+            </details>
+          )}
+          {summary && known && (
+            <details className="ov-fold">
+              <summary>The whole month</summary>
+              <dl className="whole">
+                <div>
+                  <dt className="lab">Income</dt>
+                  <dd>
+                    {formatCents(summary.total_income_cents)}
+                    {summary.income_breakdown.map(i => (
+                      <small key={i.category_id}>{i.category_name} · {formatCents(i.amount_cents)}</small>
+                    ))}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="lab">Spent</dt>
+                  <dd>
+                    {formatCents(summary.total_expenses_cents)}
+                    {summary.total_income_cents > 0 && (
+                      <small>{Math.round((summary.total_expenses_cents / summary.total_income_cents) * 100)}% of income</small>
+                    )}
+                  </dd>
+                </div>
+                <div><dt className="lab">Saved</dt><dd>{formatCents(summary.total_savings_cents)}</dd></div>
+                <div><dt className="lab">Net</dt><dd>{formatCents(summary.left_over_cents)}</dd></div>
+              </dl>
+            </details>
+          )}
+          <ReportLink month={month}>
+            <RecurringLink month={month} />
+          </ReportLink>
+        </div>
       </div>
     </>
   )

@@ -10,18 +10,35 @@ import Trends from './pages/Trends'
 import Setup from './pages/Setup'
 import ReportPage from './components/reports/ReportPage'
 import Chat from './chat/Chat'
-import { AddChip, AddRow, FindButtons } from './components/shell/Entries'
+import { AddChip, AddRow, FindButtons, ImportEntries } from './components/shell/Entries'
 import { scrollToTop, useOpenAtTop } from './components/shell/scroll'
 import { useShellTools } from './components/shell/useShellTools'
 
 const queryClient = new QueryClient()
 
 const TABS = [
-  { to: '/', label: 'Month' },
-  { to: '/transactions', label: 'Transactions' },
-  { to: '/trends', label: 'Trends' },
-  { to: '/setup', label: 'Setup' },
+  { to: '/', label: 'Overview' },
+  { to: '/transactions', label: 'Money' },
+  { to: '/setup', label: 'Plan' },
 ]
+
+/** Which of the three places a path belongs to: Money holds payments and trends, Overview its report. */
+function placeOf(pathname: string) {
+  if (pathname === '/' || pathname === '/report') return '/'
+  if (pathname === '/transactions' || pathname === '/trends') return '/transactions'
+  if (pathname === '/setup') return '/setup'
+  return undefined
+}
+
+/** Money's two views: every payment, and how the months compare. */
+function MoneySwitch({ pathname }: { pathname: string }) {
+  return (
+    <nav className="subnav" aria-label="Money">
+      <Link to="/transactions" aria-current={pathname === '/transactions' ? 'page' : undefined}>Payments</Link>
+      <Link to="/trends" aria-current={pathname === '/trends' ? 'page' : undefined}>Trends</Link>
+    </nav>
+  )
+}
 
 /** The pressed-in well that glides from the old tab to the new one, as on the dashboard. */
 function useTabWell(current: string | undefined) {
@@ -76,8 +93,7 @@ function useTabWell(current: string | undefined) {
 
 function Shell() {
   const { pathname, search } = useLocation()
-  // The month report belongs to Month, so Month stays the current tab there.
-  const current = TABS.find(t => t.to === pathname)?.to ?? (pathname === '/report' ? '/' : undefined)
+  const current = placeOf(pathname)
   const { nav, well } = useTabWell(current)
   const { openFind, openAdd, overlays } = useShellTools()
   useOpenAtTop(pathname)
@@ -88,6 +104,7 @@ function Shell() {
         <Link to="/" className="brand">Finances</Link>
         <FindButtons onOpen={openFind} />
         <AddChip onOpen={openAdd} />
+        <ImportEntries />
         <nav className="tabbar" aria-label="Main" ref={nav}>
           <span className="tab-well" ref={well} aria-hidden="true" />
           {TABS.map(t => (
@@ -111,6 +128,7 @@ function Shell() {
         <a href="/" className="back" aria-label="Dashboard"><ChevronLeft size={13} aria-hidden="true" /><span className="back-label">Dashboard</span></a>
       </aside>
       <main className="content" key={pathname}>
+        {current === '/transactions' && <MoneySwitch pathname={pathname} />}
         <Routes>
           <Route path="/" element={<Month />} />
           <Route path="/transactions" element={<Transactions />} />

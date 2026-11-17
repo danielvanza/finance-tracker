@@ -111,6 +111,8 @@ export default function ReviewCard({ transaction: tx, categories, onConfirm, onS
     setChosen(option)
     try {
       await onConfirm(tx.id, decision)
+    } catch {
+      // The page says what went wrong; the card only has to be answerable again.
     } finally {
       // Saved: the next card replaces this one. Refused: the card is answerable again.
       if (alive.current) {

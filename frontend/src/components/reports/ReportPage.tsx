@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, ChevronLeft, ChevronRight, Copy, Download, Printer } from 'lucide-react'
 import { api } from '../../api'
 import { formatCents, formatEuros } from '../../money'
-import ErrorBanner, { describeApiError } from '../ErrorBanner'
+import ErrorBanner from '../ErrorBanner'
+import { describeApiError } from '../apiError'
 import { csvFilename, downloadCsv } from './csv'
 import {
   buildReport, footerText, isQuiet, longDate, meterPct, moveRange, moveText, planText, reportText, shiftMonth, sinceText, spentText,

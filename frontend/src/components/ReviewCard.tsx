@@ -6,7 +6,8 @@ import { parseToCents, centsToInputString } from '../money'
 import { Amount } from '../pages/overview/Amount'
 import { merchantFor } from './merchants/merchantKey'
 import CategorySelect from './CategorySelect'
-import SplitEditor, { splitRowsValid, type SplitRow } from './SplitEditor'
+import SplitEditor from './SplitEditor'
+import { splitRowsValid, type SplitRow } from './splitRows'
 
 export interface ReviewDecision {
   category_id?: number

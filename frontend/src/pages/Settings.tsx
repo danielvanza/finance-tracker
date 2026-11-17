@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
-import ErrorBanner, { describeApiError } from '../components/ErrorBanner'
+import ErrorBanner from '../components/ErrorBanner'
+import { describeApiError } from '../components/apiError'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -10,15 +11,11 @@ export default function Settings() {
     queryFn: api.getSettings,
   })
 
-  const [startDay, setStartDay] = useState('')
+  // What was typed, else what is stored.
+  const [typed, setStartDay] = useState<string | null>(null)
+  const startDay = typed ?? settings?.financial_month_start_day ?? ''
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
-
-  useEffect(() => {
-    if (settings?.financial_month_start_day) {
-      setStartDay(settings.financial_month_start_day)
-    }
-  }, [settings])
 
   const mutation = useMutation({
     mutationFn: (value: string) => api.patchSetting('financial_month_start_day', value),

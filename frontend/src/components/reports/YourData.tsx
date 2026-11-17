@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { api } from '../../api'
-import { describeApiError } from '../ErrorBanner'
+import { describeApiError } from '../apiError'
 import { csvFilename, downloadCsv } from './csv'
 import '../../styles/reports.css'
 

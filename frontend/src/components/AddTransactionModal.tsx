@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import type { Category } from '../types'
 import { api } from '../api'
 import CategorySelect from './CategorySelect'
-import { describeApiError } from './ErrorBanner'
+import { describeApiError } from './apiError'
 import { parseToCents } from '../money'
 
 type Kind = 'expense' | 'income' | 'refund' | 'transfer'

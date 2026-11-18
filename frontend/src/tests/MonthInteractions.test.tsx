@@ -62,8 +62,20 @@ describe('Month top block: money left to spend', () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
     render(wrap(<Month />))
     expect(await screen.findByRole('heading', { level: 1, name: '€1.688,00' })).toBeInTheDocument()
-    expect(screen.getByText('Free to spend until payday')).toBeInTheDocument()
-    expect(screen.getByText('About €169 a day · 15 days to payday')).toBeInTheDocument()
+    expect(screen.getByText('Free in the plan', { selector: '.ov-label' })).toBeInTheDocument()
+    expect(screen.getByText('About €169 a day')).toBeInTheDocument()
+    expect(screen.getByText('15 days to payday, today included.')).toBeInTheDocument()
+  })
+
+  it('shows what is left in the account beside the plan, and each fold sum ends on its figure', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
+    render(wrap(<Month />))
+    const account = (await screen.findByText('Left in the account', { selector: '.ov-label' })).parentElement!
+    expect(account.querySelector('.amount')!.getAttribute('aria-label')).toBe('€2.638,00')
+    const fold = screen.getByText('How this is worked out').closest('details')!
+    const sums = [...fold.querySelectorAll('.sum')].map(s => s.textContent)
+    expect(sums[0]).toBe('Free in the plan€1.688')
+    expect(sums[1]).toContain('Left in the account')
   })
 
   it('lists the bills and set-asides still to pay before payday, soonest first', async () => {
@@ -99,7 +111,7 @@ describe('Month top block: money left to spend', () => {
     expect(within(fold).getByText('Car insurance')).toBeInTheDocument()
     expect(fold.textContent).toContain('€988 over 21 ordinary days = €47')
     expect(fold.textContent).toContain('over 15 days, today included = €169 a day')
-    expect(within(fold).getByText(/€950 of what is left to spend lies outside the plan/)).toBeInTheDocument()
+    expect(fold.textContent).toContain('That is €950 more than the plan')
   })
 
   it('early in the month the working says when the average day shows', async () => {
@@ -115,9 +127,10 @@ describe('Month top block: money left to spend', () => {
       free: free({ free_cents: -24000, per_day_cents: null, cash_left_cents: 71000, month_end_cents: -54000 }),
     }))
     render(wrap(<Month />))
-    expect(await screen.findByText('Over plan until payday')).toBeInTheDocument()
+    expect(await screen.findByText('Over the plan')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: '€240,00' })).toBeInTheDocument()
-    expect(screen.getByText('The plan for this month is used up. 15 days to payday.')).toBeInTheDocument()
+    expect(screen.getByText('The plan is used up')).toBeInTheDocument()
+    expect(screen.getByText('15 days to payday, today included.')).toBeInTheDocument()
   })
 
   it('shows a finished month against its plan, with no working to show', async () => {
@@ -188,6 +201,29 @@ describe('Month links to the payments behind its figures', () => {
     render(wrap(<Month />))
     expect(await screen.findByText('All sorted')).toBeInTheDocument()
     expect(screen.queryByText(/payments? to sort/)).toBeNull()
+  })
+})
+
+describe('Needs you keeps small overruns quiet', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('gives a big overrun its own red row and folds the small ones into one line', async () => {
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
+    vi.mocked(api.getCategories).mockResolvedValueOnce([
+      { id: 1, name: 'Clothing', type: 'wants', sort_order: 1 },
+      { id: 2, name: 'Takeaway', type: 'wants', sort_order: 2 },
+      { id: 3, name: 'Cinema', type: 'wants', sort_order: 3 },
+    ])
+    vi.mocked(api.getBudget).mockResolvedValueOnce([
+      { id: 1, category_id: 1, category_name: 'Clothing', month: '2026-11', planned_amount_cents: 10000, actual_amount_cents: 20800 },
+      { id: 2, category_id: 2, category_name: 'Takeaway', month: '2026-11', planned_amount_cents: 20000, actual_amount_cents: 20600 },
+      { id: 3, category_id: 3, category_name: 'Cinema', month: '2026-11', planned_amount_cents: 10000, actual_amount_cents: 10300 },
+    ])
+    render(wrap(<Month />))
+    expect((await screen.findByText('Clothing is €108 over')).closest('.ov-row')!.querySelector('.is-over')).not.toBeNull()
+    const little = screen.getByText('2 categories a little over').closest('.ov-row')!
+    expect(little.querySelector('.is-watch')).not.toBeNull()
+    expect(little.textContent).toContain('Takeaway €6 · Cinema €3')
   })
 })
 

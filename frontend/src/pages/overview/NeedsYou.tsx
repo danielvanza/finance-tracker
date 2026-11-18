@@ -3,7 +3,7 @@ import { AlertCircle, Check, ChevronRight, CircleHelp, Upload } from 'lucide-rea
 import { dayLabel } from '../../dates'
 import { formatEuros } from '../../money'
 import type { BudgetRow, Category, Pace } from '../../types'
-import { overCategories } from './figures'
+import { isMarked, overCategories } from './figures'
 
 const STALE_DAYS = 7
 
@@ -13,7 +13,10 @@ const daysBetween = (from: string, to: string) =>
 /** What needs one of the two of you: payments to sort, categories over plan, bank data gone stale. */
 export default function NeedsYou({ pace, rows, categories }: { pace: Pace; rows: BudgetRow[]; categories: Category[] }) {
   const isCurrent = pace.month === pace.current_month
-  const over = pace.status === 'ok' ? overCategories(rows, categories).slice(0, 4) : []
+  const overAll = pace.status === 'ok' ? overCategories(rows, categories) : []
+  // A big overrun gets its own red row (three at most); small ones share one quiet line, so €6 over never looks like €119.
+  const over = overAll.filter(isMarked).slice(0, 3)
+  const little = overAll.filter(o => !isMarked(o))
   const newest = pace.newest_bank_date
   const stale = isCurrent && pace.status === 'ok' && newest !== null && daysBetween(newest, pace.today) > STALE_DAYS
 
@@ -25,7 +28,7 @@ export default function NeedsYou({ pace, rows, categories }: { pace: Pace; rows:
           <span className="ov-icon is-watch"><CircleHelp size={18} aria-hidden="true" /></span>
           <span className="ov-row-text">
             {pace.to_review} payment{pace.to_review === 1 ? '' : 's'} to sort
-            <small>Claude wasn't sure. {pace.to_review === 1 ? 'It counts' : 'They count'} once answered.</small>
+            <small>{pace.to_review === 1 ? 'It counts' : 'They count'} once a category is picked.</small>
           </span>
           <ChevronRight className="ov-chev" size={18} aria-hidden="true" />
         </Link>
@@ -43,6 +46,22 @@ export default function NeedsYou({ pace, rows, categories }: { pace: Pace; rows:
           </span>
           <ChevronRight className="ov-chev" size={18} aria-hidden="true" />
         </Link>
+      </li>,
+    )
+  }
+  if (little.length > 0) {
+    const one = little.length === 1 ? little[0] : null
+    items.push(
+      <li key="little">
+        <div className="ov-row">
+          <span className="ov-icon is-watch"><AlertCircle size={18} aria-hidden="true" /></span>
+          <span className="ov-row-text">
+            {one ? `${one.row.category_name} is ${formatEuros(one.over)} over` : `${little.length} categories a little over`}
+            <small>{one
+              ? `${formatEuros(one.row.actual_amount_cents ?? 0)} of ${formatEuros(one.row.planned_amount_cents)}`
+              : little.map(o => `${o.row.category_name} ${formatEuros(o.over)}`).join(' · ')}</small>
+          </span>
+        </div>
       </li>,
     )
   }

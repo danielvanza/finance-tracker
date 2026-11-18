@@ -42,7 +42,6 @@ colors:
   muted-night: "#8e9a93"
 typography:
   figure: { fontFamily: "Geist, system-ui, sans-serif", fontSize: "3.5rem", fontWeight: 650, lineHeight: 1, letterSpacing: "-0.04em" }
-  figure-pair: { fontFamily: "Geist, system-ui, sans-serif", fontSize: "clamp(2rem, 9vw, 2.75rem)", fontWeight: 650, lineHeight: 1, letterSpacing: "-0.04em" }
   heading: { fontFamily: "Geist, system-ui, sans-serif", fontSize: "0.95rem", fontWeight: 600, lineHeight: 1.3 }
   label: { fontFamily: "Geist, system-ui, sans-serif", fontSize: "0.95rem", fontWeight: 500, lineHeight: 1.3 }
   body: { fontFamily: "Geist, system-ui, sans-serif", fontSize: "15px", fontWeight: 400, lineHeight: 1.5 }
@@ -63,7 +62,7 @@ Read before any visual change; update after the verified change. At most 150 lin
 ## Overview
 **Creative North Star: "Forest"** (redesign of 2026-11-17; the brief and direction contract are in `.impeccable/surfaces/frontend-src-app-tsx.md`).
 
-Finances answers "what is free until payday?" with the hero figures and one pace line, and refuses the category's KPI tiles, donuts and rainbow categories. Its own world, independent of life-dashboard. Phone first (390 px), both themes always; only the tokens change between them.
+Finances answers "what is free until payday?" with the hero figure and one pace line, and refuses the category's KPI tiles, donuts and rainbow categories. Its own world, independent of life-dashboard. Phone first (390 px), both themes always; only the tokens change between them.
 
 **Key Characteristics:** sage-grey ground and white cards with a hairline by day, green-black by night; deep green (mint at night) marks what you can tap; the pace line is the signature, drawing in from payday onto a pill that says over or under pace.
 
@@ -85,7 +84,7 @@ Finances answers "what is free until payday?" with the hero figures and one pace
 ## Typography
 **One family:** Geist (with system-ui), loaded in `index.html`; `--serif`, `--mono` and `--mincho` all point to it. Tabular figures everywhere.
 ### Hierarchy
-- **Figure**: the hero amounts, weight 650, tracking -0.04em. The euro sign and the cents are smaller and lighter (`Amount`). One figure alone: 3.5rem on a phone, 4.5rem from 1024 px. The current month's pair: `clamp(2rem, 9vw, 2.75rem)`, 3.5rem from 1024 px, the two equal.
+- **Figure**: the hero amounts, weight 650, tracking -0.04em. The euro sign and the cents are smaller and lighter (`Amount`). One figure alone: 3.5rem on a phone, 4.5rem from 1024 px. The strip under it (`.ov-strip`) is label 0.8rem `--quiet` over a 0.95rem weight 600 value.
 - **Heading**: card titles (`h2`), 0.95rem weight 600. The page's `h1` is the plan figure; headings inside a fold are `h2`, never a skipped level.
 - **Label and Small**: above a figure (`.ov-label`), 0.95rem weight 500; notes, axis and sub-lines 0.8–0.875rem. Both `--quiet`, sentence case, never uppercase or tracked.
 
@@ -133,7 +132,7 @@ Flat and quiet. A card is white with a hairline and one soft shadow (`--raise`);
 ### Navigation
 - Phone: the floating pill tab bar at the bottom, the current place filled with `accent`. Desktop: the side rail. Find, Add and Import live in the shell on every page. Dashboard is a house icon (labelled "Dashboard" on desktop), never a bare chevron.
 ### The Hero and the Pace Line
-- The current month shows two figures side by side, equal: **Free in the plan** (the `h1`, with "About €X a day") and **Left in the account** ("After bills and saving"). "How this is worked out" holds one sum per figure, each ending on it, then the average day and "If it goes on". A past month shows one figure against its plan.
+- The current month shows one figure, **Free to spend** (the `h1`, with "About €X a day"): money in less spent, saved, bills still to come and set-asides. A small strip under it (In, Spent, Saved, To pay) is that sum in short. "How this is worked out" holds the sum, then the plan's own sum, the average day and "If it goes on". A past month shows one figure against its plan.
 - Pace line: dashed `muted` plan, the spending line over a fading area, full width, 7.5rem tall on a phone rising to 10rem. A dot ends the spending line with a pill: "€X over pace" or "€X under pace", plus "by 16 Nov" when the bank files stop before today. Then today is a dashed `quiet` mark with its label at the foot; nothing is drawn for the days between.
 - The plot is focusable: arrow keys, Home and End read a day (announced politely); hover or drag does the same.
 - **The No Guessing Rule.** Every figure that projects or compares reads "Can't tell yet" instead of a guess. With status `gap` or `empty` Month says so ("Can't tell yet", "No bank files yet"), shows no meters or today tick, and offers the import as the one primary button.

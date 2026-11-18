@@ -49,9 +49,9 @@ const wrap = (ui: React.ReactElement, client = new QueryClient({ defaultOptions:
 )
 
 const free = (over: Partial<FreeToSpend> = {}): FreeToSpend => ({
-  free_cents: 168800, per_day_cents: 16880, left_in_plan_cents: 168800, bills_cents: 0, bills: [], set_aside_cents: 0, set_asides: [],
+  free_cents: 303800, per_day_cents: 20253, plan_free_cents: 168800, left_in_plan_cents: 168800, bills_cents: 0, bills: [], set_aside_cents: 0, set_asides: [],
   money_in_cents: 550000, income_expected_cents: 0, income_expected: [], spent_cents: 246200, saved_cents: 0, to_save_cents: 40000,
-  cash_left_cents: 263800, outside_plan_cents: 95000, still_to_come_cents: 40000,
+  still_to_come_cents: 40000,
   avg_day_cents: 4700, avg_day_days: 21, avg_day_spent_cents: 98800, days_ahead: 9, month_end_cents: 221000, ...over,
 })
 
@@ -61,21 +61,27 @@ describe('Month top block: money left to spend', () => {
   it('leads with what is free until payday, a day at a time', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
     render(wrap(<Month />))
-    expect(await screen.findByRole('heading', { level: 1, name: '€1.688,00' })).toBeInTheDocument()
-    expect(screen.getByText('Free in the plan', { selector: '.ov-label' })).toBeInTheDocument()
-    expect(screen.getByText('About €169 a day')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '€3.038,00' })).toBeInTheDocument()
+    expect(screen.getByText('Free to spend', { selector: '.ov-label' })).toBeInTheDocument()
+    expect(screen.getByText('About €203 a day')).toBeInTheDocument()
     expect(screen.getByText('15 days to payday, today included.')).toBeInTheDocument()
   })
 
-  it('shows what is left in the account beside the plan, and each fold sum ends on its figure', async () => {
+  it('shows what the headline is made of in a small strip: in, spent, saved, to pay', async () => {
+    const bills = [{ key: 'ziggo', name: 'Ziggo', amount_cents: 6200, next_date: '2026-11-20', category_name: 'Utilities' }]
+    vi.mocked(api.getPace).mockResolvedValue(pace({ free: free({ bills, bills_cents: 6200, set_aside_cents: 4500, saved_cents: 8000 }) }))
+    render(wrap(<Month />))
+    const strip = await screen.findByLabelText('What it is made of')
+    expect(strip.textContent).toBe('In€5.500Spent€2.462Saved€80To pay€107')
+  })
+
+  it('ends the first fold sum on the headline and the second on the plan', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({ free: free() }))
     render(wrap(<Month />))
-    const account = (await screen.findByText('Left in the account', { selector: '.ov-label' })).parentElement!
-    expect(account.querySelector('.amount')!.getAttribute('aria-label')).toBe('€2.638,00')
-    const fold = screen.getByText('How this is worked out').closest('details')!
+    const fold = (await screen.findByText('How this is worked out')).closest('details')!
     const sums = [...fold.querySelectorAll('.sum')].map(s => s.textContent)
-    expect(sums[0]).toBe('Free in the plan€1.688')
-    expect(sums[1]).toContain('Left in the account')
+    expect(sums[0]).toBe('Free to spend€3.038')
+    expect(sums[1]).toBe('Free in the plan€1.688')
   })
 
   it('lists the bills and set-asides still to pay before payday, soonest first', async () => {
@@ -103,15 +109,16 @@ describe('Month top block: money left to spend', () => {
     }))
     render(wrap(<Month />))
     const fold = (await screen.findByText('How this is worked out')).closest('details')!
-    for (const text of ['Money in so far', 'Still expected in', 'Spent so far', 'Fixed bills still to come', 'Set aside this month', 'Still to save, as planned']) {
+    for (const text of ['Money in so far', 'Still expected in', 'Spent so far', 'Fixed bills still to come', 'Set aside this month', 'Saved so far', 'Planned to spend this month']) {
       expect(within(fold).getAllByText(text).length).toBeGreaterThan(0)
     }
     expect(within(fold).getByText(/Salary, 12 Nov/)).toBeInTheDocument()
     expect(within(fold).getByRole('button', { name: 'Zilveren Kruis is not a fixed bill' })).toBeInTheDocument()
     expect(within(fold).getByText('Car insurance')).toBeInTheDocument()
     expect(fold.textContent).toContain('€988 over 21 ordinary days = €47')
-    expect(fold.textContent).toContain('over 15 days, today included = €169 a day')
-    expect(fold.textContent).toContain('That is €950 more than the plan')
+    expect(fold.textContent).toContain('over 15 days, today included = €203 a day')
+    expect(fold.textContent).toContain('The plan still wants €400 saved this month')
+    expect(fold.textContent).toContain('The money leaves €1.350 more than the plan')
   })
 
   it('early in the month the working says when the average day shows', async () => {
@@ -119,17 +126,17 @@ describe('Month top block: money left to spend', () => {
     render(wrap(<Month />))
     const fold = (await screen.findByText('How this is worked out')).closest('details')!
     expect(fold.textContent).toContain('Shows once five days of the month are over')
-    expect(screen.getByRole('heading', { level: 1, name: '€1.688,00' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '€3.038,00' })).toBeInTheDocument()
   })
 
-  it('says the plan is used up when nothing is free until payday', async () => {
+  it('says it is short when more goes out than comes in', async () => {
     vi.mocked(api.getPace).mockResolvedValue(pace({
-      free: free({ free_cents: -24000, per_day_cents: null, cash_left_cents: 71000, month_end_cents: -54000 }),
+      free: free({ free_cents: -24000, per_day_cents: null, month_end_cents: -54000 }),
     }))
     render(wrap(<Month />))
-    expect(await screen.findByText('Over the plan')).toBeInTheDocument()
+    expect(await screen.findByText('Short this month')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: '€240,00' })).toBeInTheDocument()
-    expect(screen.getByText('The plan is used up')).toBeInTheDocument()
+    expect(screen.getByText('More goes out than comes in')).toBeInTheDocument()
     expect(screen.getByText('15 days to payday, today included.')).toBeInTheDocument()
   })
 

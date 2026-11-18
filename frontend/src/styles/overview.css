@@ -71,20 +71,31 @@
   color: var(--over);
 }
 
-/* The current month's two answers, side by side: the plan's view first (the page's h1), then the account's. */
-.ov-pair {
+/* What the headline is made of, small: in, spent, saved, still to pay. Reads as the sum under the figure. */
+.ov-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0.9rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--rule);
 }
 
-.ov-pair .ov-figure {
-  font-size: clamp(2rem, 9vw, 2.75rem);
-}
-
-.ov-pair > div + div {
-  padding-left: 1rem;
+.ov-strip > div + div {
+  padding-left: 0.75rem;
   border-left: 1px solid var(--rule);
+}
+
+.ov-strip dt {
+  font: 500 0.8rem/1.3 var(--sans);
+  color: var(--quiet);
+}
+
+.ov-strip dd {
+  margin: 0.1rem 0 0;
+  font: 600 0.95rem/1.3 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .amount {
@@ -676,18 +687,6 @@ a.ov-row:hover {
 
   .ov-figure {
     font-size: 4.5rem;
-  }
-
-  .ov-pair .ov-figure {
-    font-size: 3.5rem;
-  }
-
-  .ov-pair {
-    gap: 1.75rem;
-  }
-
-  .ov-pair > div + div {
-    padding-left: 1.75rem;
   }
 
   .pace-plot {

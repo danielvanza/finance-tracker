@@ -422,7 +422,7 @@ def month_overview(label: str | None = None) -> dict:
                        vs_plan_by_now_cents=pace["pace_delta_cents"])
             free = pace["free"]
             if free is not None:
-                # The Month page's headline: what is left in the plan, less fixed bills still to come and set-asides.
+                # The Month page's headline: money in less spent, saved, fixed bills still to come and set-asides.
                 out.update(
                     free_to_spend_cents=free["free_cents"], free_per_day_cents=free["per_day_cents"],
                     fixed_bills_still_to_come_cents=free["bills_cents"], upcoming_bills=free["bills"],

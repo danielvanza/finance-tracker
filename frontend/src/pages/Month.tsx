@@ -48,7 +48,7 @@ const nextDay = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** How the two headline figures are worked out, each as its own sum, with the bills and set-asides they allow for. */
+/** How the headline is worked out as one sum, then the plan's own sum, with the bills and set-asides they allow for. */
 function Ledger({ p, free, daysToPayday }: { p: Pace; free: FreeToSpend; daysToPayday: number }) {
   const qc = useQueryClient()
   const leaveOut = async (key: string) => {
@@ -58,38 +58,42 @@ function Ledger({ p, free, daysToPayday }: { p: Pace; free: FreeToSpend; daysToP
   }
   const e = formatEuros
   const end = p.end_date
+  const moneyLines: Array<[string, string, string?]> = [
+    ['Money in so far', e(free.money_in_cents)],
+  ]
+  if (free.income_expected_cents > 0) {
+    moneyLines.push(['Still expected in', `+ ${e(free.income_expected_cents)}`,
+      free.income_expected.map(i => `${i.name}${i.next_date ? `, ${dayLabel(i.next_date)}` : ''}`).join(' · ') || undefined])
+  }
+  moneyLines.push(
+    ['Spent so far', `- ${e(free.spent_cents)}`],
+    ['Saved so far', `- ${e(free.saved_cents)}`],
+    ['Fixed bills still to come', `- ${e(free.bills_cents)}`],
+    ['Set aside this month', `- ${e(free.set_aside_cents)}`],
+  )
   const planLines: Array<[string, string, string?]> = [
     ['Planned to spend this month', e(p.spendable_plan_cents)],
     ['Spent so far', `- ${e(free.spent_cents)}`],
     ['Fixed bills still to come', `- ${e(free.bills_cents)}`],
     ['Set aside this month', `- ${e(free.set_aside_cents)}`],
   ]
-  const cashLines: Array<[string, string, string?]> = [
-    ['Money in so far', e(free.money_in_cents)],
-    ['Still expected in', `+ ${e(free.income_expected_cents)}`,
-      free.income_expected.map(i => `${i.name}${i.next_date ? `, ${dayLabel(i.next_date)}` : ''}`).join(' · ') || undefined],
-    ['Spent so far', `- ${e(free.spent_cents)}`],
-  ]
-  if (free.saved_cents > 0) cashLines.push(['Saved so far', `- ${e(free.saved_cents)}`])
-  cashLines.push(
-    ['Fixed bills still to come', `- ${e(free.bills_cents)}`],
-    ['Set aside this month', `- ${e(free.set_aside_cents)}`],
-    ['Still to save, as planned', `- ${e(free.to_save_cents)}`],
-  )
-  const gap = free.outside_plan_cents
+  const gap = free.free_cents - free.plan_free_cents
   const days = free.days_ahead
   const from = p.data_through ? nextDay(p.data_through) : null
   return (
     <details className="ov-how">
       <summary>How this is worked out</summary>
       <div className="ledger">
-        <h2>The plan</h2>
-        <Sum lines={planLines} total={['Free in the plan', free.free_cents < 0 ? `${e(-free.free_cents)} over` : e(free.free_cents)]} />
+        <h2>Free to spend</h2>
+        <Sum lines={moneyLines} total={['Free to spend', eurosOrShort(free.free_cents)]} />
         <p>
           {free.per_day_cents !== null
             ? <>{e(free.free_cents)} over {daysToPayday} days, today included = <b>{e(free.per_day_cents)}</b> a day.</>
-            : <>The plan for this month is used up.</>}
+            : <>Nothing is free to spend this month.</>}
         </p>
+        {free.to_save_cents > 0 && (
+          <p className="muted">The plan still wants {e(free.to_save_cents)} saved this month. That is not held back here.</p>
+        )}
         {free.bills.length === 0 && free.set_asides.length === 0 && (
           <p className="muted">No fixed bills are still to come before {dayLabel(end)}, and nothing is set aside this month.</p>
         )}
@@ -116,12 +120,12 @@ function Ledger({ p, free, daysToPayday }: { p: Pace; free: FreeToSpend; daysToP
             ))}
           </ul>
         )}
-        <h2>The account</h2>
-        <Sum lines={cashLines} total={['Left in the account', eurosOrShort(free.cash_left_cents)]} />
+        <h2>Against the plan</h2>
+        <Sum lines={planLines} total={['Free in the plan', free.plan_free_cents < 0 ? `${e(-free.plan_free_cents)} over` : e(free.plan_free_cents)]} />
         {gap !== 0 && (
           <p>{gap > 0
-            ? <>That is {e(gap)} more than the plan: more money comes in this month than the plan spends and saves.</>
-            : <>That is {e(-gap)} less than the plan: the plan spends and saves more than comes in this month.</>}</p>
+            ? <>The money leaves {e(gap)} more than the plan does: more comes in than the plan spends and saves.</>
+            : <>The money leaves {e(-gap)} less than the plan does: the plan spends and saves more than comes in.</>}</p>
         )}
         <h2>Average day</h2>
         {free.avg_day_cents !== null ? (
@@ -132,9 +136,9 @@ function Ledger({ p, free, daysToPayday }: { p: Pace; free: FreeToSpend; daysToP
         <h2>If it goes on</h2>
         {free.month_end_cents !== null && free.avg_day_cents !== null ? (
           <p>
-            {eurosOrShort(free.cash_left_cents)} in the account, less {e(free.avg_day_cents)} for each of the {days} day{days === 1 ? '' : 's'}
+            {eurosOrShort(free.free_cents)} free to spend, less {e(free.avg_day_cents)} for each of the {days} day{days === 1 ? '' : 's'}
             {from && days > 0 ? <> the bank files don't show yet ({from === end ? dayLabel(end) : `${dayLabel(from)} – ${dayLabel(end)}`})</> : null}
-            {' '}= <b>{eurosOrShort(free.month_end_cents)}</b> left on {dayLabel(end)}.
+            {' '}= <b>{eurosOrShort(free.month_end_cents)}</b>{free.month_end_cents < 0 ? ' on' : ' free on'} {dayLabel(end)}.
           </p>
         ) : (
           <p>Needs the average day.</p>
@@ -178,25 +182,25 @@ function Hero({ p }: { p: Pace }) {
   if (p.free) {
     const f = p.free
     const days = p.days_left! + 1
-    const over = f.free_cents < 0
-    const short = f.cash_left_cents < 0
+    const short = f.free_cents < 0
+    const coming = f.bills_cents + f.set_aside_cents
     return (
       <div className="ov-hero-text">
-        <div className="ov-pair">
-          <div>
-            <p className="ov-label">{over ? 'Over the plan' : 'Free in the plan'}</p>
-            <h1 className={`ov-figure${over ? ' is-over' : ''}`}><Amount cents={f.free_cents} count /></h1>
-            <p className="ov-sub">
-              {over || f.per_day_cents === null ? 'The plan is used up' : `About ${formatEuros(f.per_day_cents)} a day`}
-            </p>
-          </div>
-          <div>
-            <p className="ov-label">{short ? 'Short in the account' : 'Left in the account'}</p>
-            <p className={`ov-figure${short ? ' is-over' : ''}`}><Amount cents={f.cash_left_cents} count /></p>
-            <p className="ov-sub">After bills and saving</p>
-          </div>
-        </div>
+        <p className="ov-label">{short ? 'Short this month' : 'Free to spend'}</p>
+        <h1 className={`ov-figure${short ? ' is-over' : ''}`}><Amount cents={f.free_cents} count /></h1>
+        <p className="ov-sub">
+          {short ? 'More goes out than comes in' : f.per_day_cents === null ? 'Nothing is left to spend' : `About ${formatEuros(f.per_day_cents)} a day`}
+        </p>
         <p className="ov-note">{days} day{days === 1 ? '' : 's'} to payday, today included.</p>
+        <dl className="ov-strip" aria-label="What it is made of">
+          <div>
+            <dt>In</dt>
+            <dd>{formatEuros(f.money_in_cents + f.income_expected_cents)}</dd>
+          </div>
+          <div><dt>Spent</dt><dd>{formatEuros(f.spent_cents)}</dd></div>
+          <div><dt>Saved</dt><dd>{formatEuros(f.saved_cents)}</dd></div>
+          <div><dt>To pay</dt><dd>{formatEuros(coming)}</dd></div>
+        </dl>
       </div>
     )
   }

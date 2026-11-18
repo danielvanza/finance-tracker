@@ -257,10 +257,10 @@ def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int, *, 
                    remaining_days: int, early: bool) -> dict:
     """What can still be spent freely this month.
 
-    `free_cents` (the plan's view): what is left in the plan, less the fixed bills that have not been
-    debited yet and less what this month sets aside for later bills.
-    `cash_left_cents` (the money's view): money in so far + income still expected - spent so far (needs and
-    wants) - saved so far - savings still to put aside as planned - the same bills and set-asides.
+    `free_cents` (the headline, the money's view): money in so far + income still expected - spent so far
+    (needs and wants) - saved so far - the fixed bills that have not been debited yet - what this month sets
+    aside for later bills. The plan's savings not yet put away (`to_save_cents`) is not held back.
+    `plan_free_cents` (the plan's view): what is left in the plan, less the same bills and set-asides.
     """
     bills = [
         {"key": i["key"], "name": i["name"], "amount_cents": i["amount_cents"] * i["remaining"],
@@ -271,10 +271,10 @@ def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int, *, 
     expected = recurring_router.expected_income(label, db)
     kept = set_asides.month_view(db, label)
     bills_cents = sum(b["amount_cents"] for b in bills)
-    free = left_cents - bills_cents - kept["set_aside_cents"]
+    plan_free = left_cents - bills_cents - kept["set_aside_cents"]
     to_save = max(0, savings_plan_cents - saved_cents)
-    cash = (money_in_cents + expected["expected_cents"] - spent_cents - saved_cents
-            - to_save - bills_cents - kept["set_aside_cents"])
+    free = (money_in_cents + expected["expected_cents"] - spent_cents - saved_cents
+            - bills_cents - kept["set_aside_cents"])
     average = None if early or ordinary is None else ordinary["avg_cents"]
     return {
         "money_in_cents": money_in_cents,
@@ -287,15 +287,13 @@ def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int, *, 
         "spent_cents": spent_cents,
         "saved_cents": saved_cents,
         "to_save_cents": to_save,
-        "cash_left_cents": cash,
-        # What the plan leaves out: income above it, or a plan that is not fully spent.
-        "outside_plan_cents": cash - free,
+        "plan_free_cents": plan_free,
         "still_to_come_cents": bills_cents + kept["set_aside_cents"] + to_save,
         "avg_day_cents": average,
         "avg_day_days": None if average is None else ordinary["days"],
         "avg_day_spent_cents": None if average is None else ordinary["spent_cents"],
         "days_ahead": remaining_days,
-        "month_end_cents": None if average is None else cash - average * remaining_days,
+        "month_end_cents": None if average is None else free - average * remaining_days,
         "free_cents": free,
         # Today can still be spent, so it counts.
         "per_day_cents": free // (days_left + 1) if free > 0 else None,

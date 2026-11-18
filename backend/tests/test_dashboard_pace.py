@@ -145,7 +145,7 @@ def _spread(db, start, daily_euros, category):
         _tx(db, start + timedelta(days=i), euros, category, key=f"spread-{i}-{category.name}")
 
 
-def test_cash_left_counts_money_in_out_expected_bills_and_savings(db, client, monkeypatch):
+def test_free_counts_money_in_out_expected_bills_and_savings(db, client, monkeypatch):
     # today 8 Apr = day 16 of the month 24 Mar - 23 Apr (31 days)
     _plan_only(db, client, (2026, 4), {"Utilities": "400.00", "Miscellaneous": "100.00", "DEGIRO": "50.00"})
     salary, needs, wants = _cat(db, "Salary"), _cat(db, "Utilities"), _cat(db, "Miscellaneous")
@@ -159,9 +159,9 @@ def test_cash_left_counts_money_in_out_expected_bills_and_savings(db, client, mo
     assert free["spent_cents"] == 15000 + 3000
     assert free["to_save_cents"] == 5000 and free["saved_cents"] == 0
     assert free["income_expected_cents"] == 0
-    expect = 200000 - 18000 - 5000 - free["bills_cents"] - free["set_aside_cents"]
-    assert free["cash_left_cents"] == expect
-    assert free["outside_plan_cents"] == free["cash_left_cents"] - free["free_cents"]
+    expect = 200000 - 18000 - free["bills_cents"] - free["set_aside_cents"]  # the 50 still to save is not held back
+    assert free["free_cents"] == expect
+    assert free["plan_free_cents"] == 50000 - 18000 - free["bills_cents"] - free["set_aside_cents"]
     assert free["still_to_come_cents"] == free["bills_cents"] + free["set_aside_cents"] + 5000
 
 
@@ -171,7 +171,7 @@ def test_saved_money_has_left_the_pot_and_replaces_the_planned_savings(db, clien
     _tx(db, date(2026, 3, 25), "-80.00", _cat(db, "DEGIRO"), key="sv")  # saved more than planned
     free = client.get("/dashboard/pace").json()["free"]
     assert (free["saved_cents"], free["to_save_cents"]) == (8000, 0)
-    assert free["cash_left_cents"] == 50000 - 8000 - free["bills_cents"] - free["set_aside_cents"]
+    assert free["free_cents"] == 50000 - 8000 - free["bills_cents"] - free["set_aside_cents"]
 
 
 def test_average_day_uses_finished_days_and_skips_big_payment_days(db, client):
@@ -187,7 +187,7 @@ def test_average_day_uses_finished_days_and_skips_big_payment_days(db, client):
     free = body["free"]
     assert (free["avg_day_cents"], free["avg_day_days"], free["avg_day_spent_cents"]) == (1429, 14, 20000)
     assert free["days_ahead"] == 15  # 9 Apr .. 23 Apr; today's spending is already in
-    assert free["month_end_cents"] == free["cash_left_cents"] - 1429 * 15
+    assert free["month_end_cents"] == free["free_cents"] - 1429 * 15
 
 
 def test_days_the_files_do_not_reach_count_as_still_ahead(db, client, monkeypatch):
@@ -205,7 +205,7 @@ def test_early_month_says_nothing_about_the_average_day(db, client, monkeypatch)
     body = client.get("/dashboard/pace").json()
     assert body["ordinary_day"] is None
     assert body["free"]["avg_day_cents"] is None and body["free"]["month_end_cents"] is None
-    assert body["free"]["cash_left_cents"] is not None
+    assert body["free"]["free_cents"] is not None
 
 
 def test_a_past_month_has_its_average_day_and_money_in(db, client, monkeypatch):

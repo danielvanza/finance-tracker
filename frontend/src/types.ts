@@ -64,22 +64,21 @@ export interface SetAsides { month: string; items: SetAside[]; set_aside_cents: 
 
 /** What can still be spent freely this month: the Month page's headline. */
 export interface FreeToSpend {
-  free_cents: number
+  free_cents: number                   // the headline: money in (and expected) less spent, saved, bills, set-asides
   per_day_cents: number | null
   left_in_plan_cents: number
   bills_cents: number
   bills: Array<{ key: string; name: string; amount_cents: number; next_date: string | null; category_name: string }>
   set_aside_cents: number
   set_asides: Array<{ id: number; name: string; monthly_cents: number }>
-  // The money's view: in + still expected in - out - saved - still to save - bills - set-asides.
+  // What free_cents is made of: in + still expected in - spent - saved - bills - set-asides.
   money_in_cents: number
   income_expected_cents: number
   income_expected: Array<{ key: string; name: string; amount_cents: number; next_date: string | null }>
   spent_cents: number
   saved_cents: number
   to_save_cents: number
-  cash_left_cents: number
-  outside_plan_cents: number           // cash_left less free: income above the plan
+  plan_free_cents: number              // the plan's view: left in the plan less bills and set-asides
   still_to_come_cents: number          // bills + set-asides + still to save
   avg_day_cents: number | null         // null: too early, or no ordinary day yet
   avg_day_days: number | null

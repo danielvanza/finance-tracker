@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ChevronLeft } from 'lucide-react'
+import { House } from 'lucide-react'
 import { ThemeProvider } from './daylight'
 import Month from './pages/Month'
 import Import from './pages/Import'
@@ -125,7 +125,7 @@ function Shell() {
           ))}
         </nav>
         <AddRow onOpen={openAdd} />
-        <a href="/" className="back" aria-label="Dashboard"><ChevronLeft size={13} aria-hidden="true" /><span className="back-label">Dashboard</span></a>
+        <a href="/" className="back" aria-label="Dashboard"><House size={16} aria-hidden="true" /><span className="back-label">Dashboard</span></a>
       </aside>
       <main className="content" key={pathname}>
         {current === '/transactions' && <MoneySwitch pathname={pathname} />}

@@ -166,10 +166,12 @@ export default function Categories({ rows, month, isCurrent, categories, todayPc
               ? <>{formatEuros(actual - row.planned_amount_cents)} over<small> · {formatEuros(actual)} of {formatEuros(row.planned_amount_cents)}</small></>
               : <>{formatEuros(actual)}<small> of {formatEuros(row.planned_amount_cents)}{status?.kind === 'paid' && ' · paid'}</small></>}
           </span>
-          <span className="meter" aria-hidden="true">
-            <i style={{ width: `${percent(actual, row.planned_amount_cents)}%` }} />
-            {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
-          </span>
+          {row.planned_amount_cents > 0 && (
+            <span className="meter" aria-hidden="true">
+              <i style={{ width: `${percent(actual, row.planned_amount_cents)}%` }} />
+              {todayPct !== null && <b style={{ left: `${todayPct}%` }} />}
+            </span>
+          )}
           {status?.kind === 'ahead' && (
             <span className="cat-note">On course for about {formatEuros(status.endCents)}, {formatEuros(status.overCents)} over</span>
           )}

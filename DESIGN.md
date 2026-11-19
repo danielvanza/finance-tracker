@@ -21,7 +21,7 @@ colors:
   series-needs: "#16558c"
   series-needs-night: "#5590cc"
   series-wants: "#bf7fb9"
-  series-wants-night: "#82477e"
+  series-wants-night: "#a0599a"
   series-savings: "#3e7232"
   series-savings-night: "#5e9352"
   bg: "#eef1ec"

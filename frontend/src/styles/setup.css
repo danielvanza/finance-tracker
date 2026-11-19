@@ -292,10 +292,22 @@
   }
 }
 
+/* Beside the categories the panel is narrow: the button takes a row so the category name keeps its room. */
+@media (min-width: 1100px) and (max-width: 1499.98px) {
+  .setup-rule-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .setup-rule-form > .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
 /* Budget, Rules, Categories, Set-asides, Target split, Your own accounts, Settings (then Your data). The long categories list sits beside the rest. */
 @media (min-width: 1100px) {
   .setup-sections {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     grid-template-rows: repeat(7, auto) 1fr;
     align-items: start;
   }
@@ -609,9 +621,10 @@
   padding-left: 0.4rem;
 }
 
+/* Below 1024px the tab bar and the chat button share the foot of the screen, so the bar rides above them. */
 @media (max-width: 1023.98px) {
   .bud-actions.is-bar {
-    margin-right: calc(var(--chat-fab) - 0.95rem);
+    bottom: calc(var(--chat-fab-bottom) + var(--chat-fab) + 0.5rem);
   }
 }
 

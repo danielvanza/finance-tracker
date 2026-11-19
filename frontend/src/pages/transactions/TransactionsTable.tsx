@@ -117,7 +117,7 @@ export default function TransactionsTable({ transactions, categories, onCategory
                   tag={tx.set_aside_name != null ? (
                     <span className="tx-tag" title={`Paid from the set-aside "${tx.set_aside_name}": counts in no month's spending`}>set aside</span>
                   ) : tx.confirmed && tx.categorised_by === 'ai' && (
-                    <span className="tx-tag" title="Sorted automatically: Claude was sure. Click the category to change it if it is wrong.">auto</span>
+                    <span className="tx-tag is-auto" title="Sorted automatically: Claude was sure. Click the category to change it if it is wrong.">auto</span>
                   )}
                 />
               </td>
@@ -154,7 +154,7 @@ export default function TransactionsTable({ transactions, categories, onCategory
                   />
                 )}
               </td>
-              <td>
+              <td className="tx-sorted-cell">
                 <span className="tx-sorted">
                   {tx.confirmed ? (
                     <span className="tx-status is-done">

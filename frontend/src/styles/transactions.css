@@ -137,7 +137,7 @@
   }
 }
 
-@media (min-width: 1100px) and (max-width: 1679px) {
+@media (min-width: 1100px) {
   .tx-review {
     max-width: 56rem;
   }
@@ -285,8 +285,8 @@
 
 @media (max-width: 720px) {
   .tx-chips {
-    margin-inline: -1.1rem;
-    padding-inline: 1.1rem;
+    margin-inline: -1rem;
+    padding-inline: 1rem;
   }
 
   .tx-count p {
@@ -591,7 +591,7 @@
   border-radius: var(--r-chip);
   box-shadow: var(--flat-sm);
   font: 500 0.8rem/1.3 var(--sans);
-  color: var(--muted);
+  color: var(--quiet);
   vertical-align: 0.08em;
 }
 
@@ -639,7 +639,15 @@
 }
 
 .tx-status.is-done {
-  color: var(--moss);
+  color: var(--text);
+}
+
+.tx-status.is-done svg {
+  color: var(--ok);
+}
+
+.tx-status.is-review svg {
+  color: var(--watch-ink);
 }
 
 .tx-status.is-review {
@@ -647,11 +655,11 @@
 }
 
 .tx-conf-high {
-  color: var(--moss);
+  color: var(--text);
 }
 
 .tx-conf-low {
-  color: var(--error);
+  color: var(--watch-ink);
 }
 
 /* The list */
@@ -668,6 +676,19 @@
 .tx-table td.empty {
   padding: 2.4rem 1rem;
   color: var(--quiet);
+}
+
+.table.tx-table th {
+  color: var(--quiet);
+}
+
+/* From 1280 px the table's own columns: the narrow ones take what they need, Description the rest. */
+@media (min-width: 1280px) {
+  .tx-table td.tx-date,
+  .tx-table td.tx-sorted-cell,
+  .tx-table td.tx-row-actions {
+    width: 1%;
+  }
 }
 
 .tx-date,
@@ -745,12 +766,15 @@
   min-width: 8rem;
 }
 
-/* Wide enough for the longest category name: Description gives up the width. */
-@media (min-width: 721px) {
+/* Wide enough for the longest category name: Description gives up the width. Below 1280 px the rows are
+   cards, so the name can take its own line. */
+@media (min-width: 1280px) {
   .tx-cat {
     min-width: 12.5rem;
   }
+}
 
+@media (min-width: 721px) {
   .tx-cat-btn {
     white-space: nowrap;
   }
@@ -833,7 +857,7 @@
 .tx-error {
   margin-top: 0.9rem;
   font-size: 0.875rem;
-  color: var(--error);
+  color: var(--over);
 }
 
 /* Splitting */
@@ -903,11 +927,11 @@
 }
 
 .btn.split-balance.is-balanced:disabled {
-  color: var(--moss);
+  color: var(--ok);
 }
 
 .btn.split-balance.is-over {
-  color: var(--error);
+  color: var(--over);
 }
 
 .split-unsplit {
@@ -1090,7 +1114,7 @@
 }
 
 /* The row's actions: there when reached for, not a column of raised chips down the page. */
-@media (hover: hover) and (min-width: 721px) {
+@media (hover: hover) and (min-width: 1280px) {
   .tx-table tbody .btn-sm {
     opacity: 0;
     transition: opacity 0.12s ease-out;
@@ -1102,7 +1126,7 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1279px) {
   /* Keeps its 44 px target without setting the height of the row. */
   .tx-table tbody .btn-sm {
     margin-block: -0.55rem;
@@ -1118,13 +1142,56 @@
   }
 }
 
-/* Phone: each row is a card. Which cell goes where is by column position (see COLUMNS in
-   TransactionsTable.tsx). */
+/* A phone and a tablet: each row is a card (a table's own columns do not fit beside the side rail below
+   1280 px). tables.css makes the cards up to 720 px; from 721 px the same is said here. Which cell goes
+   where is by column position (see COLUMNS in TransactionsTable.tsx). */
+@media (min-width: 721px) and (max-width: 1279px) {
+  .tx-table,
+  .tx-table > tbody {
+    display: block;
+  }
+
+  .tx-table > thead {
+    display: none;
+  }
+
+  .tx-table > tbody > tr {
+    display: grid;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 12px 14px;
+  }
+
+  .tx-table > tbody > tr > td:not(:only-child) {
+    display: block;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .tx-table > tbody > tr > td:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .tx-table > tbody > tr:has(> td:only-child) {
+    padding: 0;
+  }
+}
+
 @media (max-width: 720px) {
   .tx-panel {
     padding: 0.25rem;
   }
 
+  /* The sorted mark beside the amount already says "ai", and the source is the bank on all but a few rows:
+   neither earns the width a name needs here. */
+  .tx-tag.is-auto,
+  .tx-src {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) {
   .tx-table > tbody > tr + tr {
     border-top: 1px solid var(--line);
   }
@@ -1134,7 +1201,7 @@
   }
 
   .tx-table > tbody > tr {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(5.25rem, auto);
     grid-template-areas:
       'desc desc status amount'
       'date cat cat actions';
@@ -1143,7 +1210,12 @@
   .tx-table > tbody > tr > td:nth-child(1):not(:only-child) { grid-area: date; align-self: center; color: var(--quiet); font-size: 0.8rem; }
   .tx-table > tbody > tr > td:nth-child(2) { grid-area: desc; width: auto; overflow: visible; }
   .tx-desc-text.is-button { min-height: var(--tap); align-content: start; }
+  .tx-desc-merchant { align-items: flex-start; }
+  /* A tag beside the name sits on the name's own line, not centred on its 44 px target. */
+  .tx-desc-merchant > .tx-tag { margin: 0.15rem 0 0; }
+  .tx-sorted { margin-top: 0.15rem; }
   .tx-desc-merchant .mer-open { justify-content: flex-start; }
+  .tx-desc-merchant .mer-open:not(:has(.mer-raw)) { margin-bottom: -0.6rem; } /* the 44 px target, not its empty half, takes room */
   .tx-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }
   .tx-table > tbody > tr > td:nth-child(4) { grid-area: cat; }
   .tx-table > tbody > tr > td:nth-child(5) { grid-area: status; justify-self: end; align-self: start; } /* how it was sorted + source; the confidence is on the review card */
@@ -1170,7 +1242,7 @@
 
   /* Select mode: the tick column is first, so every cell moves up by one. */
   .tx-table.has-pick > tbody > tr {
-    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto minmax(5.25rem, auto);
     grid-template-areas:
       'pick desc desc status amount'
       'pick date cat cat actions';
@@ -1191,20 +1263,28 @@
   }
 }
 
-/* The card opens up: the payment on the left, the answers beside it. */
-@media (min-width: 1100px) and (max-width: 1679px) {
+/* The card opens up: the payment on the left, the answers beside it. It stays above the list at any width:
+   the content is only 84rem wide, and the table needs most of it. */
+@media (min-width: 1100px) {
   .rev {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
     column-gap: 2.4rem;
-    row-gap: 1rem;
+    row-gap: 0;
     align-content: start;
     max-width: 56rem;
     padding: 1.4rem 1.6rem;
   }
 
+  /* Spacing by margin, not row-gap: the payment spans rows that may stay empty, and gaps would still count. */
   .rev > * {
     grid-column: 2;
+    margin-top: 1rem;
+  }
+
+  .rev > .rev-pay,
+  .rev > .rev-pay + * {
+    margin-top: 0;
   }
 
   .rev > .rev-pay {
@@ -1222,19 +1302,6 @@
 
   .rev-pay .rev-meta {
     order: 1;
-  }
-}
-
-/* Wide screens: the review card beside the list rather than above it. */
-@media (min-width: 1680px) {
-  .tx-layout.has-review {
-    grid-template-columns: 28rem minmax(0, 1fr);
-    gap: 2.4rem;
-    align-items: start;
-  }
-
-  .rev {
-    max-width: none;
   }
 }
 
@@ -1270,19 +1337,19 @@
   width: 1.6rem;
   height: 1.6rem;
   border-radius: var(--r-chip);
-  background: var(--sunk);
-  box-shadow: none;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
   color: transparent;
 }
 
 .tx-pick input:checked + .tx-box {
-  background: var(--ink);
+  background: var(--accent);
   box-shadow: none;
-  color: var(--bg);
+  color: var(--on-accent);
 }
 
 .tx-pick input:focus-visible + .tx-box {
-  outline: 2px solid var(--shu);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 

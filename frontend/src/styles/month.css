@@ -493,6 +493,11 @@
   align-items: center;
 }
 
+.free-list li > .num:last-child {
+  grid-column: 2 / -1;
+  text-align: right;
+}
+
 .free-list small {
   display: block;
   color: var(--quiet);

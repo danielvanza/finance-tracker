@@ -46,6 +46,34 @@
   clip-path: inset(50%);
 }
 
+/* Against the plan: a line per kind (name, spent of plan) over its meter. */
+.report .kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.report .kind {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.report .kind small {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.report .kind .meter {
+  grid-column: 1 / -1;
+}
+
 .rep-cats {
   display: grid;
   gap: 1.1rem;

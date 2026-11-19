@@ -7,8 +7,10 @@ export function describeApiError(e: unknown): string {
     if (e.status === 0) {
       return "Couldn't reach the server — check your connection and try again."
     }
-    const detail = e.detail ?? (e.message.startsWith('Request failed') ? null : e.message)
-    return detail ? `Server error ${e.status}: ${detail}` : `Server error ${e.status}.`
+    // The server's own sentence stands alone; a status code only appears when it said nothing.
+    if (e.detail) return e.detail
+    const text = e.message.startsWith('Request failed') ? null : e.message
+    return text ? `Server error ${e.status}: ${text}` : `Server error ${e.status}.`
   }
   return 'Something went wrong — please try again.'
 }

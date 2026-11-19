@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { CircleAlert, X } from 'lucide-react'
 
 interface ErrorBannerProps {
   message: string
@@ -12,6 +12,7 @@ interface ErrorBannerProps {
 export default function ErrorBanner({ message, title = 'Something went wrong', onDismiss }: ErrorBannerProps) {
   return (
     <div role="alert" className="notice notice-error">
+      <span className="notice-icon" aria-hidden="true"><CircleAlert size={18} /></span>
       <div className="notice-body">
         <strong>{title}</strong>
         {message}

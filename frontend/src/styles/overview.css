@@ -52,7 +52,7 @@
 
 /* The hero sits on the ground, not in a card: it is the page. */
 .ov-hero {
-  padding: 0.5rem 0.125rem 0.25rem;
+  padding: 0.5rem 0 0.25rem;
 }
 
 .ov-label {
@@ -96,6 +96,12 @@
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .ov-strip > div + div {
+    padding-left: 0.5rem;
+  }
 }
 
 .amount {
@@ -350,6 +356,7 @@
 li.ov-row {
   margin: 0;
   padding-inline: 0;
+  border-radius: 0; /* the hairline between rows must not curl at its ends */
 }
 
 a.ov-row:hover {
@@ -361,6 +368,7 @@ a.ov-row:hover {
   flex: 1;
   min-width: 0;
   font: 500 0.95rem/1.3 var(--sans);
+  text-wrap: pretty;
 }
 
 .ov-row-text small {
@@ -540,6 +548,13 @@ a.ov-row:hover {
   background: var(--sunk);
 }
 
+@media (pointer: coarse), (max-width: 720px) {
+  .ov-looks a {
+    align-items: center;
+    min-height: var(--tap);
+  }
+}
+
 .ov-looks li + li {
   margin-top: 0.3rem;
 }
@@ -638,12 +653,30 @@ a.ov-row:hover {
   border-top: 1px solid var(--line);
 }
 
-/* From 720 px the groups stand in columns, so the hairline goes between them. */
-@media (min-width: 720px) {
+/* From 1280 px the three groups stand in columns, so the hairline goes between them. Below that they stack:
+   two columns would leave the third alone on a row with a rule it no longer needs. */
+.ov-fold .cat-groups {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1280px) {
+  .ov-fold .cat-groups {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .ov-fold .cat-group {
+    padding-right: 1.4rem;
+  }
+
   .ov-fold .cat-group + .cat-group {
-    padding: 0 0 0 1.4rem;
+    padding: 0 1.4rem;
     border-top: 0;
     border-left: 1px solid var(--line);
+  }
+
+  .ov-fold .cat-group:last-child {
+    padding-right: 0;
   }
 }
 
@@ -669,6 +702,7 @@ a.ov-row:hover {
 
   .ov-hero {
     grid-area: hero;
+    padding-top: 1rem; /* its label on the baseline of the first card's title */
   }
 
   .ov-side {
@@ -698,6 +732,18 @@ a.ov-row:hover {
   .ov-side {
     display: grid;
     gap: 0.875rem;
+  }
+}
+
+/* A tablet is not a stretched phone: the two cards stand side by side under the hero, the plot a little taller. */
+@media (min-width: 720px) and (max-width: 1023.98px) {
+  .ov-side {
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    align-items: start;
+  }
+
+  .pace-plot {
+    height: 8.5rem;
   }
 }
 

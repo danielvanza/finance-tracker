@@ -50,7 +50,11 @@
   border-radius: var(--r-chip);
   font: 500 0.875rem/1 var(--sans);
   white-space: nowrap;
-  color: var(--quiet);
+  color: var(--text);
+}
+
+.back svg {
+  flex: none;
 }
 
 .back:hover {
@@ -160,6 +164,18 @@
   .back-label {
     display: none;
   }
+
+  .back svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+}
+
+/* Narrow phones: the five things in the top row stay on one line. */
+@media (max-width: 23.75em) {
+  .side {
+    gap: 0.35rem;
+  }
 }
 
 /* Money's two views. */
@@ -173,6 +189,7 @@
 }
 
 .subnav a {
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: 2.25rem;
@@ -180,6 +197,13 @@
   border-radius: 9px;
   font: 600 0.875rem/1 var(--sans);
   color: var(--quiet);
+}
+
+/* The segment stays slim; its touch target is the full 44px. */
+.subnav a::after {
+  content: '';
+  position: absolute;
+  inset: -0.3rem -0.1rem;
 }
 
 .subnav a:hover {
@@ -333,5 +357,22 @@ html.theme-fading *::after {
 
   .shell .content {
     padding-right: calc(1.5rem + var(--chat-fab) + 1.25rem);
+  }
+}
+
+/* Tablet (720 to 1023): the three places keep a phone-sized bar, centred between the edges. */
+@media (min-width: 720px) and (max-width: 1023.98px) {
+  .tabbar {
+    left: 50%;
+    right: auto;
+    width: min(30rem, calc(100% - 2 * (var(--chat-fab) + 1.25rem)));
+    transform: translateX(-50%);
+  }
+}
+
+/* Desktop: a place you are not on answers the pointer with the sunk tint. */
+@media (min-width: 1024px) and (hover: hover) {
+  .tabbar a:not([aria-current='page']):hover {
+    background: var(--sunk);
   }
 }

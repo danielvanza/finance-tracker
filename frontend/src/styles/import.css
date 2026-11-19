@@ -1,4 +1,4 @@
-/* Import: choose the bank, choose the file, check the preview, confirm, see what happened. After a gap a short path leads through it. */
+/* Import: choose the file, check the preview, confirm, see what happened. After a gap a short path leads through it. */
 
 .import-back {
   margin-bottom: 1rem;
@@ -18,47 +18,11 @@
   gap: 0.9rem;
 }
 
-.import-num {
-  margin-right: 0.5em;
-  color: var(--quiet);
-}
-
 .import-hint {
   margin-top: -0.4rem;
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text);
-}
-
-.import-banks {
-  display: flex;
-}
-
-/* Each chip carries its bank's last row under the name. */
-.import-banks button {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  min-height: 3.2rem;
-  padding: 0.4rem;
-  font-size: 0.875rem;
-  line-height: 1.2;
-}
-
-.import-banks small {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font: 500 0.8rem/1.3 var(--sans);
-  font-weight: 400;
-  color: var(--quiet);
-}
-
-.import-banks small svg {
-  color: var(--moss);
 }
 
 /* The drop zone is the file input, stretched invisibly over a well. */
@@ -74,17 +38,35 @@
   padding: 1.4rem 1rem;
   text-align: center;
   color: var(--quiet);
+  border: 1.5px dashed var(--hair);
   transition: transform var(--press-out), box-shadow var(--press-out), background-color var(--press-out);
+}
+
+/* The upload mark is the tappable thing: a soft green disc, the accent glyph. */
+.import-drop > svg {
+  box-sizing: content-box;
+  padding: 0.6rem;
+  margin-bottom: 0.2rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .import-drop strong {
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
 }
 
 .import-drop span {
   font-size: 0.85rem;
+}
+
+/* A finger cannot drop a file here, so a phone is not told to. */
+@media (pointer: coarse) {
+  .import-drop .import-or {
+    display: none;
+  }
 }
 
 .import-drop:is(:active, .is-pressed),
@@ -97,7 +79,7 @@
 
 /* A file dragged anywhere over the page marks the well it will land in. */
 .import-drop.is-over {
-  outline: 2px dashed var(--shu);
+  outline: 2px dashed var(--accent);
   outline-offset: 4px;
 }
 
@@ -119,8 +101,14 @@
   text-align: left;
 }
 
+.import-steps:has(~ .import-preview) .import-drop > svg {
+  padding: 0;
+  margin: 0;
+  background: none;
+}
+
 .import-drop:has(.import-file:focus-visible) {
-  outline: 2px solid var(--shu);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -159,6 +147,19 @@
   scroll-margin-top: 1rem;
 }
 
+/* A new panel arrives with one short rise; reduced motion turns it off (base.css). */
+.import-preview,
+.import-done {
+  animation: import-in 0.28s var(--ease-out) both;
+}
+
+@keyframes import-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 /* The shared banner stops at 40rem; here it runs as wide as the panels around it. */
 .import-alert .notice {
   max-width: none;
@@ -181,20 +182,15 @@
   width: 100%;
 }
 
-.import-counts {
-  margin-top: 0.4rem;
-  font-size: 0.9rem;
-  color: var(--text);
-}
-
 .import-new {
-  color: var(--moss);
+  color: var(--ok);
 }
 
 .import-say {
   margin-top: 0.4rem;
   font-size: 0.9rem;
   color: var(--text);
+  text-wrap: pretty;
 }
 
 .import-say strong {
@@ -207,15 +203,47 @@
   white-space: nowrap;
 }
 
-/* Rows already in fold away under the new ones. */
+/* Rows already in fold away under the new ones; the chevron says the line opens. */
 .import-fold > summary,
 .import-more > summary {
   display: flex;
   align-items: center;
+  gap: 0.6rem;
   min-height: var(--tap);
   cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--quiet);
+  list-style: none;
+  font: 500 0.875rem/1.3 var(--sans);
+  color: var(--text);
+}
+
+.import-fold > summary::-webkit-details-marker,
+.import-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.import-fold > summary::before,
+.import-more > summary::before {
+  content: '';
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin: 0 0.15rem 0.2rem 0.1rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.3s var(--ease-out);
+}
+
+.import-fold[open] > summary::before,
+.import-more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+@media (hover: hover) {
+  .import-fold > summary:hover,
+  .import-more > summary:hover {
+    color: var(--accent);
+  }
 }
 
 .import-fold > summary {
@@ -225,8 +253,8 @@
 .import-fold > summary:focus-visible,
 .import-more > summary:focus-visible,
 .import-preview h2:focus-visible,
-.import-done-label:focus-visible {
-  outline: 2px solid var(--shu);
+.import-done-heading:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
   border-radius: var(--r-chip);
 }
@@ -236,20 +264,35 @@
 }
 
 .import-table td.is-in {
-  color: var(--moss);
+  color: var(--ok);
 }
 
 .import-table tr.is-duplicate td {
   color: var(--quiet);
 }
 
-/* What happened: the sentence, the one line that needs a look, the button, the count folded away. */
+/* What happened: the heading, the sentence, the one line that needs a look, the button, the count folded away. */
 .import-done > * + * {
   margin-top: 0.9rem;
 }
 
-.import-done-title {
+.import-done-heading {
   font: 600 1.25rem/1.25 var(--sans);
+  color: var(--ink);
+}
+
+.import-done > .import-done-title {
+  margin-top: 0.35rem;
+  font: 500 1rem/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.import-done > .import-done-line {
+  margin-top: 0.2rem;
+}
+
+.import-done > .import-done-actions {
+  margin-top: 1.1rem;
 }
 
 .import-done-line {
@@ -269,7 +312,8 @@
 }
 
 .import-done-actions .btn-primary {
-  flex: 1 1 14rem;
+  flex: 0 1 auto;
+  min-width: 14rem;
 }
 
 .import-tally div {
@@ -318,8 +362,8 @@
   justify-content: center;
   gap: 0.1rem;
   min-height: 3.4rem;
-  padding: 0.4rem 0.55rem;
-  font-size: 0.82rem;
+  padding: 0.4rem 0.4rem;
+  font-size: 0.875rem;
   color: var(--ink);
 }
 
@@ -332,12 +376,12 @@
 .import-path li[aria-current='step'] {
   background: var(--sunk);
   box-shadow: none;
-  font-weight: 700;
+  font-weight: 600;
   border-radius: var(--r-row);
 }
 
 .import-path li small {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   line-height: 1.25;
   font-weight: 400;
   color: var(--quiet);
@@ -358,7 +402,7 @@
 }
 
 .import-path li.is-done .mark {
-  color: var(--moss);
+  color: var(--ok);
 }
 
 /* With the result showing, the steps stay as progress and the result carries the words. */
@@ -446,7 +490,7 @@
     grid-template-columns: 1fr auto;
     grid-template-areas: "desc amount" "date date";
     gap: 2px 10px;
-    padding: 8px 14px;
+    padding: 8px 0.5rem;
     border-top: 1px solid var(--line);
   }
   .import-table > tbody > tr:first-child { border-top: 0; }
@@ -454,5 +498,5 @@
   .import-table > tbody > tr > td:nth-child(1) { grid-area: date; }
   .import-table > tbody > tr > td:nth-child(2) { grid-area: desc; overflow-wrap: anywhere; }
   .import-table > tbody > tr > td:nth-child(3) { grid-area: amount; align-self: start; }
-  .import-table > tbody > tr > td:nth-child(1) { font-size: 0.76rem; color: var(--quiet); }
+  .import-table > tbody > tr > td:nth-child(1) { font-size: 0.8rem; color: var(--quiet); }
 }

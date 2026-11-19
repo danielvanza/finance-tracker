@@ -44,7 +44,7 @@ export default function Result({ data, bank, catchup, headingRef, onAgain }: Pro
 
   return (
     <section className="panel import-done" aria-labelledby="import-result-title">
-      <h2 id="import-result-title" className="lab import-done-label" tabIndex={-1} ref={headingRef}>
+      <h2 id="import-result-title" className="import-done-heading" tabIndex={-1} ref={headingRef}>
         {catchup ? `${BANKS[bank]} added` : 'Import finished'}
       </h2>
       <p className="import-done-title num">{catchup ? added : `Added ${added}`}</p>

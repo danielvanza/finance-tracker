@@ -12,3 +12,4 @@
 - **No status column.** The heading's "N new" and the fold's summary say which rows are in; already-in rows are only muted. The phone grid is `desc amount / date date`.
 - **The chooser folds** to one 44 px row (no hint, no Preview button) while a preview shows (`:has(~ .import-preview)`); the file can still be changed from it.
 - **The whole page takes a dropped CSV** (window listeners in `Import.tsx`); the well is outlined while a file is dragged over the page. Non-CSV drops are ignored but never navigate away.
+- **Quiet openers, no eyebrow.** The result's `h2` is its heading (`.import-done-heading`); the sentence under it is body text. Both folds ("rows already in", "The full count") read in `--text` with a chevron, `--accent` on hover. "or drop one here" is hidden on a coarse pointer (`.import-or`), where nothing can be dropped. Phone preview rows pad 0.5 rem so their text lines up with the heading and the fold.

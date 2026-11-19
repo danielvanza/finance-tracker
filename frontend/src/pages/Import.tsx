@@ -176,7 +176,7 @@ export default function Import() {
                 <>
                   <Upload size={20} aria-hidden="true" />
                   <strong>Choose a file</strong>
-                  <span className="muted">or drop one here</span>
+                  <span className="muted import-or">or drop one here</span>
                 </>
               )}
               <input

@@ -70,6 +70,11 @@
   margin-bottom: 0.9rem;
 }
 
+/* "By shop" sits beside the period pills, so it is a pill too. */
+.mer-views .mer-toggle {
+  border-radius: 999px;
+}
+
 .mer-scope {
   margin: 0 0 0.7rem;
 }

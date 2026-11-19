@@ -1051,6 +1051,13 @@
   cursor: pointer;
 }
 
+/* A long name wraps inside its cell instead of ending in an ellipsis. */
+.cs-opt .cs-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
 .cs-opt.is-hi {
   background: var(--press-tint);
 }

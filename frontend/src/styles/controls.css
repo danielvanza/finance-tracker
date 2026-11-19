@@ -291,6 +291,19 @@ label.lab {
   color: var(--error);
 }
 
+/* An error says so by its icon as well as its colour. */
+.notice-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin: -0.1rem 0.1rem -0.1rem -0.2rem;
+  border-radius: 10px;
+  color: var(--over);
+  background: var(--over-soft);
+}
+
 .notice button {
   flex: none;
   display: grid;

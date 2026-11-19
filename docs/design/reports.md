@@ -7,3 +7,4 @@
 - Phone action chips (under 720px) are one row of three equal chips that never wrap (`flex: 1 1 0; min-width: 0`), down to 320px.
 - **Folds are screen-only.** Rows with nothing spent and nothing different from the month before fold into one "Nothing spent in N categories" line per group (only when there are two or more), and "What moved" sits behind one row, closed. Both stay in the DOM, hidden by `.is-open` classes, so print forces them shown: the statement lists every category.
 - The report's period label drops "day N of M" up to 430px (the year makes it longer than Month's).
+- **Against the plan** is `.report .kinds` / `.report .kind` in `reports.css` (name and "spent of plan" over a meter); Month no longer uses those classes, so nothing else styles them.

@@ -46,6 +46,7 @@ function NamesForm({ saved: savedNames }: { saved: string }) {
               <input
                 id={`own-name-${i}`}
                 className="field"
+                placeholder="e.g. J Jansen"
                 value={name}
                 onChange={e => { setNames(names.map((n, j) => (j === i ? e.target.value : n))); setSaved(false) }}
               />

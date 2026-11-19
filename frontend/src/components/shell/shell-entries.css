@@ -75,7 +75,7 @@
     font: 400 0.9rem/1 var(--sans);
     color: var(--quiet);
     background: var(--sunk);
-    box-shadow: none;
+    box-shadow: var(--press);
   }
 
   .find-well svg,

@@ -8,3 +8,5 @@
 - **A transient confirmation** sits above the chat button on a phone, in a persistent `role=status` region.
 - **`/report` keeps Month as the current tab.**
 - **Find lists Places once you type**: settings and sheets (`PLACES` in `keys.ts`: label, where it lives, route, hidden search words), after pages and actions, at most five. The empty query is pages and actions only. A place that is a sheet which hides when empty (Recurring, Savings goals) links to its page, never to the sheet.
+- **Tablet (720 to 1023) keeps a phone-sized tab bar**: 30rem at most, centred between the edges, the chat button at the right. The Money switch's segments look 34px tall but their touch target is 44px (`::after`).
+- **No key hints on a touch screen**: the palette hides its `G O`, `N` and `?` hints under `(hover: none)`. The Dashboard icon is `--text` and 1.2rem so it reads as a button; the top row tightens its gap under 380px so all five fit at 320px.

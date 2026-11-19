@@ -110,3 +110,10 @@
   font-size: 0.72rem;
   color: var(--quiet);
 }
+
+/* A touch screen has no keyboard to press the hints on. */
+@media (hover: none) {
+  .pal .cs-opt .kbd {
+    display: none;
+  }
+}

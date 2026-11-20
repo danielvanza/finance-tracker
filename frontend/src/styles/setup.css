@@ -169,7 +169,6 @@
 }
 
 /* A row with a name, a line about it and actions: set-asides */
-/* .content wraps "anywhere", which would let the name column shrink to one letter: wrap only at spaces, break a long word only when it overflows. */
 .setup-adj {
   display: flex;
   flex-wrap: wrap;
@@ -177,7 +176,6 @@
   gap: 0.5rem 0.6rem;
   padding: 0.7rem 0;
   border-top: 1px solid var(--line);
-  overflow-wrap: break-word;
 }
 
 .setup-adj-text {
@@ -251,12 +249,18 @@
   white-space: nowrap;
 }
 
+/* Each section is its own container: a row gets the one-line grid only when the section has room for the name beside
+   the buttons. A narrow section (the third column on a wide screen) keeps the stacked layout. */
+.setup-sections > * {
+  container-type: inline-size;
+}
+
 /* Wide enough for one line: the name shares it with the controls and the detail runs full width beneath. */
-@media (min-width: 560px) {
+@container (min-width: 26rem) {
   .setup-adj {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 8rem auto auto;
-    grid-template-areas: "name amount pause del" "meta meta meta meta";
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "name pause del" "meta meta meta";
     gap: 0.15rem 0.6rem;
   }
 

@@ -169,6 +169,7 @@
 }
 
 /* A row with a name, a line about it and actions: set-asides */
+/* .content wraps "anywhere", which would let the name column shrink to one letter: wrap only at spaces, break a long word only when it overflows. */
 .setup-adj {
   display: flex;
   flex-wrap: wrap;
@@ -176,6 +177,7 @@
   gap: 0.5rem 0.6rem;
   padding: 0.7rem 0;
   border-top: 1px solid var(--line);
+  overflow-wrap: break-word;
 }
 
 .setup-adj-text {

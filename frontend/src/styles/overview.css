@@ -104,10 +104,16 @@
   }
 }
 
+/* .content wraps "anywhere", which would let the flex items shrink and split the digits: an amount never wraps. */
 .amount {
   display: inline-flex;
   align-items: flex-start;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount > * {
+  flex-shrink: 0;
 }
 
 .amount small {

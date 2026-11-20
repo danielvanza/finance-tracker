@@ -329,30 +329,66 @@
 }
 
 @media (min-width: 1800px) {
-  /* The five narrow ones (set-asides, target split, your own accounts, settings, your data) stack at the top of
-     the third column: the budget and the categories span the five auto rows and the flexible one, so they never
-     stretch them. */
-  .setup-sections {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto 1fr auto;
+  /* The page uses the width of a big screen: the plan and its rules, the categories, then the five narrow
+     sections. The budget and the rules each span two of the five rows the narrow sections sit in, so the
+     rules follow the budget at once and no row is stretched to make room for them. */
+  :root:not([data-chat-docked]) .shell:has(.setup-sections) .content {
+    max-width: 112rem;
   }
 
-  .setup-sections > :nth-child(1) {
+  :root:not([data-chat-docked]) .setup-sections {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: repeat(5, auto);
+  }
+
+  :root:not([data-chat-docked]) .setup-sections > :nth-child(1) {
     grid-column: 1;
-    grid-row: 1 / span 6;
+    grid-row: 1 / span 2;
   }
 
-  .setup-sections > :nth-child(2) {
+  :root:not([data-chat-docked]) .setup-sections > :nth-child(2) {
     grid-column: 1;
-    grid-row: 7;
+    grid-row: 3 / span 2;
   }
 
-  .setup-sections > :nth-child(3) {
+  :root:not([data-chat-docked]) .setup-sections > :nth-child(3) {
     grid-column: 2;
-    grid-row: 1 / span 6;
+    grid-row: 1 / span 5;
   }
 
-  .setup-sections > :nth-child(n + 4) {
+  :root:not([data-chat-docked]) .setup-sections > :nth-child(n + 4) {
+    grid-column: 3;
+    grid-row: auto;
+  }
+}
+
+/* With the chat panel beside the page it takes 400px, so three columns wait for a screen that much wider. */
+@media (min-width: 2200px) {
+  :root[data-chat-docked] .shell:has(.setup-sections) .content {
+    max-width: 112rem;
+  }
+
+  :root[data-chat-docked] .setup-sections {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: repeat(5, auto);
+  }
+
+  :root[data-chat-docked] .setup-sections > :nth-child(1) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  :root[data-chat-docked] .setup-sections > :nth-child(2) {
+    grid-column: 1;
+    grid-row: 3 / span 2;
+  }
+
+  :root[data-chat-docked] .setup-sections > :nth-child(3) {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+  }
+
+  :root[data-chat-docked] .setup-sections > :nth-child(n + 4) {
     grid-column: 3;
     grid-row: auto;
   }

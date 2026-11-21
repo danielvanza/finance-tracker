@@ -125,3 +125,26 @@ class Setting(Base):
     value = Column(String(500), nullable=False)
 
 
+
+
+class RemovedBankRow(Base):
+    """An imported bank row a person had removed (a duplicate, a wrong row). A later import of the same
+    file counts it as already here, so it does not come back. Undoing the removal drops this row."""
+    __tablename__ = "removed_bank_rows"
+    import_hash = Column(String, primary_key=True)  # the removed row's import_hash
+    date = Column(Date, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    description = Column(String, nullable=False)
+
+
+class AppliedChange(Base):
+    """What an applied chat card changed, so it can be undone: for each row it touched in
+    `assistant.actions._TABLES`, the row before and after (`rows`: [{table, key, before, after}], None for a
+    row that was not there)."""
+    __tablename__ = "applied_changes"
+    id = Column(Integer, primary_key=True)
+    card_id = Column(Integer, nullable=False, unique=True)  # the bot kit's card id
+    op = Column(String, nullable=False)
+    rows = Column(JSON, nullable=False)
+    applied_at = Column(DateTime, nullable=False)
+    undone_at = Column(DateTime, nullable=True)

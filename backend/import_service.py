@@ -9,7 +9,7 @@ import guesses
 import money
 from categorizer.ai import batch_categorise_with_ai
 from categorizer.rules import apply_rules
-from models import Transaction, TransactionSource
+from models import RemovedBankRow, Transaction, TransactionSource
 
 # A manual entry this many days from a bank row with the same amount looks like the same payment.
 DOUBLE_ENTRY_DAYS = 7
@@ -33,13 +33,17 @@ def already_here(rows: list, db: Session) -> list[bool]:
     The same export imported twice matches by its hash. The same payment from an export in the other
     language has other wording in its notes and so another hash; it is recognised by date, amount and
     name, one existing row answering for one row of the file.
+
+    A bank row a person had removed (`RemovedBankRow`) counts as here, so a later import does not bring it back.
     """
-    hashes = {t[0] for t in db.query(Transaction.import_hash).all()}
+    removed = db.query(RemovedBankRow.import_hash, RemovedBankRow.date, RemovedBankRow.amount,
+                       RemovedBankRow.description).all()
+    hashes = {t[0] for t in db.query(Transaction.import_hash).all()} | {r[0] for r in removed}
     key = lambda day, amount, description: (day, money.to_cents(amount), description)  # noqa: E731
     stored = Counter(
         key(*row) for row in db.query(Transaction.date, Transaction.amount, Transaction.description)
         .filter(Transaction.source == TransactionSource.ing).all()
-    )
+    ) + Counter(key(*row[1:]) for row in removed)
     here = [r.import_hash in hashes for r in rows]
     for r, known in zip(rows, here):
         if known and stored[key(r.date, r.amount, r.description)] > 0:

@@ -332,8 +332,8 @@ test.describe.serial('the finance agent, in controlled conditions', () => {
 
     // A change that truly cannot be made ends in the agent's own plain explanation, not an app error.
     const bank = (await app.transactions()).find(t => t.source === 'ing')!
-    const refused = script(change('Delete the bank row.', 'transaction.delete', { id: bank.id }),
-      'SCRIPT-SAY I can\'t delete that one: it came from the bank file, and only manual entries can be deleted.')
+    const refused = script(change('Change the bank row\'s amount.', 'transaction.update', { id: bank.id, amount_cents: -1 }),
+      'SCRIPT-SAY I can\'t change that amount: it came from the bank file, and only manual entries can have their amount changed.')
     const plain = await replyTo(refused)
     expect((await bubble()).find((m: any) => m.text === refused).steps).toContain('The app would not take that as it was, so I am correcting it')
     expect(plain.map((r: any) => r.kind)).toEqual(['answer'])

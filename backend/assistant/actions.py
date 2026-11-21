@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select, text as sql
+from sqlalchemy import Date, DateTime, Float, Numeric, select, text as sql
 from sqlalchemy.orm import Session
 
 import clock
@@ -22,7 +22,10 @@ import guesses
 import money
 import spend_service
 from financial_month import label_month_for_date
-from models import AskShop, Budget, Category, IgnoredBill, Rule, SetAside, Setting, Transaction, TransactionSplit
+from models import (
+    AppliedChange, AskShop, Budget, Category, IgnoredBill, RemovedBankRow, Rule, SetAside, Setting, Transaction,
+    TransactionSplit,
+)
 from routers import budget as budget_router
 from routers import categories as categories_router
 from routers import goals as goals_router
@@ -41,7 +44,7 @@ _LONG_MONTHS = [
 ]
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
 MAX_BATCH = 500
-_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting)
+_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting, RemovedBankRow)
 _SETTING_NAMES = {
     "financial_month_start_day": "Financial month start day",
     "target_split": "Target split (needs/wants/savings)",
@@ -331,6 +334,159 @@ def _set_setting(db: Session, a: dict):
     settings_router.patch_setting(a.get("key"), SettingPatch(value=str(a.get("value"))), db)
 
 
+def _is_manual(tx: Transaction) -> bool:
+    return (tx.source.value if hasattr(tx.source, "value") else tx.source) == "manual"
+
+
+def _delete_transaction(db: Session, a: dict):
+    """Remove a manual entry, or an imported bank row (a duplicate, a wrong row). A removed bank row is noted
+    (`RemovedBankRow`) so that importing its file again does not bring it back. Its split parts go with it; one
+    paid from a set-aside must be unlinked first, so the card shows the set-aside counting it as unpaid again."""
+    tx = _get(db, Transaction, a.get("id"), "transaction")
+    if _is_manual(tx):
+        transactions_router.delete_transaction(tx.id, db)
+        return
+    if tx.set_aside_id is not None:
+        bill = db.get(SetAside, tx.set_aside_id)
+        raise ActionError(
+            f"The bank row '{tx.description} · {_short_date(tx.date)}' (id {tx.id}) is paid from the set-aside "
+            f"'{bill.name if bill else tx.set_aside_id}' (id {tx.set_aside_id}). Unlink it first with set_aside.unpay, "
+            "in a batch before transaction.delete"
+        )
+    if db.get(RemovedBankRow, tx.import_hash) is None:
+        db.add(RemovedBankRow(import_hash=tx.import_hash, date=tx.date, amount=tx.amount, description=tx.description))
+    db.delete(tx)  # its split parts go with it
+    db.commit()
+
+
+UNDO_DAYS = 7  # an applied card shows its Undo button this long
+
+
+def _jsonable(value):
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    return value
+
+
+def _from_json(column, value):
+    """A stored value back in its column's own Python type."""
+    if value is None:
+        return None
+    if isinstance(column.type, DateTime):
+        return datetime.fromisoformat(value)
+    if isinstance(column.type, Date):
+        return date.fromisoformat(value)
+    if isinstance(column.type, Numeric) and not isinstance(column.type, Float):
+        return Decimal(value)
+    return value
+
+
+def _touched(before: dict, after: dict) -> list[dict]:
+    """Every row whose content differs between two snapshots, JSON-safe: [{table, key, before, after}]."""
+    rows = []
+    for model in _TABLES:
+        name = model.__table__.name
+        old, new = before[name], after[name]
+        for key in sorted(set(old) | set(new), key=str):
+            if old.get(key) != new.get(key):
+                rows.append({
+                    "table": name, "key": key,
+                    "before": {k: _jsonable(v) for k, v in old[key].items()} if key in old else None,
+                    "after": {k: _jsonable(v) for k, v in new[key].items()} if key in new else None,
+                })
+    return rows
+
+
+def _row_now(db: Session, table, key) -> dict | None:
+    pk = next(iter(table.primary_key.columns))
+    row = db.execute(select(table).where(pk == key)).mappings().first()
+    return {k: _jsonable(_plain(v)) for k, v in row.items()} if row is not None else None
+
+
+def _row_name(db: Session, table_name: str, row: dict) -> str:
+    """A row as the household would name it, for a refusal."""
+    def when(value) -> str:
+        return _short_date(date.fromisoformat(value)) if value else ""
+
+    def category(cid) -> str:
+        c = db.get(Category, cid) if cid is not None else None
+        return c.name if c else "no category"
+
+    if table_name == "transactions":
+        return f"the payment '{row['description']} · {when(row['date'])}'"
+    if table_name == "transaction_splits":
+        tx = db.get(Transaction, row["transaction_id"])
+        return f"the split of the payment '{tx.description} · {_short_date(tx.date)}'" if tx else "a split of a payment"
+    if table_name == "categories":
+        return f"the category '{row['name']}'"
+    if table_name == "rules":
+        return f"the rule '{row['pattern']}'"
+    if table_name == "budgets":
+        month = _month_label(date.fromisoformat(row["month"])) if row.get("month") else "the starting amount"
+        return f"the plan for {category(row['category_id'])} in {month}"
+    if table_name == "set_asides":
+        return f"the set-aside '{row['name']}'"
+    if table_name == "ask_shops":
+        return f"the shop '{row['pattern']}'"
+    if table_name == "ignored_bills":
+        return f"the fixed bill '{row['key']}'"
+    if table_name == "settings":
+        return "the savings goals" if row["key"] == goals_router.KEY else f"the setting '{_SETTING_NAMES.get(row['key'], row['key'])}'"
+    if table_name == "removed_bank_rows":
+        return f"the removed bank row '{row['description']} · {when(row['date'])}'"
+    return f"a row in {table_name}"
+
+
+def _undo_card(db: Session, a: dict):
+    """Put back every row an applied card changed, as it was before; refused when one was changed since."""
+    card_id = a.get("card_id")
+    record = (db.query(AppliedChange).filter_by(card_id=card_id).first()
+              if isinstance(card_id, int) and not isinstance(card_id, bool) else None)
+    if record is None:
+        raise ActionError(
+            f"There is no record of what card {card_id} changed: it was not applied, or it was applied before the app "
+            "kept what each card changed, so it cannot be undone"
+        )
+    if record.undone_at is not None:
+        raise ActionError(f"Card {card_id} was already undone")
+    tables = {model.__table__.name: model.__table__ for model in _TABLES}
+    for entry in record.rows:
+        table = tables.get(entry["table"])
+        if table is None:
+            raise ActionError(f"Card {card_id} changed something the app no longer has, so it cannot be undone")
+        now = _row_now(db, table, entry["key"])
+        if now != entry["after"]:
+            named = _row_name(db, entry["table"], now or entry["after"] or entry["before"])
+            raise ActionError(f"{named[0].upper()}{named[1:]} was changed again after that card (card {card_id}), so it cannot be undone")
+
+    def restore(entry) -> dict:
+        table = tables[entry["table"]]
+        return {c.name: _from_json(c, entry["before"].get(c.name)) for c in table.columns if c.name in entry["before"]}
+
+    def pk(entry):
+        return next(iter(tables[entry["table"]].primary_key.columns)) == entry["key"]
+
+    order = [m.__table__.name for m in _TABLES]
+    rows = sorted(record.rows, key=lambda e: order.index(e["table"]))
+    for entry in reversed(rows):  # what the card added goes first, so nothing it held is in the way
+        if entry["before"] is None:
+            db.execute(tables[entry["table"]].delete().where(pk(entry)))
+    for entry in rows:
+        if entry["before"] is not None and entry["after"] is not None:
+            db.execute(tables[entry["table"]].update().where(pk(entry)).values(**restore(entry)))
+        elif entry["before"] is not None:  # what it removed comes back with its own id
+            db.execute(tables[entry["table"]].insert().values(**restore(entry)))
+    record.undone_at = clock.now()
+    db.commit()
+
+
+def _record(conn, card_id: int, name: str, rows: list[dict]) -> None:
+    conn.execute(AppliedChange.__table__.insert().values(
+        card_id=card_id, op=name, rows=rows, applied_at=clock.now()))
+
+
 @dataclass(frozen=True)
 class Op:
     run: Callable[[Session, dict], Any]
@@ -345,8 +501,8 @@ OPS: dict[str, Op] = {
         '{"id":int, then only what changes: "category_id":int,"confirmed":bool,"is_refund":bool; manual entries also "date","amount_cents","description"}'),
     "transaction.split": Op(_split_transaction,
         '{"id":int,"parts":[{"category_id":int,"amount_cents":int,"is_refund":bool optional}]} parts sum exactly to the transaction amount with the same sign; "parts":[] removes a split'),
-    "transaction.delete": Op(lambda db, a: transactions_router.delete_transaction(a.get("id"), db),
-        '{"id":int} manual entries only'),
+    "transaction.delete": Op(_delete_transaction,
+        '{"id":int} removes a manual entry; an imported bank row only when the person asks for it (a payment that is in twice, a wrong row): a later import of the same file will not bring it back'),
     "refund.book": Op(_book_refund,
         '{"refund_id":int (the incoming payment),"purchase_id":int (the original purchase),"category_id":int only if the purchase is split}'),
     "refund.add": Op(_add_refund,
@@ -397,6 +553,8 @@ OPS: dict[str, Op] = {
     "goal.set": Op(_set_goal,
         '{"category_id":int (a savings category; one goal each),"name":str,"target_cents":int,"start_cents":int optional (already in the pot when it started),"by":"YYYY-MM" or null optional} adds a goal, or changes the one that category has (then only what changes)'),
     "goal.delete": Op(_delete_goal, '{"category_id":int}'),
+    "card.undo": Op(_undo_card,
+        '{"card_id":int (an applied card)} puts back everything that card changed, as it was before it was applied; undoing an undo makes the change again'),
     "batch": Op(_batch,
         '{"changes":[{"op":str,"args":{...}}, ...]} several of the changes above on one card, applied together or not at all, such as reviewing a group of guesses with review.confirm and transaction.update',
         prepare=_prepare_batch),
@@ -559,8 +717,10 @@ def _changes(before: dict, after: dict) -> list[dict]:
             for label in (new_values or old_values)
             if old_values.get(label) != new_values.get(label)
         ]
-        heading = "New manual entry: " if not old else ("Removed: " if not new else "")
         row = new or old
+        bank = row["source"] != "manual"
+        heading = ("Bank row back: " if bank else "New manual entry: ") if not old else (
+            ("Removed bank row: " if bank else "Removed: ") if not new else "")
         changed = {f["label"] for f in fields}
         how = "new" if not old else "removed" if not new else (
             "moved" if "Category" in changed else "confirmed" if changed == {"Reviewed"} and new["confirmed"] else "changed")
@@ -602,6 +762,19 @@ def _changes(before: dict, after: dict) -> list[dict]:
     out += _row_changes(
         lambda b: f"Fixed bill “{b['key']}”", before["ignored_bills"], after["ignored_bills"],
         lambda b: {"Counted as a fixed bill": "No"}, "No longer counted: ", "Counted again: ",
+    )
+    # A removed bank row is said on the payment's own line; only one removed or let back on its own is said here.
+    with_payment = {
+        (new or old)["import_hash"]
+        for tx_id in set(before["transactions"]) ^ set(after["transactions"])
+        for old, new in [(before["transactions"].get(tx_id), after["transactions"].get(tx_id))]
+    }
+    out += _row_changes(
+        lambda r: f"{r['description']} · {_short_date(r['date'])}",
+        {k: v for k, v in before["removed_bank_rows"].items() if k not in with_payment},
+        {k: v for k, v in after["removed_bank_rows"].items() if k not in with_payment},
+        lambda r: {"Kept out of later imports": "Yes"},
+        "Kept out of later imports: ", "Let in by a later import again: ",
     )
     plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(
@@ -715,13 +888,14 @@ def _purchase(name: str, args: dict, db: Session) -> dict | None:
 
 def _execute(
     name: str, args: dict, on_commit: Callable[[Any, dict], None] | None,
-    precheck: Callable[[Any], None] | None = None,
+    precheck: Callable[[Any], None] | None = None, card_id: int | None = None,
 ) -> dict:
     """Run the action in one transaction. Without on_commit it is only a preview.
 
     The session's commits (the routers') become savepoints, so nothing lands until the end.
     The write lock is taken first, so two taps on Apply run one after the other; precheck then
-    stops the second before it touches anything.
+    stops the second before it touches anything. With a card_id, what the change did to each row is
+    kept (`AppliedChange`) in the same transaction, so card.undo can put it back.
     """
     with database.engine.connect() as conn:
         conn.exec_driver_sql("BEGIN IMMEDIATE")
@@ -761,9 +935,12 @@ def _execute(
                 conn.rollback()
                 return preview
 
+            before_apply = _snapshot(conn) if card_id is not None else None
             _run_op(name, args, session)
             session.close()
             on_commit(conn, preview)
+            if card_id is not None:
+                _record(conn, card_id, name, _touched(before_apply, _snapshot(conn)))
             conn.commit()
             return preview
         except BaseException:
@@ -778,15 +955,16 @@ def preview(name: str, args: dict) -> dict:
 
 def apply(
     name: str, args: dict, shown: dict, on_commit: Callable[[Any, dict], None],
-    precheck: Callable[[Any], None],
+    precheck: Callable[[Any], None], card_id: int | None = None,
 ) -> dict:
-    """Commit the action if it still does what the card showed; on_commit runs in the same transaction."""
+    """Commit the action if it still does what the card showed; on_commit runs in the same transaction, and so does
+    keeping what it changed for card `card_id`, so that it can be undone."""
     def checked(conn, fresh: dict) -> None:
         if fresh["changes"] != shown["changes"]:
             raise StaleProposal(fresh)
         on_commit(conn, fresh)
 
-    return _execute(name, args, checked, precheck)
+    return _execute(name, args, checked, precheck, card_id)
 
 
 # ---- The card in plain words --------------------------------------------------------------------
@@ -808,8 +986,11 @@ def _plain_line(change: dict) -> str:
     if payment:
         if payment["how"] == "new":
             refund = fields.get("Counts as", {}).get("after") == "Refund"
-            return f"{title.replace('New manual entry: ', 'Add: ')}, {'a refund in' if refund else 'in'} {payment['category']}"
+            title = title.replace("New manual entry: ", "Add: ").replace("Bank row back: ", "Bring back the bank row: ")
+            return f"{title}, {'a refund in' if refund else 'in'} {payment['category']}"
         if payment["how"] == "removed":
+            if title.startswith("Removed bank row: "):
+                return title.replace("Removed bank row: ", "Remove the bank row: ") + " (a later import will not bring it back)"
             return title.replace("Removed: ", "Remove: ")
         if payment["how"] == "confirmed":
             return f"{title}: confirmed as {payment['category']}"

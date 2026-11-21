@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import threading
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
 
@@ -301,16 +302,23 @@ def _change_kind(name: str, signature: str, *, for_model: bool = True) -> Change
 
     def apply(args: dict, shown: Preview, ctx: ChangeContext) -> Applied:
         try:
-            fresh = actions.apply(name, args, {"changes": shown.data["changes"]}, lambda conn, fresh: None, None)
+            fresh = actions.apply(name, args, {"changes": shown.data["changes"]}, lambda conn, fresh: None, None,
+                                  card_id=ctx.card_id)
         except actions.StaleProposal as stale:
             raise Stale(card_preview(stale.preview)) from None
         except actions.ActionError as e:
             raise ChangeError(str(e)) from None
         result = applied_result(fresh)
+        if ctx.card_id is not None:  # what it changed is kept, so its Undo button can put it back until then
+            result["undo_until"] = (clock.now() + timedelta(days=actions.UNDO_DAYS)).isoformat(timespec="seconds")
         try:
             result.update(_after_apply(fresh))
         except Exception:
             logger.exception("[chat] working out what an applied card still says failed")
+        try:
+            _mark_undone(_undone_cards(name, args))
+        except Exception:
+            logger.exception("[chat] marking an undone card failed")
         return Applied(result=result)
 
     merge = name == "merge"
@@ -321,18 +329,50 @@ def _change_kind(name: str, signature: str, *, for_model: bool = True) -> Change
     )
 
 
+def _undone_cards(name: str, args: dict) -> list[int]:
+    """The cards an applied card.undo (or a batch holding some) put back."""
+    if name == "card.undo":
+        return [args["card_id"]]
+    if name == "batch":
+        return [c["args"]["card_id"] for c in args.get("changes", []) if c.get("op") == "card.undo"]
+    return []
+
+
+def _mark_undone(card_ids: list[int]) -> None:
+    """An undone card's message says so (`payload.undone`), which takes its Undo button away, also in Telegram."""
+    if not card_ids:
+        return
+    store = bot().store
+    with store.write() as db:
+        for card_id in card_ids:
+            row = db.execute("SELECT message_id FROM bot_cards WHERE id = ?", (card_id,)).fetchone()
+            if row is not None:
+                store.merge_payload(db, row["message_id"], undone=True)
+
+
+def _can_undo(card: dict, message: dict) -> bool:
+    """An applied card whose changes were kept, not undone yet, applied less than UNDO_DAYS ago."""
+    until = (card.get("result") or {}).get("undo_until")
+    if card.get("status") != "applied" or not until or (message.get("payload") or {}).get("undone"):
+        return False
+    return clock.now() < datetime.fromisoformat(until)
+
+
 def card_buttons(card: dict, message: dict) -> list[dict]:
     """A summed-up card offers every row (the bubble folds them out itself, so only push chats get the button); an
-    applied card that sorted shops offers to remember them, until that is done."""
+    applied card that sorted shops offers to remember them, until that is done, and for a week offers Undo."""
     data = (card.get("preview") or {}).get("data") or {}
     result = card.get("result") or {}
     if card["status"] == "open" and data.get("summed_up") and message.get("channel") != "bubble":
         count = data.get("payments") or 0
         everything = f"{count} payments" if count > 1 else f"{data.get('rows')} rows"
         return [{"action": "show_all", "label": f"Show all {everything}", "style": "quiet"}]
+    buttons = []
     if card["status"] == "applied" and result.get("offer") and not (message.get("payload") or {}).get("remembered"):
-        return [{"action": "remember_shops", "label": result["offer"]["label"]}]
-    return []
+        buttons.append({"action": "remember_shops", "label": result["offer"]["label"]})
+    if _can_undo(card, message):
+        buttons.append({"action": "undo_card", "label": "Undo", "style": "quiet"})
+    return buttons
 
 
 CHANGES = [_change_kind(name, op.signature) for name, op in actions.OPS.items()]
@@ -360,6 +400,25 @@ def remember_shops(ctx: ActionContext) -> None:
         said = questions.remembered_text([r for r in rules if r is not None])
         db.commit()
     ctx.update(payload={"remembered": said})
+
+
+UNDO_NOTE = "This puts back how things were before that card was applied."
+
+
+def undo_card(ctx: ActionContext) -> None:
+    """A tap on Undo under an applied card: a card.undo card is offered, showing exactly what goes back."""
+    card = ctx.message.get("card") or {}
+    if card.get("status") != "applied" or (ctx.message.get("payload") or {}).get("undone"):
+        return
+    if not _can_undo(card, ctx.message):
+        ctx.say("error", "That Undo is more than a week old, so it no longer works. Ask me to undo that card if you "
+                         "still want it. Nothing changed.")
+        return
+    try:
+        bot().offer(ctx.channel, "card.undo", f"Undo: {card.get('summary') or 'that change'}",
+                    {"card_id": card["id"]}, reply_to=ctx.message["id"], note=UNDO_NOTE)
+    except ChangeError as e:
+        ctx.say("error", f"{e.reason}. Nothing changed.")
 
 
 # ---- Files, photos and voice notes ------------------------------------------------------------------
@@ -494,6 +553,8 @@ def history_entry(message: dict) -> dict | None:
             shown["args"] = card["args"]
         if card.get("error"):
             shown["error"] = card["error"]
+        if payload.get("undone"):
+            shown["undone"] = True
         entry = {"from": "app", "card": shown}
         if card.get("says"):
             entry["you_said_with_it"] = card["says"]
@@ -592,6 +653,7 @@ def bot() -> Bot:
                 actions={
                     "answer": questions.answer, "something_else": questions.something_else,
                     "remember": questions.remember, "show_all": show_all, "remember_shops": remember_shops,
+                    "undo_card": undo_card,
                 },
                 typed_actions={"show_all": SHOW_ALL_WORDS},
                 describe_choice=describe_choice,

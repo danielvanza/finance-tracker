@@ -16,7 +16,7 @@ A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRO
 backend/
   main.py              App entry point, CORS, startup, router registration
   db.py                SQLAlchemy engine + session config (SQLite)
-  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill (the chat keeps its own store)
+  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, RemovedBankRow, AppliedChange (the chat keeps its own store)
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
   importers/           ing.py: the one parser, for English and Dutch ING exports (base.py holds the hashing)
@@ -55,7 +55,7 @@ frontend/
 - **Schemas:** Pydantic v2 models in `schemas.py`. All API endpoints use these for request/response typing.
 - **Enums:** `CategoryType` (needs/wants/savings/income/exclude), `TransactionSource` (ing/manual), `CategorisedBy` (rule/ai/manual). Defined in `models.py`. On a confirmed row `ai` means sorted automatically; a person's confirmation makes it `manual`.
 - **Naming:** British spelling for domain terms (`categoriser`, `categorised_by`). Standard Python snake_case everywhere else.
-- **Importer:** ING only (`importers/ing.py`, `parse_ing`), English or Dutch column names, semicolons or commas. A row is already in when its hash (`source|date|amount|description|notes|balance`) is, or when a stored ING row has the same date, amount and name (the same payment from an export in the other language); see `import_service.already_here`. The bank's note is kept whole in `Transaction.note`; `ing.written` gives the part the payer typed, which is what the sorter and the chat's `transactions` table are shown. A row that is in without a note gets it when its file is imported again.
+- **Importer:** ING only (`importers/ing.py`, `parse_ing`), English or Dutch column names, semicolons or commas. A row is already in when its hash (`source|date|amount|description|notes|balance`) is, or when a stored ING row has the same date, amount and name (the same payment from an export in the other language); see `import_service.already_here`. A bank row removed in the chat (`removed_bank_rows`) counts as already in. The bank's note is kept whole in `Transaction.note`; `ing.written` gives the part the payer typed, which is what the sorter and the chat's `transactions` table are shown. A row that is in without a note gets it when its file is imported again.
 - **Categorisation:** rules first (the longest matching text wins; a text under six characters only fits as a word of its own, `rules.fits`; a rule only fits money in the right direction), then Claude. Claude says whether it is sure. Sure: confirmed at once, `categorised_by = ai`. Not sure: unconfirmed with `ai_options`, counted nowhere, asked about (`guesses.py`, `assistant/questions.ask_questions`). A person's answer sorts the shop's other waiting payments (`guesses.settle_like`) and makes no rule by itself: remembering the shop is offered afterwards (a button after an answered question or an applied card, a tick box on the review card) and made by `guesses.remember`. The shop's name is worked out by `guesses.shop_pattern`, which keeps a number the name starts with; a payment service that hides the shop gets no rule (`guesses.hides_shop`). A shop marked "always ask" (`AskShop`, `guesses.always_ask`: one that sells a bit of everything) is never counted on Claude's say-so, each payment is asked about on its own, an answer settles only that payment, and it gets no rule. Money going out to a name in the `own_names` setting goes to "To personal accounts" (`guesses.sort_personal`).
 - **Totals:** only confirmed rows count. A row with `set_aside_id` counts only for the part that had not been set aside yet when it was paid (`set_asides.counted_parts`); every total reads parts through that or through `spend_service`.
 - **Budgets:** a row per category per month; a month takes the newest earlier month's amount (`routers/budget.planned_for`). Changing a row also changes the later rows that still hold the old amount, up to the first month that holds another (`patch_budget`).
@@ -139,6 +139,10 @@ extras (budget effect, refund's purchase, rows, the offer to remember shops) are
 aimed at a payment that looks just like another is refused until the person has said which (`bot._check_target`).
 Claude's closing words ride on the card it made. An import in the chat may offer `merge` cards (`bot.offer`); Claude
 cannot make one.
+Applying a card keeps every row it changed in `actions._TABLES` (before/after, `AppliedChange` by card id), so
+`card.undo` can put it back; an applied card has an Undo button for a week (`bot.card_buttons`, `undo_card`). A new
+table in `_TABLES` is covered by undo without more work. The chat's `transaction.delete` can also remove an imported
+bank row; its import hash goes into `removed_bank_rows`, which `import_service.already_here` counts as already here.
 
 The app also speaks without Claude, through `bot.post`: questions about payments Claude was not sure of
 (`questions.ask_questions`, a few open at a time, in the Telegram group, answered by a button, and only once Claude has

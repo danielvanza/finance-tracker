@@ -98,7 +98,7 @@ def render_card(message: dict, view: View | None = None) -> Shown:
     card = message["card"]
     data, result = card.get("data") or {}, card.get("result") or {}
     status = card["status"]
-    extra = button_rows(message)  # Show all (open, summed up) or Remember these shops (applied, until done)
+    extra = button_rows(message)  # Show all (open, summed up); Remember these shops and Undo (applied)
     said = heard(view)
     if status == "applied":
         # One sentence for what happened, the budget set apart, then what is left.
@@ -106,7 +106,8 @@ def render_card(message: dict, view: View | None = None) -> Shown:
         lines = card["lines"]
         summed_up = data.get("applied_line") or (lines[0] if len(lines) == 1 else None)
         remembered = (message.get("payload") or {}).get("remembered")
-        tail = [*effect, *_still_waiting(result.get("waiting")), *([esc(remembered)] if remembered else [])]
+        undone = ["Undone since."] if (message.get("payload") or {}).get("undone") else []
+        tail = [*effect, *_still_waiting(result.get("waiting")), *([esc(remembered)] if remembered else []), *undone]
 
         def sentence(words: str | None) -> str:
             head = [f"<b>Applied.</b> {esc(words)}" if words else "<b>Applied.</b>"]

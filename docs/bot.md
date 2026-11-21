@@ -29,7 +29,7 @@ exactly this.
 | assistant | `import` | the import in one sentence | counts (below) | — |
 | assistant | `question` | the question in one line | question (below), `unasked?` | answers, Something else; once answered: Remember |
 | assistant | `nudge` | the unasked message (recap, old data, month end), a few lines | `nudge` (`close`, `recap`, `stale`, joined with `+`), `unasked: true` | — |
-| assistant | `card` | the card's summary | `says?` (on the card JSON), `remembered?` | card buttons (below) |
+| assistant | `card` | the card's summary | `says?` (on the card JSON), `remembered?`, `undone?` (a `card.undo` for it was applied) | card buttons (below) |
 | assistant | `error` | the plain reason; always says what did not happen | — | — |
 
 ### Payloads
@@ -62,6 +62,7 @@ exactly this.
 | answered question | `remember` | `Remember {shop} for next time` | — | makes the rule, appends what was remembered to `result`, removes the offer |
 | open, summed-up card (not in the bubble) | `show_all` | `Show all N payments` / `Show all N rows` (`style: quiet`) | — | posts an `all_rows` message |
 | applied card that sorted shops | `remember_shops` | `Remember {shop} for next time` / `Remember these N shops` | — | makes a rule per shop; card message `payload.remembered` says what was remembered |
+| applied card, until `result.undo_until` and not undone | `undo_card` | Undo (`style: quiet`) | — | offers a `card.undo` card for it in that channel (`bot.offer`, replying to the card, with a note); a refusal is posted as an `error`, and a tap after the week says it no longer works |
 
 The bubble folds every row of a summed-up card out itself ("Show all N rows"), so it has no Show all button. Typing
 `show all` (and the other words in `bot.SHOW_ALL_WORDS`) to the one card in front of the person runs `show_all`, like a
@@ -90,8 +91,22 @@ change, or a count and a line per category when there are many) and:
 
 **`result`** (once applied): `applied_text` (what was saved, in the app's words), `effect`, `effect_lines` (the budget
 lines as they stand now, without the before), `waiting?` (payments still waiting, when the card sorted waiting ones),
-`offer?: {transaction_ids, label}` (Remember these shops). What was remembered is the card message's
-`payload.remembered`.
+`offer?: {transaction_ids, label}` (Remember these shops), `undo_until` (ISO local time, a week after Apply: the Undo
+button shows until then). What was remembered is the card message's `payload.remembered`.
+
+**Undo.** Applying a card also keeps, in the same transaction, every row it changed in a table of `actions._TABLES`,
+before and after (finance's `applied_changes`, by card id). `card.undo {card_id}` is a card like any other: its preview
+shows exactly what goes back, and the app refuses it when the card has no such record (not applied, or applied before
+this was kept), was undone already, or a row it touched was changed again since (naming the row). A removed row comes
+back with its own id. Applying it marks the card undone (`applied_changes.undone_at`, the card message's
+`payload.undone`, which takes the Undo button away and has Telegram edit the card to say `Undone since.`); an undo card
+is kept the same way, so undoing it makes the change again.
+
+**Removing a bank row.** The chat's `transaction.delete` also removes an imported bank row (the Transactions page still
+only deletes manual entries). Its split parts go with it; one paid from a set-aside is refused until `set_aside.unpay`
+(in the same batch). The row's import hash, date, amount and name are kept in `removed_bank_rows`, which
+`import_service.already_here` counts as already here, so importing the file again skips it. The card says `Remove the
+bank row: … (a later import will not bring it back)`; undoing it says `Bring back the bank row: …`.
 
 A card's `status` is the kit's: `open | applying | applied | rejected | superseded | failed`. Before the move it was
 `pending` for `open`; Claude is still shown `pending` in its conversation.
@@ -101,7 +116,7 @@ A card's `status` is the kit's: `open | applying | applied | rejected | supersed
 `<context>`: `today`, `payments_waiting_for_an_answer`, `this_month` (the Month page overview). `<conversation>`: each
 message as it always was: the person's words (`sent_a_bank_file`, `sent_a_photo`, `heard_from_a_voice_note`, Stop
 noted), Claude's own words (`choices_shown`, `chart_shown`), cards (`id, summary, op, rows_changed, status, args?,
-error?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `import_summary`,
+error?, undone?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `import_summary`,
 `asked_after_something_else`, errors. Tools: `month_overview`, `run_query` (a private in-memory copy per reply, closed
 when it ends), `show_chart`, and the kit's `make_change` and `show_choices`.
 

@@ -267,12 +267,12 @@ test.describe.serial('chat in controlled conditions', () => {
     const before = await rowCount()
     // The app's reason goes back to the agent (finance-agent R-007); with no words of its own, the script's reply
     // is what its tools answered.
-    await say(page, script(['make_change', { kind: 'transaction.delete', summary: 'Delete it.', args: { id: ing.id } }]))
+    await say(page, script(['make_change', { kind: 'transaction.update', summary: 'Change it.', args: { id: ing.id, amount_cents: -1 } }]))
     await expect(reply()).toContainText('make_change (error)')
     await expect(reply()).toContainText('No card was shown, because the app would not take this')
-    await expect(reply()).toContainText('Only manual transactions can be deleted')
-    await expect(pendingCard(page, 'Delete it.')).toHaveCount(0)
-    expect(app.botValue("SELECT COUNT(*) FROM bot_cards WHERE summary = 'Delete it.'")).toEqual([[0]])
+    await expect(reply()).toContainText('Only a manually added entry can have its date, amount or description changed')
+    await expect(pendingCard(page, 'Change it.')).toHaveCount(0)
+    expect(app.botValue("SELECT COUNT(*) FROM bot_cards WHERE summary = 'Change it.'")).toEqual([[0]])
     expect(await rowCount()).toBe(before)
   })
 

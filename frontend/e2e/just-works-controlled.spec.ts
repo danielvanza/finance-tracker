@@ -347,9 +347,9 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // R-013: nothing was remembered by itself; the applied card offers it, and one press remembers every shop it sorted.
     const sampleRules = async () => (await app.json<any[]>('/rules')).filter(r => /^sample (grocer|bistro|odds)$/.test(r.pattern)).map(r => `${r.pattern} → ${r.category_name}`).sort()
     expect(await sampleRules()).toEqual([])
-    expect(labels(again)).toEqual(['Remember these 3 shops'])
+    expect(labels(again)).toEqual(['Remember these 3 shops', 'Undo'])
     stub.tap(DANIEL, again, stub.button(again, 'Remember these 3 shops'))
-    await expect.poll(() => labels(again), { timeout: 15_000 }).toEqual([])
+    await expect.poll(() => labels(again), { timeout: 15_000 }).toEqual(['Undo'])
     expect(again.text.split('\n').at(-1)).toBe('Remembered 3 shops for next time.')
     expect(await sampleRules()).toEqual(['sample bistro → Food - Not Essential', 'sample grocer → Food - Essential', 'sample odds → Miscellaneous'])
 
@@ -592,7 +592,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     expect(labels(webshop)).toEqual(['Other Income', 'Refund: Clothing', 'Something else'])
     // The same payments are in the app's review list.
     // (With payments waiting the page opens its review queue, whose header gives the count.)
-    await expect(page.locator('.tx-page')).toContainText(`${waitingBefore + 6} remaining`)
+    await expect(page.locator('.tx-page')).toContainText(`${waitingBefore + 6} left`)
     const inReview = new Set<string>()
     for (let i = 0, skip: number[] = []; i < 12; i++) {
       const next = await app.json<any>(`/transactions/review?${skip.map(id => `skip_ids=${id}`).join('&')}`)
@@ -675,10 +675,10 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     // The applied card offers to remember the one shop it sorted, by name.
     const ruleFor = async (pattern: string) => (await app.json<any[]>('/rules')).filter(r => r.pattern === pattern).map(r => r.category_name)
     expect(await ruleFor('mw p voorbeeld')).toEqual([])
-    expect(labels(card)).toEqual(['Remember Mw P Voorbeeld for next time'])
+    expect(labels(card)).toEqual(['Remember Mw P Voorbeeld for next time', 'Undo'])
     stub.tap(DANIEL, card, stub.button(card, 'Remember Mw P Voorbeeld'))
     await expect.poll(() => card.text.split('\n').at(-1), { timeout: 15_000 }).toBe('Remembered: “mw p voorbeeld” → Home & DIY.')
-    expect(labels(card)).toEqual([])
+    expect(labels(card)).toEqual(['Undo'])
     expect(await ruleFor('mw p voorbeeld')).toEqual(['Home & DIY'])
 
     // R-011: an automatically sorted payment can still be changed. The correction is remembered for the shop when asked.
@@ -794,7 +794,7 @@ test.describe.serial('just works for two, in controlled conditions', () => {
     await page.goto(`${app.base}/transactions`)
     const review = page.locator('.rev')
     await expect(review).toContainText('Pretpark Voorbeeld')
-    await expect(review).toContainText('Claude was not sure. Its guess: Recreation & Entertainment')
+    await expect(review).toContainText('Claude wasn’t sure. Which is it?Recreation & EntertainmentClaude’s guess')
     // The review card remembers the shop only when its box is ticked.
     const box = review.getByRole('checkbox', { name: 'Remember this shop for next time' })
     await expect(box).not.toBeChecked()

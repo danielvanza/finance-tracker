@@ -101,7 +101,7 @@ frontend/
 | `TELEGRAM_GROUP_ID` | For the bot | (none) | The household group's numeric id. Without it the bot answers nobody and logs the id of a group one of the two writes in. |
 | `VOICE_MODEL` | No | `small.en` | Speech model for voice notes, fetched on first use. |
 | `FINANCE_TIMEZONE` | No | `Europe/Amsterdam` | The household's time. |
-| `NUDGES` | No | `on` | `off` stops the bot writing unasked (recaps, old-data and month-end messages, questions after an import on the Import page). The `nudges` setting (`on`/`off`) wins when set; `nudges.start()` always runs and each round asks it. Reminders the household asked the chat to set are still sent. |
+| `NUDGES` | No | `on` | `off` stops the bot writing unasked (recaps, old-data and month-end messages, and the morning catch-up of questions; questions right after an import still go out). The `nudges` setting (`on`/`off`) wins when set; `nudges.start()` always runs and each round asks it. Reminders the household asked the chat to set are still sent. |
 | `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 | `FINANCE_SCRIPT_RUNNER` | Tests only | (off) | `1` adds botkit's scripted model ("Test script") to the picker, for the E2E suite. Never set in production. |
 

@@ -24,7 +24,7 @@ import db as database
 from db import SessionLocal
 from importers.ing import written
 from financial_month import get_financial_month_range, label_month_for_date
-from models import Budget, Category, Rule, Transaction, TransactionSource
+from models import Budget, Category, Reminder, Rule, Transaction, TransactionSource
 from routers import budget as budget_router
 from routers import dashboard as dashboard_router
 from routers import goals as goals_router
@@ -51,6 +51,7 @@ budgets: planned amounts. A plan stays as it is until changed: a month without r
 rules: what sorts imported rows automatically: a description containing pattern gets category; when several fit, the longest pattern wins. Columns: id, pattern, category_id, category.
 ask_shops: shops whose payments differ every time: a payment whose description contains pattern is never sorted by itself, however sure Claude is, and is asked about on its own. Columns: pattern.
 set_asides: bills that do not come monthly, spread over the months before they are due, as this month sees them. Columns: id, name, amount_cents, due_month (the next one), every_months (how often it comes back: 3 quarterly, 12 yearly; NULL once), monthly_cents (this month's share, which lowers what is free to spend), saved_cents (set aside so far), paid_transaction_id, paid_date.
+reminders: messages the household asked to have sent to the Telegram group. Columns: id, text, next_at ('YYYY-MM-DD HH:MM', household time; NULL once a single reminder has been sent), every (week, month or year; NULL for once), status (waiting, or done for a single reminder that was sent), last_sent_at.
 savings_goals: as the Trends page shows them. Columns: name, category_id, category, target_cents, start_cents (in the pot when it started), saved_cents, started, by_month, status (done, open, late, unknown, short, on_track), needed_per_month_cents, pace_per_month_cents, short_per_month_cents, reach_month."""
 
 _DDL = """
@@ -71,13 +72,14 @@ CREATE TABLE rules (id INTEGER, pattern TEXT, category_id INTEGER, category TEXT
 CREATE TABLE ask_shops (pattern TEXT);
 CREATE TABLE set_asides (id INTEGER, name TEXT, amount_cents INTEGER, due_month TEXT, every_months INTEGER,
   monthly_cents INTEGER, saved_cents INTEGER, paid_transaction_id INTEGER, paid_date TEXT);
+CREATE TABLE reminders (id INTEGER, text TEXT, next_at TEXT, every TEXT, status TEXT, last_sent_at TEXT);
 CREATE TABLE savings_goals (name TEXT, category_id INTEGER, category TEXT, target_cents INTEGER, start_cents INTEGER,
   saved_cents INTEGER, started TEXT, by_month TEXT, status TEXT, needed_per_month_cents INTEGER,
   pace_per_month_cents INTEGER, short_per_month_cents INTEGER, reach_month TEXT);
 """
 _TABLES = {
     "spending", "category_months", "month_totals", "coverage", "transactions", "categories", "budgets", "rules",
-    "ask_shops", "set_asides", "savings_goals",
+    "ask_shops", "set_asides", "reminders", "savings_goals",
 }
 _FUNCTIONS = {
     "abs", "avg", "coalesce", "concat", "concat_ws", "count", "cume_dist", "date", "datetime", "dense_rank",
@@ -186,7 +188,7 @@ def _status(month: _Month, today: date, missing: list[str]) -> str:
 
 
 def _fill_setup(conn: sqlite3.Connection, db) -> None:
-    """The household's set-up: categories, plans, rules, set-asides and savings goals."""
+    """The household's set-up: categories, plans, rules, set-asides, reminders and savings goals."""
     names = {c.id: c.name for c in db.query(Category).all()}
     conn.executemany("INSERT INTO categories VALUES (?,?,?,?)", [
         (c.id, c.name, c.type.value, c.sort_order) for c in db.query(Category).order_by(Category.sort_order).all()
@@ -203,6 +205,11 @@ def _fill_setup(conn: sqlite3.Connection, db) -> None:
         (b["id"], b["name"], b["amount_cents"], b["due_month"], b["every_months"], b["monthly_cents"], b["saved_cents"],
          (b["payment"] or {}).get("transaction_id"), (b["payment"] or {}).get("date"))
         for b in set_asides.month_view(db)["items"]
+    ])
+    conn.executemany("INSERT INTO reminders VALUES (?,?,?,?,?,?)", [
+        (r.id, r.text, r.next_at.strftime("%Y-%m-%d %H:%M") if r.next_at else None, r.every,
+         "waiting" if r.next_at else "done", r.last_sent_at.strftime("%Y-%m-%d %H:%M") if r.last_sent_at else None)
+        for r in db.query(Reminder).order_by(Reminder.next_at.is_(None), Reminder.next_at, Reminder.id).all()
     ])
     conn.executemany("INSERT INTO savings_goals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
         (g["name"], g["category_id"], g["category_name"], g["target_cents"], g["start_cents"], g["saved_cents"],

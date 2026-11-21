@@ -81,7 +81,7 @@ With neither, rules still sort and everything else waits in the review list.
 | `AI_TIME_BUDGET_SECONDS` | `60` | How long sorting one import may take; the rest waits for next time. |
 | `VOICE_MODEL` | `small.en` | The speech model for voice notes. Fetched once, on the first voice note. |
 | `FINANCE_TIMEZONE` | `Europe/Amsterdam` | The household's time, for dates and for when the bot may write. |
-| `NUDGES` | `on` | `off` stops the bot writing unasked. |
+| `NUDGES` | `on` | `off` stops the bot writing what nobody asked for (the recap, old bank data, month end, questions at the morning catch-up). Reminders the household asked for are still sent. |
 | `TELEGRAM_BOT_TOKEN` | none | From BotFather. |
 | `TELEGRAM_ALLOWED_USER_IDS` | none | The two numeric Telegram accounts, comma-separated. |
 | `TELEGRAM_GROUP_ID` | none | The numeric id of the household's group. |

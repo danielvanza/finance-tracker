@@ -1,4 +1,5 @@
-"""What the bot says without being asked: old bank data, the weekly recap, and how a month ended.
+"""What the bot says without being asked: old bank data, the weekly recap, and how a month ended; and, from the same
+background loop, the reminders the household asked for (reminders.py).
 
 Each is a few lines in the Telegram chat. A message is due from a moment on (Sunday 18:00, the first
 morning of a financial month, the day the bank data turns a week old) and is sent once, at the first
@@ -17,6 +18,7 @@ from sqlalchemy import func
 
 import clock
 import runtime_settings
+import reminders
 import spend_service
 from assistant import actions, queries, questions
 from db import SessionLocal
@@ -153,10 +155,15 @@ def _recap_due(now: datetime) -> datetime:
 
 def tick(now: datetime | None = None) -> list[str]:
     """Send whatever is due and allowed right now. Returns which messages went out."""
-    if not runtime_settings.nudges_on():
-        return []
     now = now or clock.now()
     sent: list[str] = []
+    # Reminders were asked for, so they go out whether or not nudges are turned off, and each on its own.
+    try:
+        sent += ["reminder"] * reminders.send_due(now)
+    except Exception:
+        logger.exception("[nudges] sending reminders failed")
+    if not runtime_settings.nudges_on():  # only the automatic messages below are switched off
+        return sent
     with SessionLocal() as db:
         start_day = spend_service.get_start_day(db)
         label = label_month_for_date(now.date(), start_day)

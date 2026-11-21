@@ -78,6 +78,9 @@ export const Question: Renderer = ({ message, bot }) => {
 /** Something the app said unasked (the weekly recap, old bank data, a month that ended). */
 export const Nudge: Renderer = ({ message }) => <div className="bk-reply hf-pre">{message.text}</div>
 
+/** A reminder the household asked for: one plain line. */
+export const Reminder: Renderer = ({ message }) => <div className="bk-reply hf-pre">Reminder: {message.text}</div>
+
 /** Every row of a card, grouped by what changes, one short line per payment. */
 export const AllRows: Renderer = ({ message }) => {
   const groups = payloadOf<{ groups?: ChatRowGroup[] }>(message).groups ?? []

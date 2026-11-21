@@ -16,7 +16,7 @@ A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRO
 backend/
   main.py              App entry point, CORS, startup, router registration
   db.py                SQLAlchemy engine + session config (SQLite)
-  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, RemovedBankRow, AppliedChange (the chat keeps its own store)
+  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, RemovedBankRow, AppliedChange, Reminder (the chat keeps its own store)
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
   importers/           ing.py: the one parser, for English and Dutch ING exports (base.py holds the hashing)
@@ -24,7 +24,8 @@ backend/
   categorizer/         rules.py (longest matching text wins), ai.py (Claude: a category, sure or not, and options), claude_cli.py (the sandboxed Claude login through botkit's runner, with no tools; the runner settings the chat shares)
   guesses.py           Which guesses count, the questions about the rest, what an answer teaches, money moved to a personal account
   set_asides.py        Set-asides: a bill's monthly share and what its payment settles
-  nudges.py            What the bot says unasked, and when
+  nudges.py            What the bot says unasked, and when (its loop also sends due reminders)
+  reminders.py         Reminders the household asked the chat to set: when they next go out, and sending the due ones
   voice.py             Voice notes to text, on this machine (faster-whisper)
   clock.py             Today and now for the household; every date question goes through it (and `quiet_hours`, from the setting)
   runtime_settings.py  Settings that a background thread or the clock reads (nudges, quiet_hours, sort_model): the setting wins, the environment is the default; a 30-second cache on a session of its own that falls back to the default on any database error
@@ -98,7 +99,7 @@ frontend/
 | `TELEGRAM_GROUP_ID` | For the bot | (none) | The household group's numeric id. Without it the bot answers nobody and logs the id of a group one of the two writes in. |
 | `VOICE_MODEL` | No | `small.en` | Speech model for voice notes, fetched on first use. |
 | `FINANCE_TIMEZONE` | No | `Europe/Amsterdam` | The household's time. |
-| `NUDGES` | No | `on` | `off` stops the bot writing unasked (recaps, old-data and month-end messages, questions after an import on the Import page). The `nudges` setting (`on`/`off`) wins when set; `nudges.start()` always runs and each round asks it. |
+| `NUDGES` | No | `on` | `off` stops the bot writing unasked (recaps, old-data and month-end messages, questions after an import on the Import page). The `nudges` setting (`on`/`off`) wins when set; `nudges.start()` always runs and each round asks it. Reminders the household asked the chat to set are still sent. |
 | `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 | `FINANCE_SCRIPT_RUNNER` | Tests only | (off) | `1` adds botkit's scripted model ("Test script") to the picker, for the E2E suite. Never set in production. |
 
@@ -150,7 +151,9 @@ The app also speaks without Claude, through `bot.post`: questions about payments
 judged the payment or gave no answer for it; "Something else" makes the app ask what it is, as a line of the
 conversation), and what the bot says unasked (`nudges.py`, one message for everything owed; one the chat has not been
 shown yet is replaced by the next, `questions.post_nudge`). Whatever nobody asked for carries `unasked` and is held back
-between 21:00 and 9:00 (`clock.quiet_hours`; the `quiet_hours` setting, such as `22-7`, changes the hours). A voice note is turned into text first (`voice.py`), and its words never
+between 21:00 and 9:00 (`clock.quiet_hours`; the `quiet_hours` setting, such as `22-7`, changes the hours). A reminder the household asked for (`reminder.add`, `reminders.py`) is
+posted by the same loop as its own `reminder` message (never through `post_nudge`, which would replace one nobody has
+been shown): once, at the first allowed moment after its time, whether or not nudges are off. A voice note is turned into text first (`voice.py`), and its words never
 settle a card; a photo is shown to Claude as a picture beside the prompt, with no tool added.
 
 The Telegram bot is bot-kit's Telegram front (`botkit.telegram`, SPEC §11): it polls Telegram, talks to the app only

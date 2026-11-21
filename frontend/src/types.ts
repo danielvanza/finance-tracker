@@ -227,6 +227,8 @@ export interface ChatCardResult {
   waiting?: number         // payments still waiting for an answer, when the card sorted waiting ones
   offer?: { transaction_ids: number[]; label: string } | null
 }
+/** A file made in the chat, on the answer it came with (`payload.export`, docs/bot.md). */
+export interface ChatExport { id: number; filename: string; rows: number; columns: string[]; cut_off?: boolean; title?: string }
 export interface ChatImportCounts { imported: number; skipped: number; by_rule: number; by_ai: number; doubtful?: number; uncategorised: number; noted?: number }
 /** A question about payments Claude was not sure of (`kind: question`). */
 export interface ChatQuestion {

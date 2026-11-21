@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
-import { Paperclip } from 'lucide-react'
-import { Buttons, Rich, type Renderer } from 'bot-kit/bubble'
-import type { Card, Message } from 'bot-kit/client'
+import { useState, type ReactNode } from 'react'
+import { Download, Paperclip } from 'lucide-react'
+import { Buttons, Options, Rich, useTheme, type Renderer, type RendererProps } from 'bot-kit/bubble'
+import type { Card, ChoiceOption, Message } from 'bot-kit/client'
+import { exportUrl } from '../api'
 import { formatCents } from '../money'
-import type { ChatCardData, ChatCardResult, ChatChange, ChatImportCounts, ChatQuestion, ChatRowGroup } from '../types'
+import type { ChatCardData, ChatCardResult, ChatChange, ChatExport, ChatImportCounts, ChatQuestion, ChatRowGroup } from '../types'
 
 /** Finance's own message kinds in the bubble (docs/bot.md), and its card extras; Chat.tsx hands them to the bubble.
  *  The kit draws text, answers, cards and errors itself. */
@@ -101,6 +102,58 @@ export const AllRows: Renderer = ({ message }) => {
     </div>
   )
 }
+
+const count = new Intl.NumberFormat('nl-NL')
+
+/** A file made in the chat: one row to download it, its name left and how many rows right. */
+export function FileLink({ file }: { file: ChatExport }) {
+  const rows = `${count.format(file.rows)} ${file.rows === 1 ? 'row' : 'rows'}`
+  return (
+    <div className="bk-options">
+      <a className="bk-btn bk-option hf-download" href={exportUrl(file.id)} download={file.filename}>
+        <span className="bk-option-label"><Download size={16} aria-hidden="true" />{file.filename}</span>
+        <span className="bk-option-detail">{file.cut_off ? `first ${rows}` : rows}</span>
+      </a>
+    </div>
+  )
+}
+
+/** A chart under the words, in the app's theme (as the kit draws it). */
+function AnswerImage({ message, client }: Pick<RendererProps, 'message' | 'client'>) {
+  const theme = useTheme()
+  const src = client.imageUrl(message.id, theme)
+  const [failed, setFailed] = useState<string | null>(null)  // the picture that would not load; another theme tries again
+  const image = message.payload?.image as { alt?: unknown } | undefined
+  if (failed === src) return <p className="bk-reply bk-error">The picture could not be shown.</p>
+  const alt = (typeof image?.alt === 'string' && image.alt) || 'A picture. The figures are in the answer above.'
+  return <img key={theme} className="bk-image" src={src} alt={alt} onError={() => setFailed(src)} />
+}
+
+function AnswerView({ message, bot, client }: RendererProps) {
+  const payload = (message.payload ?? {}) as { options?: ChoiceOption[]; image?: unknown; export?: ChatExport }
+  const options = Array.isArray(payload.options) ? payload.options : []
+  const buttons = message.buttons ?? []
+  const file = payload.export
+  const last = bot.messages[bot.messages.length - 1]?.id === message.id
+  const hasWords = !!message.text || options.length > 0 || buttons.length > 0 || !!file
+  return (
+    <div className="hf-answer">
+      {hasWords && (
+        <div className="bk-reply">
+          {message.text && <Rich text={message.text} />}
+          {file && <FileLink file={file} />}
+          <Options options={options} disabled={!last || bot.sending || bot.inFlight} onChoose={id => void bot.choose(id)} />
+          <Buttons message={message} buttons={buttons} bot={bot} />
+        </div>
+      )}
+      {!!payload.image && <AnswerImage message={message} client={client} />}
+    </div>
+  )
+}
+
+/** Claude's answer, drawn as the kit draws it (words, "which one?" choices, buttons, a chart), plus the file it
+ *  made, if any, as a download under the words. */
+export const Answer: Renderer = props => <AnswerView {...props} />
 
 /** Every row of a card that was summed up, for when someone wants to see them. */
 function EveryRow({ changes }: { changes: ChatChange[] }) {

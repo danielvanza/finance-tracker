@@ -105,7 +105,7 @@ def test_fresh_upgrade_creates_baseline_schema(scratch_db):
     # The chat's tables came and went: its history lives in the bot kit's own store since c5e8b2a7d913.
     assert _table_names(scratch_db) == BASELINE_TABLES | {
         "alembic_version", "ask_shops", "removed_bank_rows", "applied_changes", "reminders", "added_bills",
-        "bill_changes",
+        "bill_changes", "exports",
     }
     assert _version_row(scratch_db) == _head_revision(cfg)
 

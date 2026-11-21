@@ -183,3 +183,12 @@ class Reminder(Base):
     every = Column(String, nullable=True)  # week, month, year; empty for once
     created_at = Column(DateTime, nullable=False)
     last_sent_at = Column(DateTime, nullable=True)
+
+
+class Export(Base):
+    """A file made in the chat (a spreadsheet of what was asked for), kept 30 days so its link keeps working."""
+    __tablename__ = "exports"
+    id = Column(Integer, primary_key=True)
+    filename = Column(String, nullable=False)
+    content = Column(LargeBinary, nullable=False)  # the file's bytes, as served
+    created_at = Column(DateTime, nullable=False)  # the household's time (clock.now())

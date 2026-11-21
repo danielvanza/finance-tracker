@@ -352,15 +352,16 @@ class Views:
     def close(self) -> None:
         self._conn.close()
 
-    def run(self, query_id: str, sql: str) -> dict:
-        """The rows, or an error Claude can read. A query never raises and never changes anything."""
+    def run(self, query_id: str, sql: str, cap: int = ROW_CAP, whole_text: bool = False) -> dict:
+        """The rows, or an error Claude can read. A query never raises and never changes anything. A file
+        (`export_file`) asks for many more rows (`cap`) and its text uncut (`whole_text`)."""
         started = time.monotonic()
         self._conn.set_progress_handler(lambda: time.monotonic() - started > QUERY_SECONDS, 2000)
         try:
             cursor = self._conn.execute(sql)
             if cursor.description is None:
                 return {"id": query_id, "error": "Only one SELECT can be run, nothing else."}
-            rows = cursor.fetchmany(ROW_CAP + 1)
+            rows = cursor.fetchmany(cap + 1)
             columns = [c[0] for c in cursor.description]
         except sqlite3.OperationalError as e:
             late = "interrupted" in str(e)
@@ -369,14 +370,15 @@ class Views:
             return {"id": query_id, "error": f"Refused: {e}"}
         finally:
             self._conn.set_progress_handler(None, 0)
-        cut_off = len(rows) > ROW_CAP
-        rows = rows[:ROW_CAP]
+        cut_off = len(rows) > cap
+        rows = rows[:cap]
+        cell = (lambda v: v if isinstance(v, str) else _cell(v)) if whole_text else _cell
         result = {
-            "id": query_id, "columns": columns, "rows": [[_cell(v) for v in row] for row in rows],
+            "id": query_id, "columns": columns, "rows": [[cell(v) for v in row] for row in rows],
             "row_count": len(rows), "cut_off": cut_off,
         }
         if cut_off:
-            result["note"] = f"Cut off: only the first {ROW_CAP} rows came back, so this is not everything."
+            result["note"] = f"Cut off: only the first {cap} rows came back, so this is not everything."
         return result
 
     def coverage_note(self) -> dict:

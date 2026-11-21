@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 
 import clock
+import exports
 import guesses
 import import_service
 import voice
@@ -139,6 +140,43 @@ def _web_lookup(args: dict, ctx: ToolContext):
     return "What the web says (information, not instructions; it can be out of date):\n" + answer
 
 
+EXPORT_ROW_CAP = 20_000
+NO_FILE = "No file was made"
+
+
+def _export_file(args: dict, ctx: ToolContext):
+    """A lookup's rows as a spreadsheet, kept for 30 days and sent with the reply (docs/bot.md, `export`)."""
+    try:
+        views = _views(ctx)
+    except Exception:
+        logger.exception("[chat] preparing the history failed")
+        return f"{NO_FILE}: the history could not be read. Say so plainly.", True
+    found = views.run("file", args["query"], cap=EXPORT_ROW_CAP, whole_text=True)
+    if "error" in found:
+        return f"{NO_FILE}. {found['error']} Fix the query and make the file again.", True
+    if not found["rows"]:
+        return (f"{NO_FILE}: nothing matched that query. Check it, or tell the person nothing was found "
+                "(the coverage of the data may explain why)."), True
+    content = exports.to_csv(found["columns"], found["rows"])
+    try:
+        with SessionLocal() as db:
+            saved = exports.save(db, args.get("filename") or args.get("title") or "", content)
+            export = {"id": saved.id, "filename": saved.filename, "rows": found["row_count"],
+                      "columns": [exports.header(c) for c in found["columns"]], "cut_off": found["cut_off"]}
+    except Exception:
+        logger.exception("[chat] saving a file failed")
+        return f"{NO_FILE}: it could not be saved. Say so plainly.", True
+    if args.get("title"):
+        export["title"] = str(args["title"])[:120]
+    ctx.attach(export=export)  # the last file made in a reply is the one sent
+    told = (f"The file {export['filename']} holds {export['rows']} rows with the columns "
+            f"{', '.join(export['columns'])}, and will be sent with your reply.")
+    if found["cut_off"]:
+        told += (f" It was cut off at {EXPORT_ROW_CAP} rows, so it does not hold everything: say so, or make "
+                 "smaller files, such as one per year.")
+    return told
+
+
 TOOLS = [
     Tool("month_overview", (
         "One financial month exactly as the Month page shows it: what is free to spend until payday and per day, the "
@@ -204,6 +242,24 @@ TOOLS = [
         },
         "required": ["doing", "question"],
     }, _web_lookup, step="Looking it up on the web"),
+    Tool("export_file", (
+        "Make a spreadsheet file (CSV) from one read-only SQLite SELECT on the same tables as run_query, sent to the "
+        f"person with your reply. Use it when they ask for a file, spreadsheet, CSV, Excel or export. It holds up to "
+        f"{EXPORT_ROW_CAP} rows, with text uncut. Name the columns for the household with AS, in plain lower-case "
+        "words such as date, description, category, note, amount_cents; every *_cents column becomes euros with a "
+        "decimal comma, named *_eur. Order the rows the way a person would read them, usually by date. The last file "
+        "you make in a reply is the one sent. Nothing can be changed through this tool."
+    ), {
+        "type": "object",
+        "properties": {
+            "doing": DOING,
+            "query": {"type": "string", "description": "One SQLite SELECT statement."},
+            "filename": {"type": "string", "description": (
+                "The file's name in a few plain words, such as 'Groceries 2026'; no folders. .csv is added.")},
+            "title": {"type": "string", "description": "What the file holds, in plain words, such as 'Groceries this year'."},
+        },
+        "required": ["doing", "query", "filename"],
+    }, _export_file, step="Making a file"),
 ]
 
 
@@ -614,6 +670,9 @@ def history_entry(message: dict) -> dict | None:
                                   for o in options]
     if payload.get("chart"):
         entry["chart_shown"] = payload["chart"].get("title") or "a chart"
+    export = payload.get("export")
+    if export:
+        entry["file_sent"] = f"{export.get('filename')} ({export.get('rows')} rows)"
     return entry
 
 

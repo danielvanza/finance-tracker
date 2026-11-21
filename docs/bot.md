@@ -24,7 +24,7 @@ exactly this.
 | user | `file` | caption (usually empty) | `filename`, `size` | — |
 | user | `photo` | caption | `filename`, `size` | — |
 | user | `voice` | **what was heard** (set by the handler before the reply; empty until then) | `filename`, `size` | — |
-| assistant | `answer` | Claude's words (`**bold**`, `- ` list lines) | `options?` ("which one?"), `chart?` + `image?` (a chart), `about_question?` + `transaction_ids?` (the app asking what a payment is, after Something else) | — |
+| assistant | `answer` | Claude's words (`**bold**`, `- ` list lines) | `options?` ("which one?"), `chart?` + `image?` (a chart), `export?` (a file), `about_question?` + `transaction_ids?` (the app asking what a payment is, after Something else) | — |
 | assistant | `all_rows` | every row of a card, as plain text | `groups`, `card_id` | — |
 | assistant | `import` | the import in one sentence | counts (below) | — |
 | assistant | `question` | the question in one line | question (below), `unasked?` | answers, Something else; once answered: Remember |
@@ -40,6 +40,13 @@ exactly this.
   choice_id}`; it is saved as the person's text `That one: {name}, {date_label}, {amount_label} (id {id})`.
 - **Chart** (`answer`): `chart = {type: line|bars, title, labels: [..], series: [{name, values}], unit}`; `image =
   {alt}`. The picture is `GET /messages/{id}/image?theme=day|night` (PNG). The answer's words carry the same figures.
+- **File** (`answer`, from the `export_file` tool): `export = {id, filename, rows, columns, cut_off, title?}`; the last
+  file made in a reply is the one sent. The file is `GET /api/exports/{id}` (`routers/exports.py`, outside `/chat`,
+  behind the same sign-in): `text/csv`, `Content-Disposition: attachment`. It is a CSV for a Dutch spreadsheet
+  (`exports.py`): UTF-8 with a byte order mark, `;` between columns, every `*_cents` column as euros with a decimal
+  comma and renamed `*_eur`, dates `YYYY-MM-DD`, text that starts like a formula prefixed with `'`. At most 20 000 rows
+  (`cut_off` when there were more). Kept in the finance database (`exports`) for 30 days; making one clears out older
+  ones. The bubble shows a download row under the words (`kinds.tsx`, `Answer`); Telegram sends it as a document.
 - **Every row of a card** (`all_rows`): `groups = [{heading, rows: [{when, amount, name}]}` or
   `{heading, lines: [str]}]`. Payment groups first (by size), then `Remembered for next time`, then `Other changes`.
   `text` is the same as plain text (`actions.details`).
@@ -135,12 +142,12 @@ A card's `status` is the kit's: `open | applying | applied | rejected | supersed
 
 `<context>`: `today`, `payments_waiting_for_an_answer`, `this_month` (the Month page overview). `<conversation>`: each
 message as it always was: the person's words (`sent_a_bank_file`, `sent_a_photo`, `heard_from_a_voice_note`, Stop
-noted), Claude's own words (`choices_shown`, `chart_shown`), cards (`id, summary, op, rows_changed, status, args?,
+noted), Claude's own words (`choices_shown`, `chart_shown`, `file_sent: "{filename} ({rows} rows)"`), cards (`id, summary, op, rows_changed, status, args?,
 error?, undone?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `reminder_sent`, `import_summary`,
 `asked_after_something_else`, errors. Tools: `month_overview`, `run_query` (a private in-memory copy per reply, closed
 when it ends), `show_chart`, `web_lookup` (a public question answered from the web with sources, by a separate
 sandboxed Claude run whose only tools are WebSearch and WebFetch; `assistant/web.py`; live-log step "Looking it up on
-the web"), and the kit's `make_change` and `show_choices`.
+the web"), `export_file` (one SELECT on the same copy, as a file), and the kit's `make_change` and `show_choices`.
 
 Fixed bills: `this_month.upcoming_bills` are the bills still to come (`{key, name, amount_cents, next_date,
 category_name, added}`; `added` for a bill added by hand, key `added-N`), and `run_query`'s `fixed_bills` table lists
@@ -159,7 +166,8 @@ yearly bills; Report: last month in a few lines, where most of it went.
 ## Telegram
 
 `backend/telegram_bot.py` is the kit's Telegram front (`botkit.telegram`, SPEC §11) with finance's renderers: `card`,
-`question`, `answer` (with "which one?" choices and a chart sent as a photo from `/messages/{id}/image`), `all_rows`,
+`question`, `answer` (with "which one?" choices, a chart sent as a photo from `/messages/{id}/image`, and a file sent as
+a document from `FINANCE_API_URL` + `/exports/{id}` by `FinanceFront`), `all_rows`,
 `import`, `nudge`, `reminder`, `error`; the live log of a voice note and the first reply to it start with `Heard: “…”`; and the
 words the bot says itself. Buttons carry the kit's callback data (`a:` Apply, `r:` reject, `c:` a choice, `b:` a
 message's action, `s:` Stop); buttons on messages sent before the move (`q:{question}:{n|x|m}`, `d:{card}`,

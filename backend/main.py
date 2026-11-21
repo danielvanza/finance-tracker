@@ -19,6 +19,7 @@ from routers.settings import router as settings_router
 from routers.set_asides import router as set_asides_router
 from routers.recurring import router as recurring_router
 from routers.goals import router as goals_router
+from routers.exports import router as exports_router
 from assistant import bot as chat_bot, questions
 from botkit.fastapi import bot_router
 import nudges
@@ -44,6 +45,7 @@ app.include_router(settings_router)
 app.include_router(set_asides_router)
 app.include_router(recurring_router)
 app.include_router(goals_router)
+app.include_router(exports_router)
 
 with SessionLocal() as session:
     run_seed(session)

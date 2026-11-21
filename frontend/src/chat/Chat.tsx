@@ -6,13 +6,13 @@ import { createClient } from 'bot-kit/client'
 import { Bubble, type CardBody, type Renderer } from 'bot-kit/bubble'
 import 'bot-kit/bubble.css'
 import { CHAT_BASE } from '../api'
-import { AllRows, CardExtras, FileSent, ImportDone, Nudge, Question, Reminder } from './kinds'
+import { AllRows, Answer, CardExtras, FileSent, ImportDone, Nudge, Question, Reminder } from './kinds'
 
 const DESKTOP = '(min-width: 1024px)'
 const EXPLAIN = 'Ask anything about the household\'s money, or say what needs sorting out. Every change is shown on a card first, and nothing changes until it is applied.'
 const ATTACH = { kind: 'file', accept: '.csv,text/csv', label: 'Attach an ING file' }
 /** Finance's own message kinds (docs/bot.md); the kit draws text, answers, cards and errors. */
-const renderers: Record<string, Renderer> = { file: FileSent, import: ImportDone, question: Question, nudge: Nudge, reminder: Reminder, all_rows: AllRows }
+const renderers: Record<string, Renderer> = { file: FileSent, import: ImportDone, question: Question, nudge: Nudge, reminder: Reminder, all_rows: AllRows, answer: Answer }
 const cardBody: CardBody = (card, message) => <CardExtras card={card} message={message} />
 
 /**

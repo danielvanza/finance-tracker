@@ -6,6 +6,7 @@ import re
 import time
 import anthropic
 from sqlalchemy.orm import Session
+import runtime_settings
 from models import Category
 from categorizer import claude_cli
 from importers.ing import written
@@ -15,7 +16,6 @@ BATCH_SIZE = 50  # Max transactions per AI call
 AI_TIMEOUT_SECONDS = 30
 AI_MAX_RETRIES = 2
 AI_TIME_BUDGET_SECONDS = int(os.getenv("AI_TIME_BUDGET_SECONDS", "60"))
-CLI_MODEL = os.getenv("SORT_MODEL", "sonnet")  # the model that sorts imported rows, on the Claude login
 CLI_TIMEOUT_SECONDS = 120
 SYSTEM_PROMPT = "You are a financial transaction categoriser. Respond with JSON only."
 
@@ -90,7 +90,7 @@ _INCOMING = (
 def _completer():
     """A function (prompt -> text) for whichever Claude access is set up: the CLI's login or the API."""
     if claude_cli.enabled():
-        return lambda prompt: claude_cli.complete(SYSTEM_PROMPT, prompt, CLI_MODEL, CLI_TIMEOUT_SECONDS)
+        return lambda prompt: claude_cli.complete(SYSTEM_PROMPT, prompt, runtime_settings.sort_model(), CLI_TIMEOUT_SECONDS)
     client = anthropic.Anthropic(timeout=AI_TIMEOUT_SECONDS, max_retries=AI_MAX_RETRIES)
 
     def complete(prompt: str) -> str:

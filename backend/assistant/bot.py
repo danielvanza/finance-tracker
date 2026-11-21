@@ -282,6 +282,8 @@ def _after_apply(fresh: dict) -> dict:
     extra: dict = {}
     with SessionLocal() as db:
         sorts = [c for c in fresh["changes"] if c.get("payment") and c["payment"]["how"] in ("moved", "confirmed")]
+        if any(c["title"].startswith("Removed category: ") for c in fresh["changes"]):
+            sorts = []  # a category merged away moved its payments; that is no sorting to remember
         if any(f["label"] == "Reviewed" for c in sorts for f in c["fields"]):
             extra["waiting"] = db.query(func.count(Transaction.id)).filter(Transaction.confirmed == False).scalar()  # noqa: E712
         rows = [t for t in (db.get(Transaction, c["payment"]["id"]) for c in sorts) if t is not None and t.confirmed]

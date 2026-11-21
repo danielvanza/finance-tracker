@@ -26,7 +26,8 @@ backend/
   set_asides.py        Set-asides: a bill's monthly share and what its payment settles
   nudges.py            What the bot says unasked, and when
   voice.py             Voice notes to text, on this machine (faster-whisper)
-  clock.py             Today and now for the household; every date question goes through it
+  clock.py             Today and now for the household; every date question goes through it (and `quiet_hours`, from the setting)
+  runtime_settings.py  Settings that a background thread or the clock reads (nudges, quiet_hours, sort_model): the setting wins, the environment is the default; a 30-second cache on a session of its own that falls back to the default on any database error
   assistant/           The chat, on the shared bot kit (docs/bot.md): bot.py (finance's Bot: tools, card kinds, file/photo/voice handlers, buttons, history, starters), questions.py (questions about unsure payments, unasked messages), actions.py (what it can change, preview + apply), prompts.py (system prompt), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results), figures.py (wording helpers)
   telegram_bot.py      The Telegram bot, its own process: bot-kit's Telegram front (botkit.telegram) with finance's settings, layouts and words: one group, two people
   routers/             API route handlers (imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings); the chat is botkit's router at /chat
@@ -90,14 +91,14 @@ frontend/
 | `CLAUDE_BIN`, `CLAUDE_CREDENTIALS` | No | `claude` on PATH, `~/.claude/.credentials.json` | The Claude CLI and the login token it uses (linked into the private folder, never copied). |
 | `CODEX_CLI_HOME` | No | (none) | Private folder for the sandboxed Codex login: without it the chat's "Codex" runner shows as not set up. |
 | `CHAT_MODEL` | No | `sonnet` | Claude Code model a new conversation starts on, in both chats. The picker in the chat changes it per conversation. |
-| `SORT_MODEL` | No | `sonnet` | Claude model that sorts imported rows (on the Claude login). |
+| `SORT_MODEL` | No | `sonnet` | Claude model that sorts imported rows (on the Claude login). The `sort_model` setting (`sonnet`, `opus` or `haiku`) wins when set. |
 | `CHAT_TIME_LIMIT_SECONDS` | No | `540` | How long Claude may work on one reply before it is stopped and writes up what it found (about a minute more). |
 | `TELEGRAM_BOT_TOKEN` | For the bot | (none) | From BotFather. A bot of its own, separate from Hermes. |
 | `TELEGRAM_ALLOWED_USER_IDS` | For the bot | (none) | The two numeric Telegram accounts, comma-separated. |
 | `TELEGRAM_GROUP_ID` | For the bot | (none) | The household group's numeric id. Without it the bot answers nobody and logs the id of a group one of the two writes in. |
 | `VOICE_MODEL` | No | `small.en` | Speech model for voice notes, fetched on first use. |
 | `FINANCE_TIMEZONE` | No | `Europe/Amsterdam` | The household's time. |
-| `NUDGES` | No | `on` | `off` stops the bot writing unasked. |
+| `NUDGES` | No | `on` | `off` stops the bot writing unasked (recaps, old-data and month-end messages, questions after an import on the Import page). The `nudges` setting (`on`/`off`) wins when set; `nudges.start()` always runs and each round asks it. |
 | `FINANCE_API_URL` | No | `http://127.0.0.1:18600/api` | Where the bot finds the app. |
 | `FINANCE_SCRIPT_RUNNER` | Tests only | (off) | `1` adds botkit's scripted model ("Test script") to the picker, for the E2E suite. Never set in production. |
 
@@ -145,7 +146,7 @@ The app also speaks without Claude, through `bot.post`: questions about payments
 judged the payment or gave no answer for it; "Something else" makes the app ask what it is, as a line of the
 conversation), and what the bot says unasked (`nudges.py`, one message for everything owed; one the chat has not been
 shown yet is replaced by the next, `questions.post_nudge`). Whatever nobody asked for carries `unasked` and is held back
-between 21:00 and 9:00 (`clock.quiet_hours`). A voice note is turned into text first (`voice.py`), and its words never
+between 21:00 and 9:00 (`clock.quiet_hours`; the `quiet_hours` setting, such as `22-7`, changes the hours). A voice note is turned into text first (`voice.py`), and its words never
 settle a card; a photo is shown to Claude as a picture beside the prompt, with no tool added.
 
 The Telegram bot is bot-kit's Telegram front (`botkit.telegram`, SPEC §11): it polls Telegram, talks to the app only

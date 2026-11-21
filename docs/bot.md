@@ -75,6 +75,19 @@ and survives New chat. Labels: no heading (`""`) and Apply / Not this; `merge`: 
 payment", Merge, Keep both. The kit's card JSON (SPEC §6) has `lines` (what will change in the app's words: a line per
 change, or a count and a line per category when there are many) and:
 
+Three groups of cards read differently from the plain "a line per change":
+
+- `category.merge` `{from_id, into_id}` moves a category's payments, split parts, rules, savings goal and plan into
+  another of the same type and removes it. Its card is always summed up: `N payments:`, `• Move to X: N payments, €…`,
+  `• Removes Y`, `• N rules now point to X` (`• N rules dropped that the other category has already`), `• Its plan is
+  added to the plan of X, in N months`, `• The savings goal “…” now saves into X` (`actions._removal_lines`). A merge
+  never offers to remember shops. The same lines read a `category.delete` that removes a category's budget rows.
+- `budget.copy` `{from_month, to_month?}` and `budget.adjust` `{month?, category_ids | type, by_pct | by_cents}` are
+  plan changes: one `Budget for X, Month: planned A → B` line per row (summed up when many), with the budget `effect`.
+- `setting.set` also takes `nudges` (`on|off`), `quiet_hours` (`HH-HH`) and `sort_model` (`sonnet|opus|haiku`). A setting
+  card says `New setting: Quiet hours: from 22:00 until 7:00`, or the old and new value once the
+  setting has a row (`actions._setting_value` words the value).
+
 **`data`** (from the preview; what the card shows before Apply):
 
 | field | what |

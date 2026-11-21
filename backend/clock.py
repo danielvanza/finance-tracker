@@ -7,6 +7,8 @@ import os
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+import runtime_settings
+
 ZONE = ZoneInfo(os.getenv("FINANCE_TIMEZONE", "Europe/Amsterdam"))
 
 
@@ -26,10 +28,9 @@ def today() -> date:
     return now().date()
 
 
-QUIET_FROM, QUIET_UNTIL = 21, 9
-
-
 def quiet_hours(at: datetime | None = None) -> bool:
-    """Whether it is night for the household: nothing is sent unasked from 21:00 until 9:00."""
+    """Whether it is night for the household: nothing is sent unasked from 21:00 until 9:00, or between the hours
+    of the `quiet_hours` setting."""
+    start, end = runtime_settings.quiet_window()
     hour = (at or now()).hour
-    return hour >= QUIET_FROM or hour < QUIET_UNTIL
+    return start <= hour < end if start < end else hour >= start or hour < end

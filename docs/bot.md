@@ -138,7 +138,9 @@ message as it always was: the person's words (`sent_a_bank_file`, `sent_a_photo`
 noted), Claude's own words (`choices_shown`, `chart_shown`), cards (`id, summary, op, rows_changed, status, args?,
 error?, undone?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `reminder_sent`, `import_summary`,
 `asked_after_something_else`, errors. Tools: `month_overview`, `run_query` (a private in-memory copy per reply, closed
-when it ends), `show_chart`, and the kit's `make_change` and `show_choices`.
+when it ends), `show_chart`, `web_lookup` (a public question answered from the web with sources, by a separate
+sandboxed Claude run whose only tools are WebSearch and WebFetch; `assistant/web.py`; live-log step "Looking it up on
+the web"), and the kit's `make_change` and `show_choices`.
 
 ## Starters
 

@@ -60,7 +60,7 @@ Needs Python 3.11+ and Node 20+.
 
 Sorting uses Claude in one of two ways (the chat's runners are in its picker; see the environment below):
 
-- **The machine's Claude login** (`CLAUDE_CLI_HOME` set): `claude -p` in bot-kit's bubblewrap sandbox with no tools at all, no settings and an empty `/home` (`categorizer/claude_cli.py`). The chat's default runner is the same login, with only the app's tools. Needs `bwrap` and the `claude` CLI, and a `CLAUDE_CLI_HOME` outside any folder that holds a repository or agent instructions.
+- **The machine's Claude login** (`CLAUDE_CLI_HOME` set): `claude -p` in bot-kit's bubblewrap sandbox with no tools at all, no settings and an empty `/home` (`categorizer/claude_cli.py`). The chat's default runner is the same login, with only the app's tools. The chat's web lookup (`assistant/web.py`) is a separate short run on the same login with only WebSearch and WebFetch, in its own private folder `<CLAUDE_CLI_HOME>-web`, made on first use. Needs `bwrap` and the `claude` CLI, and a `CLAUDE_CLI_HOME` outside any folder that holds a repository or agent instructions.
 - **An API key** (`ANTHROPIC_API_KEY`): for sorting imports, and the chat's Claude API runner when picked.
 
 With neither, rules still sort and everything else waits in the review list.
@@ -71,7 +71,7 @@ With neither, rules still sort and everything else waits in the review list.
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./data/finance.db` | Where the database is. |
 | `ANTHROPIC_API_KEY` | none | Claude for sorting imports, when the login below is not used. |
-| `CLAUDE_CLI_HOME` | none | Private folder for the sandboxed Claude login: the chat's Claude Code runner, and sorting. |
+| `CLAUDE_CLI_HOME` | none | Private folder for the sandboxed Claude login: the chat's Claude Code runner, and sorting. The chat's web lookup uses `<CLAUDE_CLI_HOME>-web` beside it. |
 | `CODEX_CLI_HOME` | none | Private folder for the sandboxed Codex login: the chat's Codex runner. |
 | `OPENAI_API_KEY` | none | The chat's OpenAI API runner. |
 | `BOT_DB_PATH` | `bot.db` beside the database | The chat's own store (bot-kit). |

@@ -78,7 +78,7 @@ typed yes or no (SPEC §5.6).
 ## Cards
 
 Every change in `actions.OPS` is a `card` kind (finance has no immediate changes), named as in `OPS`
-(`transaction.add`, `review.confirm`, `batch` …); `merge` is offered by an import only (`bot.offer`), never by Claude,
+(`transaction.add`, `review.confirm`, `bill.add`, `batch` …); `merge` is offered by an import only (`bot.offer`), never by Claude,
 and survives New chat. Labels: no heading (`""`) and Apply / Not this; `merge`: heading "Looks like the same
 payment", Merge, Keep both. The kit's card JSON (SPEC §6) has `lines` (what will change in the app's words: a line per
 change, or a count and a line per category when there are many) and:
@@ -141,6 +141,13 @@ error?, undone?`, `you_said_with_it`), `asked` questions with their `buttons` an
 when it ends), `show_chart`, `web_lookup` (a public question answered from the web with sources, by a separate
 sandboxed Claude run whose only tools are WebSearch and WebFetch; `assistant/web.py`; live-log step "Looking it up on
 the web"), and the kit's `make_change` and `show_choices`.
+
+Fixed bills: `this_month.upcoming_bills` are the bills still to come (`{key, name, amount_cents, next_date,
+category_name, added}`; `added` for a bill added by hand, key `added-N`), and `run_query`'s `fixed_bills` table lists
+every bill of the current month with its state. The cards `bill.add`, `bill.update` (amount and/or day of a found
+bill; anything of an added one) and `bill.delete` (added ones only) change them; their lines read like
+`New: Fixed bill “Sportschool”: €40,00, the 15th, Every month, November 2026, “Sportschool” in a payment, Wants` and
+`Changed: Fixed bill “ziggo internet”: €52,50`.
 
 ## Starters
 

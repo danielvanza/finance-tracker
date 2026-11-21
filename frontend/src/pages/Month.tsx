@@ -101,7 +101,7 @@ function Ledger({ p, free, daysToPayday }: { p: Pace; free: FreeToSpend; daysToP
           <ul className="free-list" aria-label="Fixed bills still to come">
             {free.bills.map(bill => (
               <li key={bill.key}>
-                <span>{bill.name}<small>{bill.next_date ? `due ${dayLabel(bill.next_date)}` : ''} · {bill.category_name}</small></span>
+                <span>{bill.name}<small>{bill.next_date ? `due ${dayLabel(bill.next_date)}` : ''} · {bill.category_name}{bill.added ? ' · added by hand' : ''}</small></span>
                 <span className="num">{e(bill.amount_cents)}</span>
                 <button type="button" className="btn btn-sm" onClick={() => leaveOut(bill.key)} aria-label={`${bill.name} is not a fixed bill`}>
                   Not a fixed bill

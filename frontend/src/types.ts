@@ -68,7 +68,7 @@ export interface FreeToSpend {
   per_day_cents: number | null
   left_in_plan_cents: number
   bills_cents: number
-  bills: Array<{ key: string; name: string; amount_cents: number; next_date: string | null; category_name: string }>
+  bills: Array<{ key: string; name: string; amount_cents: number; next_date: string | null; category_name: string; added?: boolean }>
   set_aside_cents: number
   set_asides: Array<{ id: number; name: string; monthly_cents: number }>
   // What free_cents is made of: in + still expected in - spent - saved - bills - set-asides.

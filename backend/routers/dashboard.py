@@ -264,7 +264,7 @@ def _free_to_spend(db: Session, label: str, left_cents: int, days_left: int, *, 
     """
     bills = [
         {"key": i["key"], "name": i["name"], "amount_cents": i["amount_cents"] * i["remaining"],
-         "next_date": i["next_date"], "category_name": i["category_name"]}
+         "next_date": i["next_date"], "category_name": i["category_name"], "added": i["added"]}
         for i in recurring_router.recurring(label, db)["items"]
         if i["state"] in ("due", "expected") and i["category_type"] in SPENDABLE_TYPES
     ]

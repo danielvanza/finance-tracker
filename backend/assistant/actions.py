@@ -25,8 +25,8 @@ import runtime_settings
 import spend_service
 from financial_month import label_month_for_date
 from models import (
-    AppliedChange, AskShop, Budget, Category, CategoryType, IgnoredBill, Reminder, RemovedBankRow, Rule, SetAside,
-    Setting, Transaction, TransactionSplit,
+    AddedBill, AppliedChange, AskShop, BillChange, Budget, Category, CategoryType, IgnoredBill, Reminder,
+    RemovedBankRow, Rule, SetAside, Setting, Transaction, TransactionSplit,
 )
 from routers import budget as budget_router
 from routers import categories as categories_router
@@ -47,8 +47,8 @@ _LONG_MONTHS = [
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
 MAX_BATCH = 500
 _TABLES = (
-    Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting, RemovedBankRow,
-    Reminder,
+    Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, AddedBill, BillChange,
+    Setting, RemovedBankRow, Reminder,
 )
 _SETTING_NAMES = {
     "financial_month_start_day": "Financial month start day",
@@ -557,6 +557,30 @@ def _set_aside_fields(a: dict) -> dict:
     return fields
 
 
+_BILL_FIELDS = ("name", "amount_cents", "day", "every_months", "starts", "matches", "category_id")
+
+
+def _bill_args(a: dict, op: str) -> dict:
+    """A bill change's fields, refusing one the app does not know."""
+    unknown = sorted(set(a) - {"key", *_BILL_FIELDS})
+    if unknown:
+        raise ActionError(f"{op} has no field '{unknown[0]}'; it takes key and {', '.join(_BILL_FIELDS)}")
+    if a.get("amount_cents") is not None:
+        _cents(a["amount_cents"])
+    return {k: a[k] for k in _BILL_FIELDS if k in a}
+
+
+def _add_bill(db: Session, a: dict):
+    if "key" in a:
+        raise ActionError("A new bill has no key yet; bill.update changes an existing one")
+    recurring_router.add_bill(recurring_router.BillIn(**_bill_args(a, "bill.add")), db)
+
+
+def _update_bill(db: Session, a: dict):
+    key = _text(a.get("key"), "bill's key")
+    recurring_router.update_bill(key, recurring_router.BillPatch(**_bill_args(a, "bill.update")), db)
+
+
 def _set_setting(db: Session, a: dict):
     if a.get("key") not in _SETTING_NAMES:
         raise ActionError(
@@ -786,6 +810,12 @@ OPS: dict[str, Op] = {
         '{"key":str (a fixed bill\'s key from upcoming_bills)} stop counting it as a fixed bill still to pay'),
     "bill.count": Op(lambda db, a: recurring_router.count_bill_again(a.get("key") or "", db),
         '{"key":str} count an ignored bill as a fixed bill again'),
+    "bill.add": Op(_add_bill,
+        '{"name":str,"amount_cents":int positive,"day":int 1-31 (the day of the month it is paid; a shorter month uses its last day),"every_months":int 1-12 optional (default 1; 3 quarterly, 12 yearly),"starts":"YYYY-MM" optional (the month of its first payment to count; default: the first such day from today, so a date already past this month is not counted),"matches":str optional, at least 3 characters (text in the bank description of its payments; default the name),"category_id":int optional (a needs or wants category)} a fixed bill the app did not find in the payments. It counts in fixed bills still to come for every month it is due, until a confirmed outgoing payment whose description contains matches comes within 10 days of the date; those payments then belong to it'),
+    "bill.update": Op(_update_bill,
+        '{"key":str (from upcoming_bills or fixed_bills), then only what changes: "amount_cents","day" (null puts back what the payments show); a bill added by hand (key added-N) also "name","every_months","starts","matches","category_id"} such as a bill that went up'),
+    "bill.delete": Op(lambda db, a: recurring_router.delete_bill(_text(a.get("key"), "bill's key"), db),
+        '{"key":"added-N"} removes a bill added by hand; one found from payments is taken out with bill.ignore'),
     "setting.set": Op(_set_setting,
         '{"key":"financial_month_start_day","value":"1-28"} or {"key":"target_split","value":"needs/wants/savings in whole percent adding up to 100, such as 60/25/15"} or {"key":"own_names","value":"the household\'s own names as the bank shows them, separated by ;"} (money moved to them goes to To personal accounts) or {"key":"nudges","value":"on|off"} (whether the bot writes unasked: recaps, old-data and month-end messages, questions about payments it was unsure of after an import on the Import page) or {"key":"quiet_hours","value":"HH-HH from-until in whole hours, such as 21-9; may pass midnight"} (nothing is sent unasked then) or {"key":"sort_model","value":"sonnet|opus|haiku"} (the Claude model that sorts imported payments)'),
     "goal.set": Op(_set_goal,
@@ -871,6 +901,15 @@ def _reminder_when(r: dict) -> str:
         return "Already sent"
     held = " (held until the morning)" if clock.quiet_hours(r["next_at"]) else ""
     return _when_label(r["next_at"]) + held
+
+
+def _ordinal(day: int) -> str:
+    suffix = "th" if 11 <= day % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    return f"the {day}{suffix}"
+
+
+def _how_often(months: int) -> str:
+    return {1: "Every month", 12: "Every year"}.get(months, f"Every {months} months")
 
 
 def _month_label(d: date) -> str:
@@ -1041,6 +1080,28 @@ def _changes(before: dict, after: dict) -> list[dict]:
         },
         "New: ", "Removed: ",
     )
+    out += _row_changes(
+        lambda b: f"Fixed bill “{b['name']}”", before["added_bills"], after["added_bills"],
+        lambda b: {
+            "Name": b["name"], "Amount": eur(_cents_of(b["amount"])), "Paid on": _ordinal(b["day"]),
+            "How often": _how_often(b["every_months"]), "From": _month_label(b["starts"]),
+            "Found by": f"“{b['matches']}” in a payment", "Category": names.category(b["category_id"]),
+        },
+        "New: ", "Removed: ",
+    )
+    as_found = "as the payments show"
+    bill_changes = _row_changes(
+        lambda b: f"Fixed bill “{b['key']}”", before["bill_changes"], after["bill_changes"],
+        lambda b: {
+            "Amount": eur(_cents_of(b["amount"])) if b["amount"] is not None else as_found,
+            "Paid on": _ordinal(b["day"]) if b["day"] is not None else as_found,
+        },
+        "Changed: ", "As the payments show again: ",
+    )
+    for change in bill_changes:  # a new correction says only what it changes
+        if change["title"].startswith("Changed: "):
+            change["fields"] = [f for f in change["fields"] if f["after"] != as_found]
+    out += bill_changes
     plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(
         lambda s: _SETTING_NAMES.get(s["key"], s["key"]),

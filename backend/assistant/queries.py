@@ -28,6 +28,7 @@ from models import Budget, Category, Rule, Transaction, TransactionSource
 from routers import budget as budget_router
 from routers import dashboard as dashboard_router
 from routers import goals as goals_router
+from routers import recurring as recurring_router
 from routers.recurring import _key as merchant_key
 from sqlalchemy.orm import Session, selectinload
 
@@ -51,6 +52,7 @@ budgets: planned amounts. A plan stays as it is until changed: a month without r
 rules: what sorts imported rows automatically: a description containing pattern gets category; when several fit, the longest pattern wins. Columns: id, pattern, category_id, category.
 ask_shops: shops whose payments differ every time: a payment whose description contains pattern is never sorted by itself, however sure Claude is, and is asked about on its own. Columns: pattern.
 set_asides: bills that do not come monthly, spread over the months before they are due, as this month sees them. Columns: id, name, amount_cents, due_month (the next one), every_months (how often it comes back: 3 quarterly, 12 yearly; NULL once), monthly_cents (this month's share, which lowers what is free to spend), saved_cents (set aside so far), paid_transaction_id, paid_date.
+fixed_bills: every fixed bill as this financial month sees it, the same list "fixed bills still to come" is taken from: found from payments that repeat, or added by hand (added = 1). Columns: key (what bill.update, bill.ignore and bill.delete take), name, added, category, category_type, cadence, amount_cents (what one payment is counted as), found_amount_cents (what the payments show, before a change; NULL for an added bill), day (the day of the month it was moved to or added on; NULL: as the payments show), state (due, expected: still to come this month and counted; paid; later: not due this month; stopped; ignored: not counted, a person said it is not a fixed bill), next_date, remaining (payments still to come this month), last_date, matches (an added bill: the text in a payment's description that settles it), every_months, starts (an added bill: the month of its first payment).
 savings_goals: as the Trends page shows them. Columns: name, category_id, category, target_cents, start_cents (in the pot when it started), saved_cents, started, by_month, status (done, open, late, unknown, short, on_track), needed_per_month_cents, pace_per_month_cents, short_per_month_cents, reach_month."""
 
 _DDL = """
@@ -71,13 +73,16 @@ CREATE TABLE rules (id INTEGER, pattern TEXT, category_id INTEGER, category TEXT
 CREATE TABLE ask_shops (pattern TEXT);
 CREATE TABLE set_asides (id INTEGER, name TEXT, amount_cents INTEGER, due_month TEXT, every_months INTEGER,
   monthly_cents INTEGER, saved_cents INTEGER, paid_transaction_id INTEGER, paid_date TEXT);
+CREATE TABLE fixed_bills (key TEXT, name TEXT, added INTEGER, category TEXT, category_type TEXT, cadence TEXT,
+  amount_cents INTEGER, found_amount_cents INTEGER, day INTEGER, state TEXT, next_date TEXT, remaining INTEGER,
+  last_date TEXT, matches TEXT, every_months INTEGER, starts TEXT);
 CREATE TABLE savings_goals (name TEXT, category_id INTEGER, category TEXT, target_cents INTEGER, start_cents INTEGER,
   saved_cents INTEGER, started TEXT, by_month TEXT, status TEXT, needed_per_month_cents INTEGER,
   pace_per_month_cents INTEGER, short_per_month_cents INTEGER, reach_month TEXT);
 """
 _TABLES = {
     "spending", "category_months", "month_totals", "coverage", "transactions", "categories", "budgets", "rules",
-    "ask_shops", "set_asides", "savings_goals",
+    "ask_shops", "set_asides", "savings_goals", "fixed_bills",
 }
 _FUNCTIONS = {
     "abs", "avg", "coalesce", "concat", "concat_ws", "count", "cume_dist", "date", "datetime", "dense_rank",
@@ -203,6 +208,12 @@ def _fill_setup(conn: sqlite3.Connection, db) -> None:
         (b["id"], b["name"], b["amount_cents"], b["due_month"], b["every_months"], b["monthly_cents"], b["saved_cents"],
          (b["payment"] or {}).get("transaction_id"), (b["payment"] or {}).get("date"))
         for b in set_asides.month_view(db)["items"]
+    ])
+    conn.executemany("INSERT INTO fixed_bills VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        (i["key"], i["name"], i["added"], i["category_name"], i["category_type"], i["cadence"], i["amount_cents"],
+         i["found_amount_cents"], i["day"], i["state"], i["next_date"], i["remaining"], i["last_date"],
+         i.get("matches"), i.get("every_months"), i.get("starts"))
+        for i in recurring_router.recurring(None, db)["items"]
     ])
     conn.executemany("INSERT INTO savings_goals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
         (g["name"], g["category_id"], g["category_name"], g["target_cents"], g["start_cents"], g["saved_cents"],

@@ -9,7 +9,7 @@ import type { Recurring, RecurringItem } from '../components/recurring/types'
 
 const item = (over: Partial<RecurringItem> & Pick<RecurringItem, 'key' | 'name' | 'amount_cents' | 'last_date' | 'state'>): RecurringItem => ({
   category_name: 'Utilities', category_type: 'needs', cadence: 'monthly', next_date: null, remaining: 0,
-  price_change: null, history: [{ date: over.last_date, amount_cents: over.amount_cents }], ...over,
+  price_change: null, history: over.last_date ? [{ date: over.last_date, amount_cents: over.amount_cents }] : [], ...over,
 })
 
 const mortgage = item({ key: 'hypotheek ing', name: 'Hypotheek ING', amount_cents: 185000, last_date: '2026-10-26', next_date: '2026-11-26', state: 'paid' })
@@ -105,6 +105,13 @@ describe('RecurringSheet', () => {
     const late = { ...normal, items: [{ ...normal.items[0], next_date: '2026-11-05' }] }
     show(late)
     expect(screen.getByRole('button', { name: /Ziggo internet/ })).toHaveTextContent('Was due 5 Nov')
+  })
+
+  it('marks a bill added by hand, also one with no payment yet', () => {
+    const gym = item({ key: 'added-1', name: 'Sportschool', amount_cents: 4000, last_date: null, next_date: '2026-11-15', state: 'due', remaining: 1, added: true })
+    show({ ...base, due_cents: 4000, items: [gym, { ...gym, key: 'added-2', name: 'Bike lease', state: 'ignored' }] })
+    expect(screen.getByRole('button', { name: /Sportschool/ })).toHaveTextContent('15 Nov · in 6 days · monthly · added by hand')
+    expect(screen.getByRole('button', { name: /Bike lease/ })).toHaveTextContent('Added by hand · monthly · not counted')
   })
 
   it('closes with the button, the scrim and Escape, and starts on the close button', async () => {

@@ -103,6 +103,28 @@ class IgnoredBill(Base):
     key = Column(String, primary_key=True)
 
 
+class AddedBill(Base):
+    """A fixed bill a person added because the app did not find it in the payments (routers/recurring.py)."""
+    __tablename__ = "added_bills"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    day = Column(Integer, nullable=False)  # day of the month it is paid (a shorter month: its last day)
+    every_months = Column(Integer, nullable=False, default=1)
+    starts = Column(Date, nullable=False)  # calendar month (1st) of its first payment
+    matches = Column(String, nullable=False)  # text in the bank description of its payment
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
+    category = relationship("Category")
+
+
+class BillChange(Base):
+    """A person's correction to a fixed bill the app found: its amount and/or its day, by its recurring key."""
+    __tablename__ = "bill_changes"
+    key = Column(String, primary_key=True)
+    amount = Column(Numeric(12, 2), nullable=True)  # NULL: the amount the payments show
+    day = Column(Integer, nullable=True)  # NULL: the day the payments show
+
+
 class Rule(Base):
     __tablename__ = "rules"
     id = Column(Integer, primary_key=True)

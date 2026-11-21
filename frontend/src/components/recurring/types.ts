@@ -6,9 +6,16 @@ export interface RecurringItem {
   name: string
   category_name: string
   category_type: 'needs' | 'wants' | 'savings'
-  cadence: 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly'
+  cadence: 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'yearly' | `every ${number} months`
   amount_cents: number
-  last_date: string
+  /** Added by hand (key `added-N`): a fixed bill the payments do not show. */
+  added?: boolean
+  /** What the payments show, when a person gave the bill another amount; null for an added bill. */
+  found_amount_cents?: number | null
+  /** The day of the month a person moved it to or added it on; null: as the payments show. */
+  day?: number | null
+  /** The last payment; null for an added bill that has none yet. */
+  last_date: string | null
   /** The next payment; null once it has stopped. */
   next_date: string | null
   state: RecurringState

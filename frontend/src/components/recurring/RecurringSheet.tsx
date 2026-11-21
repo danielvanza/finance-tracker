@@ -40,6 +40,8 @@ function Row({ item, kind, data, open, onToggle, onCount }: {
   const id = `rc-hist-${item.key.replace(/\W+/g, '-')}`
   const more = item.remaining > 1 ? ` · ${item.remaining} to go` : ''
   const rise = item.price_change ? item.price_change.to_cents - item.price_change.from_cents : 0
+  const lastPaid = item.last_date ? `Last paid ${dayLabel(item.last_date)}` : 'Added by hand'
+  const added = item.added ? ' · added by hand' : ''
   return (
     <li>
       <button
@@ -52,11 +54,11 @@ function Row({ item, kind, data, open, onToggle, onCount }: {
         <span className="rc-name">{item.name}</span>
         <span className="rc-amt">{formatCents(item.amount_cents)}</span>
         <span className="rc-when">
-          {kind === 'due' && `${dueWhen(item, data.today)} · ${item.cadence}${more}`}
-          {kind === 'expected' && `Expected ${dayLabel(item.next_date!)} · ${item.cadence}${more}`}
-          {kind === 'paid' && <><Check className="rc-tick" size={14} strokeWidth={2.4} aria-hidden="true" />Paid {dayLabel(item.last_date)}</>}
-          {kind === 'stopped' && `Last paid ${dayLabel(item.last_date)}`}
-          {kind === 'ignored' && `Last paid ${dayLabel(item.last_date)} · ${item.cadence} · not counted`}
+          {kind === 'due' && `${dueWhen(item, data.today)} · ${item.cadence}${more}${added}`}
+          {kind === 'expected' && `Expected ${dayLabel(item.next_date!)} · ${item.cadence}${more}${added}`}
+          {kind === 'paid' && <><Check className="rc-tick" size={14} strokeWidth={2.4} aria-hidden="true" />Paid {item.last_date && dayLabel(item.last_date)}</>}
+          {kind === 'stopped' && lastPaid}
+          {kind === 'ignored' && `${lastPaid} · ${item.cadence} · not counted`}
           {rise > 0 && <span className="rc-flag">Up {formatCents(rise)}</span>}
         </span>
       </button>

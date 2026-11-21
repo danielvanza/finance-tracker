@@ -52,8 +52,7 @@ with SessionLocal() as session:
 # The chat (the bot kit's HTTP API) at /api/chat, made after the migrations so old chats are in its store first.
 app.include_router(bot_router(chat_bot.bot()), prefix="/chat", tags=["chat"])
 questions.resume()
-if os.getenv("NUDGES", "on") != "off":
-    nudges.start()
+nudges.start()  # NUDGES=off silences its automatic messages only; reminders asked for still go out
 
 @app.get("/health")
 def health():

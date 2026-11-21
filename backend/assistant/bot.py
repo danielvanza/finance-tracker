@@ -244,7 +244,7 @@ def _asked(ctx: ChangeContext) -> tuple[str, set]:
         ).fetchall()
     chosen_from: set = set()
     for row in earlier:
-        if row["kind"] in ("question", "nudge", "new_chat"):
+        if row["kind"] in ("question", "nudge", "reminder", "new_chat"):
             continue  # what the app said on its own is not part of the exchange
         options = json.loads(row["payload"] or "{}").get("options") if row["kind"] == "answer" else None
         if row["role"] == "assistant" and options:
@@ -506,6 +506,8 @@ def history_entry(message: dict) -> dict | None:
         return {"from": "app", **asked}
     if kind == "nudge":
         return {"from": "app", "sent_unasked": message["text"]}
+    if kind == "reminder":
+        return {"from": "app", "reminder_sent": message["text"]}
     if kind == "import":
         return {"from": "app", "import_summary": message["text"]}
     if kind == "error":

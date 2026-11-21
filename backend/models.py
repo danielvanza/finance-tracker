@@ -125,3 +125,18 @@ class Setting(Base):
     value = Column(String(500), nullable=False)
 
 
+
+
+class Reminder(Base):
+    """A message the household asked the chat to send to the group at a time (reminders.py).
+
+    Times are the household's local time (clock.now). `next_at` is when it goes out next, empty once a reminder that
+    does not repeat has been sent. `anchor_at` is the time as asked for, which a repeating one is counted from."""
+    __tablename__ = "reminders"
+    id = Column(Integer, primary_key=True)
+    text = Column(String, nullable=False)
+    next_at = Column(DateTime, nullable=True)
+    anchor_at = Column(DateTime, nullable=False)
+    every = Column(String, nullable=True)  # week, month, year; empty for once
+    created_at = Column(DateTime, nullable=False)
+    last_sent_at = Column(DateTime, nullable=True)

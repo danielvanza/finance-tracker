@@ -29,6 +29,7 @@ exactly this.
 | assistant | `import` | the import in one sentence | counts (below) | — |
 | assistant | `question` | the question in one line | question (below), `unasked?` | answers, Something else; once answered: Remember |
 | assistant | `nudge` | the unasked message (recap, old data, month end), a few lines | `nudge` (`close`, `recap`, `stale`, joined with `+`), `unasked: true` | — |
+| assistant | `reminder` | the reminder's words (the renderers add `Reminder: `) | `reminder_id`, `unasked: true` | — |
 | assistant | `card` | the card's summary | `says?` (on the card JSON), `remembered?` | card buttons (below) |
 | assistant | `error` | the plain reason; always says what did not happen | — | — |
 
@@ -50,6 +51,12 @@ exactly this.
   the morning catch-up) carry `unasked: true`. A question whose payments were sorted another way is closed before
   any front reads the channel (`refresh`): `status: answered`, `result: "Sorted as X."`, no buttons, and `refresh`
   set if it was delivered, so a push front edits it.
+
+- **Reminder** (`reminder`): `{reminder_id, unasked: true}`; `text` is what the household asked to be told. Posted by
+  `nudges.tick` through `reminders.send_due`, not `post_nudge`: each is its own message and none replaces another. It is
+  held back in the quiet hours and sent once at the first allowed moment, however many times it was missed; a repeating
+  one then moves to its next future time, a single one is kept as finished. `NUDGES=off` does not stop reminders (it
+  governs only the automatic messages). Claude sees it in `<conversation>` as `reminder_sent`.
 
 ### Buttons and actions
 
@@ -101,7 +108,7 @@ A card's `status` is the kit's: `open | applying | applied | rejected | supersed
 `<context>`: `today`, `payments_waiting_for_an_answer`, `this_month` (the Month page overview). `<conversation>`: each
 message as it always was: the person's words (`sent_a_bank_file`, `sent_a_photo`, `heard_from_a_voice_note`, Stop
 noted), Claude's own words (`choices_shown`, `chart_shown`), cards (`id, summary, op, rows_changed, status, args?,
-error?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `import_summary`,
+error?`, `you_said_with_it`), `asked` questions with their `buttons` and `outcome`, `sent_unasked`, `reminder_sent`, `import_summary`,
 `asked_after_something_else`, errors. Tools: `month_overview`, `run_query` (a private in-memory copy per reply, closed
 when it ends), `show_chart`, and the kit's `make_change` and `show_choices`.
 
@@ -116,7 +123,7 @@ yearly bills; Report: last month in a few lines, where most of it went.
 
 `backend/telegram_bot.py` is the kit's Telegram front (`botkit.telegram`, SPEC §11) with finance's renderers: `card`,
 `question`, `answer` (with "which one?" choices and a chart sent as a photo from `/messages/{id}/image`), `all_rows`,
-`import`, `nudge`, `error`; the live log of a voice note and the first reply to it start with `Heard: “…”`; and the
+`import`, `nudge`, `reminder`, `error`; the live log of a voice note and the first reply to it start with `Heard: “…”`; and the
 words the bot says itself. Buttons carry the kit's callback data (`a:` Apply, `r:` reject, `c:` a choice, `b:` a
 message's action, `s:` Stop); buttons on messages sent before the move (`q:{question}:{n|x|m}`, `d:{card}`,
 `m:{card}`) still work (`legacy_callback`). Its calls, before the move → now:

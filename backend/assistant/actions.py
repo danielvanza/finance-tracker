@@ -7,7 +7,7 @@ Applying runs it again and commits only if the outcome still matches what the pe
 import enum
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -20,9 +20,10 @@ import clock
 import db as database
 import guesses
 import money
+import reminders
 import spend_service
 from financial_month import label_month_for_date
-from models import AskShop, Budget, Category, IgnoredBill, Rule, SetAside, Setting, Transaction, TransactionSplit
+from models import AskShop, Budget, Category, IgnoredBill, Reminder, Rule, SetAside, Setting, Transaction, TransactionSplit
 from routers import budget as budget_router
 from routers import categories as categories_router
 from routers import goals as goals_router
@@ -41,7 +42,7 @@ _LONG_MONTHS = [
 ]
 _TYPES_WITH_BUDGET = ("needs", "wants", "savings")
 MAX_BATCH = 500
-_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting)
+_TABLES = (Transaction, TransactionSplit, Category, Rule, AskShop, Budget, SetAside, IgnoredBill, Setting, Reminder)
 _SETTING_NAMES = {
     "financial_month_start_day": "Financial month start day",
     "target_split": "Target split (needs/wants/savings)",
@@ -318,6 +319,83 @@ def _prepare_batch(db: Session, a: dict):
             OPS[name].prepare(db, args)
 
 
+# ---- Reminders ------------------------------------------------------------------------------------
+
+def _reminder_text(value: Any) -> str:
+    text = " ".join(_text(value, "reminder text").split())
+    if len(text) > reminders.MAX_TEXT:
+        raise ActionError(f"The reminder text is {len(text)} characters long; keep it under {reminders.MAX_TEXT}")
+    return text
+
+
+def _reminder_time(value: Any) -> datetime:
+    """'YYYY-MM-DD' (9:00 that day) or 'YYYY-MM-DDTHH:MM', in the household's time."""
+    wrong = ActionError("The time is not valid: use YYYY-MM-DD, or YYYY-MM-DDTHH:MM for a time of day")
+    if not isinstance(value, str):
+        raise wrong
+    try:
+        if len(value.strip()) == 10:
+            return datetime.combine(date.fromisoformat(value.strip()), time(reminders.DEFAULT_HOUR))
+        at = datetime.fromisoformat(value.strip())
+    except ValueError:
+        raise wrong from None
+    if at.tzinfo is not None:
+        raise ActionError("Give the time as the household's own time, without a time zone")
+    return reminders.minute(at)
+
+
+def _reminder_every(value: Any) -> str | None:
+    if value is None:
+        return None
+    if value not in reminders.EVERY:
+        raise ActionError("A reminder can repeat every week, month or year; leave it out for a single time")
+    return value
+
+
+def _first_time(anchor: datetime, every: str | None, now: datetime) -> datetime:
+    """When a reminder asked for at `anchor` first goes out. A single time in the past is refused; a repeating
+    one is moved on to its next time."""
+    if every:
+        return reminders.next_after(anchor, every, reminders.minute(now), inclusive=True)
+    if anchor < reminders.minute(now):
+        raise ActionError(
+            f"{_when_label(anchor)} has already passed (it is {_when_label(now)} now), so a reminder cannot be set for it. "
+            "Ask which later time they mean"
+        )
+    return anchor
+
+
+def _add_reminder(db: Session, a: dict):
+    now = clock.now()
+    anchor, every = _reminder_time(a.get("at")), _reminder_every(a.get("every"))
+    db.add(Reminder(
+        text=_reminder_text(a.get("text")), anchor_at=anchor, next_at=_first_time(anchor, every, now),
+        every=every, created_at=now,
+    ))
+    db.commit()
+
+
+def _update_reminder(db: Session, a: dict):
+    reminder = _get(db, Reminder, a.get("id"), "reminder")
+    if not {"text", "at", "every"} & a.keys():
+        raise ActionError("Say what changes about the reminder: text, at or every")
+    if reminder.next_at is None:
+        raise ActionError("That reminder has already been sent and is finished; add a new reminder instead")
+    if "text" in a:
+        reminder.text = _reminder_text(a["text"])
+    every = _reminder_every(a["every"]) if "every" in a else reminder.every
+    if "at" in a or every != reminder.every:
+        anchor = _reminder_time(a["at"]) if "at" in a else reminder.next_at
+        reminder.anchor_at, reminder.every = anchor, every
+        reminder.next_at = _first_time(anchor, every, clock.now())
+    db.commit()
+
+
+def _delete_reminder(db: Session, a: dict):
+    db.delete(_get(db, Reminder, a.get("id"), "reminder"))
+    db.commit()
+
+
 def _set_aside_fields(a: dict) -> dict:
     fields = {k: a[k] for k in ("name", "due_month", "every_months") if k in a}
     if "amount_cents" in a:
@@ -397,6 +475,11 @@ OPS: dict[str, Op] = {
     "goal.set": Op(_set_goal,
         '{"category_id":int (a savings category; one goal each),"name":str,"target_cents":int,"start_cents":int optional (already in the pot when it started),"by":"YYYY-MM" or null optional} adds a goal, or changes the one that category has (then only what changes)'),
     "goal.delete": Op(_delete_goal, '{"category_id":int}'),
+    "reminder.add": Op(_add_reminder,
+        '{"text":str (what the message says),"at":"YYYY-MM-DD" (9:00 that day) or "YYYY-MM-DDTHH:MM" (household time, in the future),"every":"week"|"month"|"year" optional (repeats; leave out for once)} a message in the Telegram group at that time, held until morning if it falls in the quiet hours. A monthly one on the 29th-31st goes out on the last day of a shorter month'),
+    "reminder.update": Op(_update_reminder,
+        '{"id":int (from reminders), then only what changes: "text","at","every" ("week","month","year" or null for once)}'),
+    "reminder.delete": Op(_delete_reminder, '{"id":int (from reminders)}'),
     "batch": Op(_batch,
         '{"changes":[{"op":str,"args":{...}}, ...]} several of the changes above on one card, applied together or not at all, such as reviewing a group of guesses with review.confirm and transaction.update',
         prepare=_prepare_batch),
@@ -456,6 +539,20 @@ def _every(months) -> str:
     if not months:
         return "No, once"
     return "Every year" if months == 12 else f"Every {months} months"
+
+
+_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _when_label(at: datetime) -> str:
+    return f"{_WEEKDAYS[at.weekday()]} {at.day} {_MONTHS[at.month - 1]} {at.year} at {at:%H:%M}"
+
+
+def _reminder_when(r: dict) -> str:
+    if r["next_at"] is None:
+        return "Already sent"
+    held = " (held until the morning)" if clock.quiet_hours(r["next_at"]) else ""
+    return _when_label(r["next_at"]) + held
 
 
 def _month_label(d: date) -> str:
@@ -602,6 +699,14 @@ def _changes(before: dict, after: dict) -> list[dict]:
     out += _row_changes(
         lambda b: f"Fixed bill “{b['key']}”", before["ignored_bills"], after["ignored_bills"],
         lambda b: {"Counted as a fixed bill": "No"}, "No longer counted: ", "Counted again: ",
+    )
+    out += _row_changes(
+        lambda r: f"Reminder “{r['text']}”", before["reminders"], after["reminders"],
+        lambda r: {
+            "Name": r["text"], "When": _reminder_when(r),
+            "Repeats": f"every {r['every']}" if r["every"] else "once",
+        },
+        "New: ", "Removed: ",
     )
     plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(

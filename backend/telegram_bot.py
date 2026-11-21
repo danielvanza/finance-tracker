@@ -240,9 +240,14 @@ def render_plain(message: dict, view: View | None = None) -> Shown:
     return Shown(esc(heard(view) + message["text"]))
 
 
+def render_reminder(message: dict, view: View | None = None) -> Shown:
+    """A reminder the household asked for: one line, the words they gave."""
+    return Shown(esc(f"Reminder: {message['text']}"))
+
+
 RENDERERS = {
     "card": render_card, "question": render_question, "answer": render_answer, "all_rows": render_all_rows,
-    "import": render_import_message, "nudge": render_plain, "error": render_plain,
+    "import": render_import_message, "nudge": render_plain, "reminder": render_reminder, "error": render_plain,
 }
 
 

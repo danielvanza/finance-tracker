@@ -27,7 +27,7 @@ backend/
   nudges.py            What the bot says unasked, and when
   voice.py             Voice notes to text, on this machine (faster-whisper)
   clock.py             Today and now for the household; every date question goes through it
-  assistant/           The chat, on the shared bot kit (docs/bot.md): bot.py (finance's Bot: tools, card kinds, file/photo/voice handlers, buttons, history, starters), questions.py (questions about unsure payments, unasked messages), actions.py (what it can change, preview + apply), prompts.py (system prompt), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results), figures.py (wording helpers)
+  assistant/           The chat, on the shared bot kit (docs/bot.md): bot.py (finance's Bot: tools, card kinds, file/photo/voice handlers, buttons, history, starters), web.py (web_lookup: a sandboxed Claude run with only WebSearch/WebFetch), questions.py (questions about unsure payments, unasked messages), actions.py (what it can change, preview + apply), prompts.py (system prompt), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results), figures.py (wording helpers)
   telegram_bot.py      The Telegram bot, its own process: bot-kit's Telegram front (botkit.telegram) with finance's settings, layouts and words: one group, two people
   routers/             API route handlers (imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings); the chat is botkit's router at /chat
   tests/               pytest test suite
@@ -86,7 +86,7 @@ frontend/
 | `OPENAI_API_KEY` | No | (none) | The chat's "OpenAI API" runner, when picked. |
 | `DATABASE_URL` | No | `sqlite:///./data/finance.db` | SQLAlchemy database URL. |
 | `BOT_DB_PATH` | No | `bot.db` beside the finance database | The chat's own SQLite file (bot-kit's store: conversations, messages, cards). |
-| `CLAUDE_CLI_HOME` | For chat | (none) | Private folder for the sandboxed Claude login: the chat's default runner ("Claude Code") and sorting imports. Keep it outside any folder holding a repository or agent instructions (`.git`, `CLAUDE.md`, `AGENTS.md`, `.claude`, `.codex`): botkit refuses to run there. |
+| `CLAUDE_CLI_HOME` | For chat | (none) | Private folder for the sandboxed Claude login: the chat's default runner ("Claude Code") and sorting imports. Keep it outside any folder holding a repository or agent instructions (`.git`, `CLAUDE.md`, `AGENTS.md`, `.claude`, `.codex`): botkit refuses to run there. The chat's web lookup uses the sibling folder `<CLAUDE_CLI_HOME>-web`, which must be outside such folders too. |
 | `CLAUDE_BIN`, `CLAUDE_CREDENTIALS` | No | `claude` on PATH, `~/.claude/.credentials.json` | The Claude CLI and the login token it uses (linked into the private folder, never copied). |
 | `CODEX_CLI_HOME` | No | (none) | Private folder for the sandboxed Codex login: without it the chat's "Codex" runner shows as not set up. |
 | `CHAT_MODEL` | No | `sonnet` | Claude Code model a new conversation starts on, in both chats. The picker in the chat changes it per conversation. |
@@ -128,7 +128,12 @@ the Telegram front are built on.
 
 Each chat (`bubble`, `telegram`) is one ongoing conversation; Claude is given all of it since the last New chat, each
 message as `bot.history_entry` shows it, plus `<context>` (today, how many payments wait, this month as the Month page
-shows it). Its tools: `month_overview`, `run_query` and `show_chart`, and the kit's `make_change` and `show_choices`.
+shows it). Its tools: `month_overview`, `run_query`, `show_chart` and `web_lookup`, and the kit's `make_change` and
+`show_choices`. `web_lookup` (`assistant/web.py`) sends only a public question to a separate, short `claude -p` run
+(sonnet, 120 s) on the Claude login, whatever runner the chat is on, whose only tools are the CLI's WebSearch and
+WebFetch, sandboxed with botkit's pieces; its first event must show exactly that and any other tool kills the run. It
+uses its own private home, `<CLAUDE_CLI_HOME>-web` (made on first use, mode 700), because the chat's run holds
+`CLAUDE_CLI_HOME` while a tool runs and botkit lets one run use a home at a time.
 Every tool call adds a plain-words step to the live log. Lookups never change data: `month_overview` rolls back what
 opening a month writes, and `run_query` only sees a private in-memory copy built per reply by the Month page's own code
 (`assistant/queries.py`) and closed when the reply ends.

@@ -237,6 +237,30 @@
   white-space: pre-wrap;
 }
 
+/* An answer is its words and, under them, a chart (the kit's own spacing between them). */
+.hf-answer {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* A file made in the chat: a row like a choice, its name left and the row count right. */
+.hf-chat .hf-download {
+  white-space: normal;
+  text-decoration: none;
+}
+
+.hf-download .bk-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.hf-download .bk-option-label svg {
+  flex: none;
+  color: var(--accent);
+}
+
 .hf-import dl {
   margin-top: 0.35rem;
 }

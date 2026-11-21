@@ -1,6 +1,8 @@
 export const BASE = `${import.meta.env.BASE_URL}api`
 /** The chat: the bot kit's HTTP API (botkit SPEC §9), reached through bot-kit's own client. */
 export const CHAT_BASE = `${BASE}/chat`
+/** A file made in the chat (`payload.export`), served as a download. */
+export const exportUrl = (id: number) => `${BASE}/exports/${id}`
 
 export class ApiError extends Error {
   readonly status: number      // HTTP status; 0 = network failure

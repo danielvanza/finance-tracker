@@ -12,17 +12,21 @@ nobody and only logs the id of any group one of the two writes in, so it can be 
 privacy must be off, or Telegram hands it commands only.
 
 What is finance's own is here: how its messages look (docs/design/telegram.md, docs/bot.md for what they carry),
-the first reply to a voice note saying what was heard, and its words. Every render_* returns HTML with the text in it
+the first reply to a voice note saying what was heard, a file made in the chat sent as a document after the words
+(FinanceFront), and its words. Every render_* returns HTML with the text in it
 escaped.
 """
 import logging
 import os
 import sys
 
+import httpx
+
 from botkit.telegram import (
     TEXT_LIMIT, Front, Settings, Shown, Texts, View, apply_key, button_rows, choice_key, columns, esc, quiet_http_log,
     quote, reject_key, rich,
 )
+from botkit.telegram.clients import TELEGRAM_FAILED, Telegram
 
 logger = logging.getLogger("finance-telegram")
 
@@ -275,12 +279,77 @@ def legacy_callback(data: str, front: Front) -> str | None:
     return None
 
 
+# ---- Files made in the chat -------------------------------------------------------------------------------------
+
+FILE_LOST = "The file could not be sent this time. Ask for it again in a moment."
+
+
+def file_caption(export: dict) -> str:
+    """Under the file: what it holds, if Claude named it, and how many rows."""
+    rows = export.get("rows") or 0
+    count = f"{rows:,}".replace(",", ".") + (" row" if rows == 1 else " rows")
+    if export.get("cut_off"):
+        count = f"the first {count}"
+    title = str(export.get("title") or "").strip()
+    return f"{title} · {count}" if title else count[:1].upper() + count[1:]
+
+
+class FinanceTelegram(Telegram):
+    """The kit's Telegram client, plus sending a file as a document."""
+
+    def send_document(self, chat_id: int, content: bytes, name: str, caption: str = "", mime: str = "text/csv"):
+        response = self._http.post(f"{self._api}/sendDocument", data={"chat_id": chat_id, "caption": caption},
+                                   files={"document": (name, content, mime)})
+        return self._result("sendDocument", response)
+
+
+class FinanceFront(Front):
+    """The kit's front, plus an answer's file (`payload.export`, docs/bot.md) sent as a document after its words,
+    fetched from the app at FINANCE_API_URL + /exports/{id}. The words are out before the file is tried, so a
+    failure says so in one line and never sends them again. A file's contents are never logged."""
+
+    def __init__(self, settings: Settings, *, exports_url: str, files: httpx.Client | None = None, **kwargs):
+        super().__init__(settings, **kwargs)
+        self.exports_url = exports_url.rstrip("/")
+        self.files = files or httpx.Client(timeout=60)
+
+    def show_reply(self, reply: dict, lookup=None) -> list[int]:
+        ids = super().show_reply(reply, lookup)
+        export = (reply.get("payload") or {}).get("export")
+        if ids and export:
+            ids += self._send_file(export)
+        return ids
+
+    def show_again(self, message: dict, shown_ids: list[int], lookup=None) -> list[int]:
+        """Brought up to date in place; the file (and any chart) after the words stays as it is."""
+        shown = self.render(message, lookup)
+        if shown is None:
+            return shown_ids
+        keep = shown.image or bool((message.get("payload") or {}).get("export"))
+        return self._show(shown.text, shown.keys, shown_ids, keep_extra=keep)
+
+    def _send_file(self, export: dict) -> list[int]:
+        try:
+            response = self.files.get(f"{self.exports_url}/exports/{int(export['id'])}")
+            response.raise_for_status()
+            sent = self.telegram.send_document(self.group, response.content, export.get("filename") or "export.csv",
+                                               file_caption(export))
+            return [sent["message_id"]]
+        except (KeyError, TypeError, ValueError, httpx.HTTPError, *TELEGRAM_FAILED):
+            logger.warning("a file could not be sent")
+        try:
+            return self.say(FILE_LOST)
+        except TELEGRAM_FAILED:
+            return []
+
+
 def make_front(token: str, allowed: set[int], group: int | None, api_url: str,
                telegram_api: str = "https://api.telegram.org") -> Front:
-    return Front(
+    return FinanceFront(
         Settings(api_url=f"{api_url.rstrip('/')}/chat", token=token, allowed_user_ids=allowed, group_id=group,
                  telegram_api=telegram_api),
         renderers=RENDERERS, texts=TEXTS, log_lead=log_lead, uploads=UPLOADS, callback_alias=legacy_callback,
+        telegram=FinanceTelegram(token, telegram_api), exports_url=api_url,
     )
 
 

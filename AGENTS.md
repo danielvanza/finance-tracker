@@ -16,7 +16,7 @@ A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRO
 backend/
   main.py              App entry point, CORS, startup, router registration
   db.py                SQLAlchemy engine + session config (SQLite)
-  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill (the chat keeps its own store)
+  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, Export (the chat keeps its own store)
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
   importers/           ing.py: the one parser, for English and Dutch ING exports (base.py holds the hashing)
@@ -24,12 +24,13 @@ backend/
   categorizer/         rules.py (longest matching text wins), ai.py (Claude: a category, sure or not, and options), claude_cli.py (the sandboxed Claude login through botkit's runner, with no tools; the runner settings the chat shares)
   guesses.py           Which guesses count, the questions about the rest, what an answer teaches, money moved to a personal account
   set_asides.py        Set-asides: a bill's monthly share and what its payment settles
+  exports.py           Files made in the chat: a CSV for a Dutch spreadsheet, kept 30 days
   nudges.py            What the bot says unasked, and when
   voice.py             Voice notes to text, on this machine (faster-whisper)
   clock.py             Today and now for the household; every date question goes through it
   assistant/           The chat, on the shared bot kit (docs/bot.md): bot.py (finance's Bot: tools, card kinds, file/photo/voice handlers, buttons, history, starters), questions.py (questions about unsure payments, unasked messages), actions.py (what it can change, preview + apply), prompts.py (system prompt), queries.py (read-only views and the Month page overview), charts.py (draws charts from query results), figures.py (wording helpers)
   telegram_bot.py      The Telegram bot, its own process: bot-kit's Telegram front (botkit.telegram) with finance's settings, layouts and words: one group, two people
-  routers/             API route handlers (imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings); the chat is botkit's router at /chat
+  routers/             API route handlers (imports, transactions, budget, set_asides, rules, dashboard, categories, recurring, goals, settings, exports); the chat is botkit's router at /chat
   tests/               pytest test suite
   data/finance.db      SQLite database (auto-created, gitignored)
 
@@ -128,7 +129,7 @@ the Telegram front are built on.
 
 Each chat (`bubble`, `telegram`) is one ongoing conversation; Claude is given all of it since the last New chat, each
 message as `bot.history_entry` shows it, plus `<context>` (today, how many payments wait, this month as the Month page
-shows it). Its tools: `month_overview`, `run_query` and `show_chart`, and the kit's `make_change` and `show_choices`.
+shows it). Its tools: `month_overview`, `run_query`, `show_chart` and `export_file` (a lookup as a CSV file sent with the reply, `exports.py`, `GET /api/exports/{id}`), and the kit's `make_change` and `show_choices`.
 Every tool call adds a plain-words step to the live log. Lookups never change data: `month_overview` rolls back what
 opening a month writes, and `run_query` only sees a private in-memory copy built per reply by the Month page's own code
 (`assistant/queries.py`) and closed when the reply ends.

@@ -12,3 +12,4 @@ Finance's own kinds and card extras are in `chat/kinds.tsx`; what they carry is 
 - **Phone first.** The sheet is 92dvh (at most 52rem); the model choice is a quiet line under the title (full-height tap target, negative margin) so the thread gets the room; the composer grows to about three lines, then scrolls. A tablet (600-1023 px) gets the same sheet centred at 36rem; a phone on its side (height up to 520 px) gets it full height without the grab handle.
 - **Docked panel.** The round button is gone while the panel is open, so the page's right lane is given back (`padding-right: 1.5rem`), and below 1680 px the Overview stacks to one column and a 3.5rem figure.
 - **A stale card** is a sunk well, never a coloured edge.
+- **A file made in the chat** is one row under the answer's words, like a choice: a download icon and the file name left, the row count right (`Answer` in `kinds.tsx` draws answers for this, otherwise as the kit does).

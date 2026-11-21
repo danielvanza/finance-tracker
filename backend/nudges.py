@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func
 
 import clock
+import runtime_settings
 import spend_service
 from assistant import actions, queries, questions
 from db import SessionLocal
@@ -152,6 +153,8 @@ def _recap_due(now: datetime) -> datetime:
 
 def tick(now: datetime | None = None) -> list[str]:
     """Send whatever is due and allowed right now. Returns which messages went out."""
+    if not runtime_settings.nudges_on():
+        return []
     now = now or clock.now()
     sent: list[str] = []
     with SessionLocal() as db:

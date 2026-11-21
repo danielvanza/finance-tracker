@@ -8,7 +8,7 @@ import enum
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Callable
 
 from fastapi import HTTPException
@@ -20,11 +20,12 @@ import clock
 import db as database
 import guesses
 import money
+import runtime_settings
 import spend_service
 from financial_month import label_month_for_date
 from models import (
-    AppliedChange, AskShop, Budget, Category, IgnoredBill, RemovedBankRow, Rule, SetAside, Setting, Transaction,
-    TransactionSplit,
+    AppliedChange, AskShop, Budget, Category, CategoryType, IgnoredBill, RemovedBankRow, Rule, SetAside, Setting,
+    Transaction, TransactionSplit,
 )
 from routers import budget as budget_router
 from routers import categories as categories_router
@@ -49,6 +50,9 @@ _SETTING_NAMES = {
     "financial_month_start_day": "Financial month start day",
     "target_split": "Target split (needs/wants/savings)",
     "own_names": "The household's own names on bank transfers",
+    "nudges": "Messages the bot sends unasked",
+    "quiet_hours": "Quiet hours",
+    "sort_model": "Model that sorts imports",
 }
 
 
@@ -266,6 +270,150 @@ def _prepare_budget(db: Session, a: dict):
     budget_router._auto_populate(date(year, mo, 1), db)
 
 
+def _required_month(a: dict, key: str) -> tuple[int, int]:
+    if a.get(key) is None:
+        raise ActionError(f"The {key} is missing")
+    try:
+        return _month(a[key])
+    except ActionError:
+        raise ActionError(f"The {key} is not valid, it needs the form YYYY-MM") from None
+
+
+def _copy_budget(db: Session, a: dict):
+    from_year, from_mo = _required_month(a, "from_month")
+    year, mo = _budget_month(db, {"month": a.get("to_month")})
+    if (from_year, from_mo) == (year, mo):
+        raise ActionError("The month to copy from and the month to copy to are the same")
+    copied = budget_router.planned_for(db, date(from_year, from_mo, 1))
+    for row in db.query(Budget).filter(Budget.month == date(year, mo, 1)).all():
+        if row.category_id in copied and row.planned_amount != copied[row.category_id]:
+            budget_router.patch_budget(
+                row.id, BudgetPatch(planned_amount_cents=money.to_cents(copied[row.category_id])), db)
+
+
+def _prepare_copy(db: Session, a: dict):
+    _required_month(a, "from_month")
+    _prepare_budget(db, {"month": a.get("to_month")})
+
+
+def _whole_euros(cents: int) -> int:
+    """Cents rounded to whole euros, half up, in cents."""
+    return int((Decimal(cents) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 100
+
+
+def _adjusted_categories(db: Session, a: dict) -> list[Category]:
+    ids, kind = a.get("category_ids"), a.get("type")
+    if (ids is None) == (kind is None):
+        raise ActionError("Give either category_ids or type, not both and not neither")
+    if kind is not None:
+        if kind not in _TYPES_WITH_BUDGET:
+            raise ActionError("The type has to be needs, wants or savings")
+        found = db.query(Category).filter(Category.type == CategoryType(kind)).order_by(Category.sort_order).all()
+        if not found:
+            raise ActionError(f"There are no {kind} categories")
+        return found
+    if not isinstance(ids, list) or not ids:
+        raise ActionError("category_ids needs a list of categories")
+    if len(set(map(str, ids))) != len(ids):
+        raise ActionError("The same category is listed twice")
+    found = [_get(db, Category, i, f"category (id {i})") for i in ids]
+    for c in found:
+        if c.type.value not in _TYPES_WITH_BUDGET:
+            raise ActionError(f"{c.name} has no plan, as it is not a need, want or saving")
+    return found
+
+
+def _adjust_budget(db: Session, a: dict):
+    pct, by = a.get("by_pct"), a.get("by_cents")
+    if (pct is None) == (by is None):
+        raise ActionError("Give either by_pct or by_cents, not both and not neither")
+    if pct is not None and (not isinstance(pct, int) or isinstance(pct, bool)):
+        raise ActionError("by_pct is not a whole number")
+    if pct is not None and pct < -100:
+        raise ActionError("A plan cannot go down by more than 100%")
+    if by is not None:
+        _cents(by, "by_cents amount")
+    year, mo = _budget_month(db, a)
+    for category in _adjusted_categories(db, a):
+        row = db.query(Budget).filter_by(category_id=category.id, month=date(year, mo, 1)).first()
+        if row is None:
+            raise ActionError(f"{category.name} has no budget for that month")
+        now = money.to_cents(row.planned_amount)
+        target = now + by if by is not None else int((Decimal(now) * (100 + pct) / 100).to_integral_value(ROUND_HALF_UP))
+        planned = max(0, _whole_euros(target))
+        if planned != now:
+            _set_budget(db, {"category_id": category.id, "month": f"{year}-{mo:02d}", "planned_amount_cents": planned})
+
+
+def _prepare_adjust(db: Session, a: dict):
+    _prepare_budget(db, a)
+
+
+_TYPE_WORDS = {
+    "needs": "a need", "wants": "a want", "savings": "savings", "income": "income", "exclude": "left out of the budget",
+}
+
+
+def _merge_category(db: Session, a: dict):
+    """Everything of one category goes into another and the first is removed."""
+    source = _get(db, Category, a.get("from_id"), "category to merge away")
+    target = _get(db, Category, a.get("into_id"), "category to merge into")
+    if source.id == target.id:
+        raise ActionError(f"{source.name} cannot be merged into itself")
+    if source.type != target.type:
+        raise ActionError(
+            f"{source.name} is {_TYPE_WORDS[source.type.value]} and {target.name} is {_TYPE_WORDS[target.type.value]}; "
+            "change one's type first")
+    goals = [_goal_in(g) for g in goals_router._stored(db)]
+    goal = next((g for g in goals if g["category_id"] == source.id), None)
+    if goal and any(g["category_id"] == target.id for g in goals):
+        raise ActionError(
+            f"Both {source.name} and {target.name} have a savings goal; remove one of them first (goal.delete)")
+
+    # The plan first, while both categories' rows are still there to read: each month with a row for either
+    # gets the two plans added, so the total stays the same.
+    months = {b.month for b in db.query(Budget).filter(Budget.category_id.in_((source.id, target.id)))}
+    plans = {}
+    for m in months:
+        carried = budget_router.planned_for(db, m) if m else {}
+        plans[m] = tuple(carried.get(c.id, Decimal("0")) if m else _starting_plan(db, c) for c in (source, target))
+    rows = {b.month: b for b in db.query(Budget).filter_by(category_id=target.id)}
+    for month, (added, kept) in plans.items():
+        if added == 0:
+            continue
+        if month in rows:
+            rows[month].planned_amount = kept + added
+        else:
+            db.add(Budget(category_id=target.id, month=month, planned_amount=kept + added))
+    db.query(Budget).filter_by(category_id=source.id).delete()
+
+    own = {r.pattern.lower() for r in db.query(Rule).filter_by(category_id=target.id)}
+    for rule in db.query(Rule).filter_by(category_id=source.id).all():
+        if rule.pattern.lower() in own:
+            db.delete(rule)
+        else:
+            rule.category_id = target.id
+            own.add(rule.pattern.lower())
+    for model in (Transaction, TransactionSplit):
+        db.query(model).filter_by(category_id=source.id).update({"category_id": target.id}, synchronize_session=False)
+    for tx in db.query(Transaction).filter(Transaction.confirmed == False).all():  # noqa: E712
+        if source.id in (tx.ai_options or []):  # what a waiting payment could be
+            tx.ai_options = list(dict.fromkeys(target.id if i == source.id else i for i in tx.ai_options))
+    if goal:
+        goal["category_id"] = target.id
+        goals_router.put_goals(goals_router.GoalsIn(goals=goals), db)
+    db.flush()
+    db.expire_all()
+    db.delete(db.get(Category, source.id))
+    db.commit()
+
+
+def _starting_plan(db: Session, category: Category) -> Decimal:
+    """The starting amount, the row with no month."""
+    row = db.query(Budget).filter_by(category_id=category.id, month=None).first()
+    return row.planned_amount if row else Decimal("0")
+
+
 def _goal_in(g: dict) -> dict:
     """A stored goal in the shape the goals endpoint takes, its start date kept."""
     return {"name": g["n"], "category_id": g["c"], "target_cents": g["t"], "start_cents": g.get("s", 0),
@@ -330,7 +478,8 @@ def _set_aside_fields(a: dict) -> dict:
 
 def _set_setting(db: Session, a: dict):
     if a.get("key") not in _SETTING_NAMES:
-        raise ActionError("Only financial_month_start_day, target_split and own_names can be set here; savings goals have goal.set")
+        raise ActionError(
+            "Only " + ", ".join(_SETTING_NAMES) + " can be set here; savings goals have goal.set")
     settings_router.patch_setting(a.get("key"), SettingPatch(value=str(a.get("value"))), db)
 
 
@@ -511,6 +660,12 @@ OPS: dict[str, Op] = {
     "budget.set": Op(_set_budget,
         '{"category_id":int,"month":"YYYY-MM" optional (the current month if left out),"planned_amount_cents":int} the plan from that month on; earlier months keep theirs',
         prepare=_prepare_budget),
+    "budget.copy": Op(_copy_budget,
+        '{"from_month":"YYYY-MM","to_month":"YYYY-MM" optional (the current month if left out)} every category\'s plan from to_month on becomes what it was in from_month; earlier months keep theirs',
+        prepare=_prepare_copy),
+    "budget.adjust": Op(_adjust_budget,
+        '{"month":"YYYY-MM" optional (the current month if left out), exactly one of "category_ids":[int,...] or "type":"needs|wants|savings", exactly one of "by_pct":int (5 or -10) or "by_cents":int} raises or lowers those categories\' plans from that month on, rounded to whole euros and never below zero',
+        prepare=_prepare_adjust),
     "rule.add": Op(lambda db, a: rules_router.create_rule(RuleCreate(**a), db),
         '{"pattern":str,"category_id":int} when several rules fit a payment the longest pattern wins'),
     "rule.update": Op(
@@ -529,6 +684,8 @@ OPS: dict[str, Op] = {
             a.get("id"), categories_router.CategoryPatch(**{k: v for k, v in a.items() if k in ("name", "type")}), db),
         '{"id":int, then only what changes: "name","type"}'),
     "category.delete": Op(lambda db, a: categories_router.delete_category(a.get("id"), db), '{"id":int}'),
+    "category.merge": Op(_merge_category,
+        '{"from_id":int,"into_id":int} moves everything of the first category into the second and removes the first: its payments and split parts, its rules (one the second already has is dropped), its savings goal, and its plan, added to the second\'s so the total plan stays the same. Both must be the same type (need, want, saving)'),
     "category.reorder": Op(lambda db, a: categories_router.reorder_categories(CategoryReorder(**a), db),
         '{"category_ids":[int,...]} in the new order'),
     "set_aside.add": Op(
@@ -549,7 +706,7 @@ OPS: dict[str, Op] = {
     "bill.count": Op(lambda db, a: recurring_router.count_bill_again(a.get("key") or "", db),
         '{"key":str} count an ignored bill as a fixed bill again'),
     "setting.set": Op(_set_setting,
-        '{"key":"financial_month_start_day","value":"1-28"} or {"key":"target_split","value":"needs/wants/savings in whole percent adding up to 100, such as 60/25/15"} or {"key":"own_names","value":"the household\'s own names as the bank shows them, separated by ;"} (money moved to them goes to To personal accounts)'),
+        '{"key":"financial_month_start_day","value":"1-28"} or {"key":"target_split","value":"needs/wants/savings in whole percent adding up to 100, such as 60/25/15"} or {"key":"own_names","value":"the household\'s own names as the bank shows them, separated by ;"} (money moved to them goes to To personal accounts) or {"key":"nudges","value":"on|off"} (whether the bot writes unasked: recaps, old-data and month-end messages, questions about payments it was unsure of after an import on the Import page) or {"key":"quiet_hours","value":"HH-HH from-until in whole hours, such as 21-9; may pass midnight"} (nothing is sent unasked then) or {"key":"sort_model","value":"sonnet|opus|haiku"} (the Claude model that sorts imported payments)'),
     "goal.set": Op(_set_goal,
         '{"category_id":int (a savings category; one goal each),"name":str,"target_cents":int,"start_cents":int optional (already in the pot when it started),"by":"YYYY-MM" or null optional} adds a goal, or changes the one that category has (then only what changes)'),
     "goal.delete": Op(_delete_goal, '{"category_id":int}'),
@@ -779,7 +936,7 @@ def _changes(before: dict, after: dict) -> list[dict]:
     plain = lambda snap: {k: v for k, v in snap["settings"].items() if k != goals_router.KEY}  # noqa: E731
     out += _row_changes(
         lambda s: _SETTING_NAMES.get(s["key"], s["key"]),
-        plain(before), plain(after), lambda s: {"Value": s["value"]}, "New setting: ", "Removed setting: ",
+        plain(before), plain(after), lambda s: {"Value": _setting_value(s)}, "New setting: ", "Removed setting: ",
     )
     out += _row_changes(
         lambda g: f"Savings goal “{g['n']}”", _goals_in(before), _goals_in(after),
@@ -791,6 +948,19 @@ def _changes(before: dict, after: dict) -> list[dict]:
         "New: ", "Removed: ",
     )
     return out
+
+
+def _setting_value(setting: dict) -> str:
+    """A setting's value in plain words, where the stored form is terse."""
+    value = setting["value"]
+    if setting["key"] == "nudges":
+        return value.capitalize()
+    if setting["key"] == "quiet_hours":
+        parsed = runtime_settings.parse_quiet_hours(value)
+        return f"from {parsed[0]}:00 until {parsed[1]}:00" if parsed else value
+    if setting["key"] == "sort_model":
+        return value.capitalize()
+    return value
 
 
 def _goals_in(snap: dict) -> dict:
@@ -1019,6 +1189,32 @@ def _count(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
+_REMOVED_CATEGORY = "Removed category: "
+
+
+def _removal_lines(others: list[dict]) -> list[str]:
+    """What a category's removal does besides moving its payments (a merge): its rules, plan and goal."""
+    def after(change: dict, label: str) -> str:
+        return next(f["after"] for f in change["fields"] if f["label"] == label)
+
+    def starts(*prefixes: str) -> list[dict]:
+        return [c for c in others if c["title"].startswith(prefixes)]
+
+    lines = [f"• Removes {c['title'].removeprefix(_REMOVED_CATEGORY)}" for c in starts(_REMOVED_CATEGORY)]
+    moved, dropped = starts("Rule "), starts("Removed: Rule")
+    if moved:
+        lines.append(f"• {_count(len(moved), 'rule')} now point{'s' if len(moved) == 1 else ''} to {after(moved[0], 'Category')}")
+    if dropped:
+        lines.append(f"• {_count(len(dropped), 'rule')} dropped that the other category has already")
+    plans = starts("Budget for ", "New: Budget for ")
+    if plans:
+        name = plans[0]["title"].removeprefix("New: ").removeprefix("Budget for ").rsplit(", ", 1)[0]
+        lines.append(f"• Its plan is added to the plan of {name}, in {_count(len(plans), 'month')}")
+    lines += [f"• The savings goal {c['title'].removeprefix('Savings goal ')} now saves into {after(c, 'Saved into')}"
+              for c in starts("Savings goal ") if any(f["label"] == "Saved into" for f in c["fields"])]
+    return lines
+
+
 def _summed_up(payments: list[dict], others: list[dict], shops_named: bool = True) -> list[str]:
     """Many changes, summed up per category with counts and totals, and the shops that weigh most
     when `shops_named`."""
@@ -1041,6 +1237,8 @@ def _summed_up(payments: list[dict], others: list[dict], shops_named: bool = Tru
     if len(ordered) > _GROUP_LINES:
         rest = [r for _, rows in ordered[_GROUP_LINES:] for r in rows]
         lines.append(f"• And {_count(len(rest), 'payment')} in {_count(len(ordered) - _GROUP_LINES, 'other group')}")
+    if any(c["title"].startswith(_REMOVED_CATEGORY) for c in others):
+        return lines + _removal_lines(others)
     rules = [c for c in others if c["title"].startswith(("New: Rule", "Rule "))]
     rest = [c for c in others if c not in rules]
     if rules:
@@ -1060,7 +1258,8 @@ def plain(preview: dict) -> dict:
     payments = [c for c in changes if c.get("payment")]
     others = [c for c in changes if not c.get("payment")]
     # A remembered shop comes with nearly every confirmation; it is not a change of its own to read through.
-    remembered = [c for c in others if payments and c["title"].startswith(("New: Rule", "Rule "))]
+    removing = any(c["title"].startswith(_REMOVED_CATEGORY) for c in others)
+    remembered = [c for c in others if payments and not removing and c["title"].startswith(("New: Rule", "Rule "))]
     told = [c for c in changes if c not in remembered]
     if len(told) <= SIMPLE_CHANGES:
         lines = [_plain_line(c) for c in told]

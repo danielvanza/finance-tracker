@@ -15,6 +15,7 @@ from sqlalchemy import func
 
 import clock
 import guesses
+import runtime_settings
 from assistant import actions
 from botkit import ActionContext
 from categorizer import claude_cli
@@ -116,6 +117,8 @@ def ask_questions(channel: str = QUESTION_CHANNEL, unasked: bool = False) -> int
     is not asked about while Claude can still be asked: it may well be sure. One Claude gave no answer for is asked
     about like the rest. `unasked` marks questions nobody in the chat prompted, which keep the quiet hours.
     """
+    if unasked and not runtime_settings.nudges_on():
+        return 0
     bot = _bot()
     with _asking:
         refresh(channel)

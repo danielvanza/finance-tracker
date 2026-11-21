@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging
-import os
 logging.basicConfig(level=logging.INFO)
 
 from fastapi import FastAPI
@@ -52,8 +51,7 @@ with SessionLocal() as session:
 # The chat (the bot kit's HTTP API) at /api/chat, made after the migrations so old chats are in its store first.
 app.include_router(bot_router(chat_bot.bot()), prefix="/chat", tags=["chat"])
 questions.resume()
-if os.getenv("NUDGES", "on") != "off":
-    nudges.start()
+nudges.start()  # each round asks the nudges setting (NUDGES is its default) before it writes
 
 @app.get("/health")
 def health():

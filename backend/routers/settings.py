@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import guesses
+import runtime_settings
+from categorizer.claude_cli import CLAUDE_MODELS
 from db import get_db
 from models import Setting
 from schemas import SettingPatch
@@ -28,12 +30,19 @@ VALIDATORS = {
     "financial_month_start_day": lambda v: v.isdigit() and 1 <= int(v) <= 28,
     "target_split": _is_split,
     "own_names": _are_names,
+    "nudges": lambda v: v in ("on", "off"),
+    "quiet_hours": lambda v: runtime_settings.parse_quiet_hours(v) is not None,
+    "sort_model": lambda v: v in CLAUDE_MODELS,
 }
 MESSAGES = {
+    "nudges": "Messages the bot sends unasked are either on or off",
+    "quiet_hours": "Quiet hours are two different whole hours from 0 to 23, such as 21-9 (from 21:00 until 9:00)",
+    "sort_model": f"The model that sorts imports is one of {', '.join(CLAUDE_MODELS)}",
     "target_split": "The three percentages must be whole numbers that add up to 100",
     "own_names": "A name needs at least 4 characters, and there can be four names at most",
 }
-DEFAULTS = {"target_split": "50/30/20", "own_names": ""}
+# What applies while nothing is set (the environment's say, or the app's own).
+DEFAULTS = {"target_split": "50/30/20", "own_names": "", **runtime_settings.defaults()}
 
 
 @router.get("")
@@ -62,4 +71,5 @@ def patch_setting(key: str, body: SettingPatch, db: Session = Depends(get_db)):
         db.flush()
         guesses.sort_personal(db, guesses.waiting(db))
     db.commit()
+    runtime_settings.forget()
     return {"key": setting.key, "value": setting.value}

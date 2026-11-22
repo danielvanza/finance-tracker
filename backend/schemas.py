@@ -217,3 +217,7 @@ class SettingOut(BaseModel):
 
 class SettingPatch(BaseModel):
     value: str
+
+
+class MonthStartIn(BaseModel):
+    start_date: date

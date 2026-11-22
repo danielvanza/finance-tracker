@@ -16,7 +16,7 @@ A sibling of life-dashboard, served at `/finances` behind its sign-in. Read [PRO
 backend/
   main.py              App entry point, CORS, startup, router registration
   db.py                SQLAlchemy engine + session config (SQLite)
-  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, AddedBill, BillChange, RemovedBankRow, AppliedChange, Reminder, Export (the chat keeps its own store)
+  models.py            ORM models: Category, Transaction, Rule, AskShop, Budget, SetAside, IgnoredBill, AddedBill, BillChange, RemovedBankRow, AppliedChange, Reminder, Export, MonthStart (the chat keeps its own store)
   schemas.py           Pydantic schemas for request/response validation
   seed.py              Default categories + budget templates (idempotent)
   importers/           ing.py: the one parser, for English and Dutch ING exports (base.py holds the hashing)
@@ -63,6 +63,7 @@ frontend/
 - **Totals:** only confirmed rows count. A row with `set_aside_id` counts only for the part that had not been set aside yet when it was paid (`set_asides.counted_parts`); every total reads parts through that or through `spend_service`.
 - **Fixed bills:** found from repeating payments on every call (`routers/recurring._scan`, nothing stored), and they feed "fixed bills still to come" in free to spend. A person can add one the payments do not show (`AddedBill`, key `added-N`): it counts for each month it is due until a confirmed outgoing payment whose description contains its `matches` text comes within `SETTLE_DAYS` of the date, and such payments are left out of the scan so it is never counted twice. A found bill can get another amount or day (`BillChange`, by its key), which the scan uses instead of what the payments show. `IgnoredBill` ("not a fixed bill") applies to both.
 - **Budgets:** a row per category per month; a month takes the newest earlier month's amount (`routers/budget.planned_for`). Changing a row also changes the later rows that still hold the old amount, up to the first month that holds another (`patch_budget`).
+- **Financial months:** `financial_month_start_day` is the usual start; `MonthStart` rows (`/settings/month-starts`) set the start date of single months. `spend_service.get_start_day` returns a `MonthStarts` (an int carrying those dates); pass it on to `financial_month` functions as the start day.
 - **Dates:** ask `clock.today()` / `clock.now()`, never `date.today()`.
 - **Error handling:** when Claude cannot be reached or gives no answer for a row (`categorizer/ai.batch_categorise_with_ai` leaves it out of what it returns), the row stays waiting with `ai_options` NULL and is judged again after the next import or start (`guesses.judge_backlog`). An import sent in the chat is refused whole instead.
 

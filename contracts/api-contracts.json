@@ -342,6 +342,33 @@
       "frontend_caller": "api.patchSetting"
     },
     {
+      "id": "month-starts-list",
+      "method": "GET",
+      "path": "/settings/month-starts",
+      "request": {},
+      "response": "[{ year, month, start_date }] (the label month and the date it begins), oldest first",
+      "frontend_caller": "api.getMonthStarts"
+    },
+    {
+      "id": "month-start-set",
+      "method": "PUT",
+      "path": "/settings/month-starts/{year}/{month}",
+      "request": {
+        "start_date": "YYYY-MM-DD, in the calendar month the start day would put it in"
+      },
+      "response": "the list, as month-starts-list",
+      "error_contract": "422 date outside that month",
+      "frontend_caller": "api.setMonthStart"
+    },
+    {
+      "id": "month-start-clear",
+      "method": "DELETE",
+      "path": "/settings/month-starts/{year}/{month}",
+      "request": {},
+      "response": "the list, as month-starts-list",
+      "frontend_caller": "api.clearMonthStart"
+    },
+    {
       "id": "chat-conversation-get",
       "method": "GET",
       "path": "/chat/conversation",

@@ -147,6 +147,15 @@ class Setting(Base):
     value = Column(String(500), nullable=False)
 
 
+class MonthStart(Base):
+    """The date one financial month begins, when it is not the usual start day (a salary that came early).
+    `year`/`month` is the month's label, as everywhere else."""
+    __tablename__ = "month_starts"
+    year = Column(Integer, primary_key=True)
+    month = Column(Integer, primary_key=True)
+    start_date = Column(Date, nullable=False)
+
+
 class RemovedBankRow(Base):
     """An imported bank row a person had removed (a duplicate, a wrong row). A later import of the same
     file counts it as already here, so it does not come back. Undoing the removal drops this row."""

@@ -5,16 +5,18 @@ and effective-parts grouping (S4). Every total in the app flows through here;
 routers must not hand-roll these loops."""
 from decimal import Decimal
 from sqlalchemy.orm import Session, selectinload
-from models import Transaction, Setting
-from financial_month import get_financial_month_range
+from models import Transaction, Setting, MonthStart
+from financial_month import MonthStarts, get_financial_month_range
 from aggregate import is_spend_part, spend_contribution
 
 DEFAULT_START_DAY = 24
 
 
-def get_start_day(db: Session) -> int:
+def get_start_day(db: Session) -> MonthStarts:
+    """The start day setting, carrying the start dates chosen for single months."""
     setting = db.query(Setting).filter_by(key="financial_month_start_day").first()
-    return int(setting.value) if setting else DEFAULT_START_DAY
+    chosen = {(m.year, m.month): m.start_date for m in db.query(MonthStart).all()}
+    return MonthStarts(int(setting.value) if setting else DEFAULT_START_DAY, chosen)
 
 
 def financial_month_bounds(db, year, mo):

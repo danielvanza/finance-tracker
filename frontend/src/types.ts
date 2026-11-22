@@ -176,6 +176,8 @@ export interface DashboardTrends {
 
 export interface SettingsMap { [key: string]: string }
 
+export interface MonthStart { year: number; month: number; start_date: string }
+
 export interface ImportPreviewRow {
   date: string
   amount_cents: number

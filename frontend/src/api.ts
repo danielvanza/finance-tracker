@@ -178,4 +178,13 @@ export const api = {
       method: 'PATCH',
       body: { value },
     }),
+
+  getMonthStarts: (): Promise<import('./types').MonthStart[]> =>
+    apiFetch(`${BASE}/settings/month-starts`, { method: 'GET' }),
+
+  setMonthStart: (year: number, month: number, startDate: string): Promise<import('./types').MonthStart[]> =>
+    apiFetch(`${BASE}/settings/month-starts/${year}/${month}`, { method: 'PUT', body: { start_date: startDate } }),
+
+  clearMonthStart: (year: number, month: number): Promise<import('./types').MonthStart[]> =>
+    apiFetch(`${BASE}/settings/month-starts/${year}/${month}`, { method: 'DELETE' }),
 }

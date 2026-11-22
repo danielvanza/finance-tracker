@@ -1,5 +1,17 @@
 import pytest
 from datetime import date
+from fastapi.testclient import TestClient
+from db import get_db
+from main import app
+from seed import run_seed
+
+
+@pytest.fixture
+def client(db):
+    app.dependency_overrides[get_db] = lambda: db
+    run_seed(db)
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 def test_mid_month_start_day():
@@ -108,3 +120,36 @@ def test_round_trip_both_endpoints():
         start, end = get_financial_month_range(y, m, sd)
         assert label_month_for_date(start, sd) == (y, m)
         assert label_month_for_date(end, sd) == (y, m)
+
+
+def test_chosen_start_moves_both_neighbouring_months():
+    from financial_month import MonthStarts, get_financial_month_range, label_month_for_date
+    days = MonthStarts(24, {(2026, 4): date(2026, 3, 22)})
+    assert get_financial_month_range(2026, 4, days) == (date(2026, 3, 22), date(2026, 4, 23))
+    assert get_financial_month_range(2026, 3, days) == (date(2026, 2, 24), date(2026, 3, 21))
+    assert label_month_for_date(date(2026, 3, 22), days) == (2026, 4)
+    assert label_month_for_date(date(2026, 3, 21), days) == (2026, 3)
+    assert label_month_for_date(date(2026, 3, 23), days) == (2026, 4)
+
+
+def test_chosen_start_with_calendar_months():
+    from financial_month import MonthStarts, get_financial_month_range, label_month_for_date
+    days = MonthStarts(1, {(2026, 4): date(2026, 4, 3)})
+    assert get_financial_month_range(2026, 4, days) == (date(2026, 4, 3), date(2026, 4, 30))
+    assert get_financial_month_range(2026, 3, days) == (date(2026, 3, 1), date(2026, 4, 2))
+    assert label_month_for_date(date(2026, 4, 2), days) == (2026, 3)
+
+
+def test_month_starts_api(client):
+    r = client.put("/settings/month-starts/2026/4", json={"start_date": "2026-03-22"})
+    assert r.status_code == 200
+    assert r.json() == [{"year": 2026, "month": 4, "start_date": "2026-03-22"}]
+    assert client.put("/settings/month-starts/2026/4", json={"start_date": "2026-04-02"}).status_code == 422
+    assert client.get("/settings/month-starts").json()[0]["start_date"] == "2026-03-22"
+    assert client.delete("/settings/month-starts/2026/4").json() == []
+
+
+def test_start_day_carries_chosen_dates(client, db):
+    import spend_service
+    client.put("/settings/month-starts/2026/4", json={"start_date": "2026-03-22"})
+    assert spend_service.financial_month_bounds(db, 2026, 4) == (date(2026, 3, 22), date(2026, 4, 23))

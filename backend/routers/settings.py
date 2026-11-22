@@ -4,8 +4,11 @@ import guesses
 import runtime_settings
 from categorizer.claude_cli import CLAUDE_MODELS
 from db import get_db
-from models import Setting
-from schemas import SettingPatch
+from datetime import date
+from financial_month import anchor_month
+from models import MonthStart, Setting
+from schemas import MonthStartIn, SettingPatch
+import spend_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -49,6 +52,51 @@ DEFAULTS = {"target_split": "50/30/20", "own_names": "", **runtime_settings.defa
 def get_settings(db: Session = Depends(get_db)):
     settings = db.query(Setting).all()
     return {**DEFAULTS, **{s.key: s.value for s in settings}}
+
+
+def _month_starts(db: Session) -> list[dict]:
+    rows = db.query(MonthStart).order_by(MonthStart.year, MonthStart.month).all()
+    return [{"year": r.year, "month": r.month, "start_date": r.start_date.isoformat()} for r in rows]
+
+
+@router.get("/month-starts")
+def list_month_starts(db: Session = Depends(get_db)):
+    """The start dates chosen for single financial months, oldest first."""
+    return _month_starts(db)
+
+
+@router.put("/month-starts/{year}/{month}")
+def set_month_start(year: int, month: int, body: MonthStartIn, db: Session = Depends(get_db)):
+    """Make financial month year-month begin on start_date, which must fall in the calendar month the usual
+    start day would put it in (the one before the label, or the label itself when the start day is 1)."""
+    if not 1 <= month <= 12 or not 2000 <= year <= 2100:
+        raise HTTPException(status_code=422, detail="That is not a month")
+    anchor = anchor_month(year, month, int(spend_service.get_start_day(db)))
+    if (body.start_date.year, body.start_date.month) != anchor:
+        raise HTTPException(
+            status_code=422,
+            detail=f"This month can only begin in {date(*anchor, 1):%B %Y}, between the 1st and the {_last_day(*anchor)}th")
+    row = db.get(MonthStart, (year, month))
+    if row is None:
+        db.add(MonthStart(year=year, month=month, start_date=body.start_date))
+    else:
+        row.start_date = body.start_date
+    db.commit()
+    return _month_starts(db)
+
+
+@router.delete("/month-starts/{year}/{month}")
+def clear_month_start(year: int, month: int, db: Session = Depends(get_db)):
+    """Put the usual start day back for financial month year-month."""
+    row = db.get(MonthStart, (year, month))
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return _month_starts(db)
+
+
+def _last_day(year: int, month: int) -> int:
+    return (date(year + (month == 12), month % 12 + 1, 1) - date(year, month, 1)).days
 
 
 @router.patch("/{key}")

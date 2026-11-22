@@ -1,6 +1,38 @@
 from datetime import date, timedelta
 
 
+class MonthStarts(int):
+    """A start day (1-28) that also carries the dates chosen for single months.
+
+    `overrides` maps a label (year, month) to the date that financial month begins. It works wherever a plain
+    start day is accepted; the two functions below use the overrides when present."""
+
+    def __new__(cls, day: int, overrides: dict[tuple[int, int], date] | None = None):
+        obj = super().__new__(cls, day)
+        obj.overrides = dict(overrides or {})
+        return obj
+
+
+def anchor_month(year: int, month: int, start_day: int) -> tuple[int, int]:
+    """The calendar month (year, month) that holds the start of financial month (year, month)."""
+    if start_day == 1:
+        return year, month
+    return (year - 1, 12) if month == 1 else (year, month - 1)
+
+
+def month_start(year: int, month: int, start_day: int) -> date:
+    """The first day of financial month (year, month): the date chosen for it, else the start day."""
+    chosen = getattr(start_day, "overrides", {}).get((year, month))
+    if chosen is not None:
+        return chosen
+    anchor_year, anchor = anchor_month(year, month, start_day)
+    return date(anchor_year, anchor, 1 if start_day == 1 else start_day)
+
+
+def _next_label(year: int, month: int) -> tuple[int, int]:
+    return (year + 1, 1) if month == 12 else (year, month + 1)
+
+
 def get_financial_month_range(year: int, month: int, start_day: int) -> tuple[date, date]:
     """Convert a financial month label (year, month) + start_day into a date range.
 
@@ -21,26 +53,7 @@ def get_financial_month_range(year: int, month: int, start_day: int) -> tuple[da
     if not 1 <= start_day <= 28:
         raise ValueError("start_day must be between 1 and 28")
 
-    if start_day == 1:
-        # Normal calendar month: 1st to last day of month
-        start_date = date(year, month, 1)
-        # Last day = first day of next month minus one day
-        if month == 12:
-            end_date = date(year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = date(year, month + 1, 1) - timedelta(days=1)
-        return start_date, end_date
-
-    # Financial month: previous month's start_day to this month's (start_day - 1)
-    # Start date is in the previous month
-    if month == 1:
-        prev_year, prev_month = year - 1, 12
-    else:
-        prev_year, prev_month = year, month - 1
-
-    start_date = date(prev_year, prev_month, start_day)
-    end_date = date(year, month, start_day - 1)
-    return start_date, end_date
+    return month_start(year, month, start_day), month_start(*_next_label(year, month), start_day) - timedelta(days=1)
 
 
 def label_month_for_date(d: date, start_day: int) -> tuple[int, int]:
@@ -65,11 +78,16 @@ def label_month_for_date(d: date, start_day: int) -> tuple[int, int]:
         raise ValueError("start_day must be between 1 and 28")
 
     if start_day == 1:
-        return d.year, d.month
-
-    if d.day >= start_day:
-        if d.month == 12:
-            return d.year + 1, 1
-        return d.year, d.month + 1
-
-    return d.year, d.month
+        guess = (d.year, d.month)
+    elif d.day >= start_day:
+        guess = _next_label(d.year, d.month)
+    else:
+        guess = (d.year, d.month)
+    if not getattr(start_day, "overrides", None):
+        return guess
+    before = (guess[0] - 1, 12) if guess[1] == 1 else (guess[0], guess[1] - 1)
+    for label in (before, guess, _next_label(*guess)):
+        start, end = get_financial_month_range(*label, start_day)
+        if start <= d <= end:
+            return label
+    return guess

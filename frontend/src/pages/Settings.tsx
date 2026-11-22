@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api'
 import ErrorBanner from '../components/ErrorBanner'
 import { describeApiError } from '../components/apiError'
+import MonthStarts from '../components/MonthStarts'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -91,6 +92,7 @@ export default function Settings() {
             )}
           </div>
 
+          <MonthStarts startDay={parseInt(settings.financial_month_start_day, 10)} />
         </div>
       )}
     </section>
